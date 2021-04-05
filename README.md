@@ -9,7 +9,7 @@
   - [Prerequisites](#prerequisites)
     - [Stack and/or cabal](#stack-andor-cabal)
     - [Cloning this repository](#cloning-this-repository)
-    - [Building the compiler](#building-the-compiler)
+  - [Building the compiler](#building-the-compiler)
 - [Code examples](#code-examples)
 - [Contributing](#contributing)
 - [Q&A](#qa)
@@ -24,7 +24,7 @@ The end-goal (the evolutionary step) is to rewrite the entire project in Zilch o
 
 ## Getting started
 
-As of now, no release has been built (yet), so you'll need to compile the project yourself if yo want to use it.
+As of now, no release has been built (yet), so you'll need to compile the project yourself if you want to use it.
 
 ### Prerequisites
 
@@ -42,9 +42,9 @@ It is used here, but [`cabal`](https://www.haskell.org/cabal/) should work as we
 The next step is to clone this repository (how do you expect to build it otherwise? :wink:) to somewhere you feel confortable with.
 Using `git`, you can just type `git clone https://github.com/zilch-lang/gzc <target-directory>` (where `<target-directory>` may be left blank, in which case the repository will be cloned in your current directory under the name `gzc`).
 
-#### Building the compiler
+### Building the compiler
 
-:warning: DISCLAIMER: It may take a lon time, depending on your machine specs.
+:warning: DISCLAIMER: It may take a long time, depending on your machine specs.
 
 <details><summary>Stack users</summary>
 
