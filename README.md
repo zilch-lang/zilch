@@ -10,8 +10,6 @@
     - [Stack and/or cabal](#stack-andor-cabal)
     - [Cloning this repository](#cloning-this-repository)
     - [Building the compiler](#building-the-compiler)
-      - [Stack users](#stack-users)
-      - [Cabal users](#cabal-users)
 - [Code examples](#code-examples)
 - [Contributing](#contributing)
 - [Q&A](#qa)
@@ -48,14 +46,18 @@ Using `git`, you can just type `git clone https://github.com/zilch-lang/gzc <tar
 
 :warning: DISCLAIMER: It may take a lon time, depending on your machine specs.
 
-##### Stack users
+<details><summary>Stack users</summary>
 
 All you need to do is to type `stack build`, and everything will be built for you.
 
-##### Cabal users
+</details>
+
+<details><summary>Cabal users</summary>
 
 To be honest, I don't work with cabal.
 All I know is that you can type `cabal v2-build` to build the project.
+
+</details>
 
 ## Code examples
 
@@ -66,7 +68,7 @@ However, you can expect some to come later in the [examples](./examples) directo
 
 Obviously, this project is open-source, which means that *you* may be involved in the development!
 If you wish to have some features to be implemented, or even want to report a bug in the compile feel free to check out the [issues](https://github.com/zilch-lang/gzc/issues) to see if nobody already requested/reported it.
-If someone was faster than you, don't worry, you can also drop a :thumbs_up: on his issue to show that you may also be interested in this feature/want to see this bug resolved.
+If someone was faster than you, don't worry, you can also drop a :thumbsup: on their issue to show that you may also be interested in this feature/want to see this bug resolved.
 
 You may also fork this project and add your own code/features! 
 However, the pull requests made may not always be accepted, depending on how relevant they are to the project.
@@ -76,7 +78,7 @@ However, the pull requests made may not always be accepted, depending on how rel
 Some of you, who are interested in programming language implementation, or even casual developers in search of their Graal programming language, may have some questions about Zilch.
 Some of them are already listed below, but if you have some other, feel free to put them in the issues section, I'd be happy to answer them.
 
-<details><summary>**What does this project bring, compared to other functional/low-level programming languages?**</summary>
+<details><summary><b>What does this project bring, compared to other functional/low-level programming languages?</b></summary>
 
 I'd be enclined to say “Nothing”.
 Most of the already in-use programming languages have not been made in 2 days, and are still actively maintained.
@@ -86,10 +88,10 @@ Zilch is not meant to be such a big programming language, and is mainly a resear
 
 </details>
 
-<details><summary>**Any current real-world use of this programming language?**</summary>
+<details><summary><b>Any current real-world use of this programming language?</b></summary>
 
 No, at least not as far as I'm aware.
-However, I plan on rewriting the compiler for Zilch and [N\*](https://github.com/zilch-lang/nsc) in Zilch at some point, when the language reaches some level of sability/usability.
+However, I plan on rewriting the compiler for Zilch and [N\*](https://github.com/zilch-lang/nsc) in Zilch at some point, when the language reaches some level of stability/usability.
 
 </details>
 
