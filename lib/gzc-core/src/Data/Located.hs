@@ -2,11 +2,13 @@
 
 module Data.Located
 ( Position
-, IndentLocated(..)
+, IndentLocated(..), Located
 , indentLevel, position, unwrapLocated
 ) where
 
 import Text.Diagnose (Position)
+
+type Located a = IndentLocated a
 
 data IndentLocated a
   = ILocated
