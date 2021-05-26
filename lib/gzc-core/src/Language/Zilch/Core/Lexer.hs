@@ -95,6 +95,8 @@ data Token
   | Comma
     -- | Type specifier (@:@)
   | Colon
+    -- | Meta-specifier beginning delimiter (@#[@)
+  | HashLBrack
     -- | Identifier or mixfix backbone part
   | Identifier Text
     -- | Inline comments (@-- ...@)
