@@ -1,4 +1,4 @@
-module Language.Zilch.Core.Lexer where
+module Language.Zilch.Core.Tokens where
 
 import Data.Located (IndentLocated)
 import Data.Text (Text)
