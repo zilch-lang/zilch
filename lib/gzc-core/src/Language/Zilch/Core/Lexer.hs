@@ -108,3 +108,25 @@ data Token
     -- | Character
   | Character Text
   deriving (Show)
+
+-- | A static list of keywords to check mixfix operator backbones.
+staticKeywordsList :: [Text]
+staticKeywordsList =
+  [ -- keywords
+    "forall", "∀"
+  , "def", "enum", "record", "type", "class", "impl"
+  , "where"
+  , "do", "case", "of", "fn", "if", "then", "else"
+  , "module", "import", "open", "foreign", "export", "as"
+  , "pattern"
+    -- reserved symbols
+  , ":=", "≔"
+  , "->", "→"
+  , "<-", "←"
+  , "<:"
+  , "_", "·"
+  , "."
+  , "--"
+  , "?"
+  , ":"
+  ]
