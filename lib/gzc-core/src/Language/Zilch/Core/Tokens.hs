@@ -1,10 +1,10 @@
 module Language.Zilch.Core.Tokens where
 
-import Data.Located (IndentLocated)
+import Data.Located (Located)
 import Data.Text (Text)
 
 -- | A simple type alias for located tokens (tokens with an additional position information).
-type LToken = IndentLocated Token
+type LToken = Located Token
 
 -- | The datatype containing all possible tokens in Zilch.
 data Token
