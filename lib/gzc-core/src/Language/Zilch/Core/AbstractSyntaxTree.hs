@@ -31,6 +31,12 @@ data Declaration
         [Located (Parameter Kind)]     -- ^ Optionally kind-annotated type parameters
         [Located Type]                 -- ^ Type constraints on class head
         [Located FunctionDeclaration]  -- ^ Type class member functions
+  | -- | Type class implementation
+    Impl
+        (Located Identifier)        -- ^ The name of the type class implemented
+        [Located (Parameter Kind)]  -- ^ Universally quantified type variables in the head of the implementation, optionally kind-annotated
+        [Located Type]              -- ^ The types whose implementation is defined for
+        [Located Declaration]       -- ^ The definition of the function members
 
 -- | The head of a function declaration/definition.
 data FunctionDeclaration
