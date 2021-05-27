@@ -56,7 +56,7 @@ data FunctionDeclaration
 type Parameter t = (Located Identifier, Maybe (Located t))
 
 -- | The type of identifiers.
-type Identifier = ([Text], Text)
+type Identifier = ([Located Text], Located Text)
 
 -- | The associativity of an infix operator
 data Associativity
@@ -175,7 +175,7 @@ data TypeAtom
     WildcardT
   | -- | A type identified by its name
     IdentifierT
-      (Located Text)  -- ^ The name of the type
+      (Located Identifier)  -- ^ The name of the type
   | -- | A parenthesized type
     ParensT
       (Located Type)
