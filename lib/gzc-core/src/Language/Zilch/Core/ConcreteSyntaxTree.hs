@@ -123,6 +123,8 @@ data ExpressionAtom
   | -- | A parenthesized expression
     ParensE
       (Located Expression)
+  | -- | The wildcard expression for lambda construction
+    WildcardE
 
 data DoStatement
   = -- | A function binding
