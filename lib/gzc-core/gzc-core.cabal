@@ -11,6 +11,7 @@ build-type:     Simple
 library
   exposed-modules:
       Data.Located
+      Language.Zilch.Core.AbstractSyntaxTree
       Language.Zilch.Core.ConcreteSyntaxTree
       Language.Zilch.Core.Tokens
   other-modules:
