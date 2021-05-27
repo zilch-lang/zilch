@@ -8,7 +8,7 @@ data Program
   = Program [Located TopLevelDeclaration]
 
 -- | A top-level declaration with meta-attributes introduced in the @#[...]@ construct.
-type TopLevelDeclaration = ([Located MetaSpecifier], Declaration)
+type TopLevelDeclaration = ([Located MetaSpecifier], Located Declaration)
 
 -- | Any Zilch declaration
 data Declaration
@@ -40,7 +40,10 @@ data Declaration
       [Located FunctionDeclaration]  -- ^ The members of the type class
   | -- | A type class implementation
     Impl
-      ()
+      (Located Identifier)        -- ^ The name of the type class
+      [Located (Parameter Kind)]  -- ^ The type parameters with optional kind annotations
+      [Located Type]              -- ^ The types for which the type class is implemented
+      [Located Declaration]       -- ^ Member function definitions
 
 data FunctionDeclaration
   = Decl
