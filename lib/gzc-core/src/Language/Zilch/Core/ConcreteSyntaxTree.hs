@@ -150,6 +150,9 @@ data PatternAtom
   | -- | An integral number
     IntegerP
       (Located Text)
+  | -- | A variable binding
+    VariableP
+      (Located Identifier)  -- ^ The name of the variable
   | -- | A parenthesized pattern
     ParensP
       (Located Pattern)
@@ -163,10 +166,6 @@ data TypeAtom
     ConstrainedT
       [Located Type]  -- ^ The type constraints
       (Located Type)  -- ^ The constrained type
-  | -- | A type-level function
-    FunctionT
-      [Located (Parameter Kind)]  -- ^ The function parameters
-      (Located Type)              -- ^ The function return type
   | -- | A type-level function application
     ApplicationT
       (Located Type)  -- ^ The type-level function
@@ -190,6 +189,8 @@ data TypeAtom
   | -- | A signed integer
     SignedT
       Integer  -- ^ The width of the integer
+  | -- | A character
+    CharT
 
 -- | The type of types
 data Kind
