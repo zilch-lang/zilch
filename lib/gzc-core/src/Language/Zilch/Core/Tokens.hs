@@ -45,7 +45,7 @@ data Token
   | Open
     -- | Module/FFI import (@import@)
   | Import
-    -- | Midule/FFI export (@export@)
+    -- | Module/FFI export (@export@)
   | Export
     -- | Permission declaration (@perm@)
   | Perm
