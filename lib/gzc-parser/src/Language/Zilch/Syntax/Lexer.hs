@@ -14,7 +14,7 @@ import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Text.Megaparsec.Char as MPC
 import Data.Maybe (catMaybes)
 import Data.Located (Located, IndentLocated (ILocated))
-import Control.Applicative (liftA2, (<|>))
+import Control.Applicative (liftA2, (<|>), empty)
 import qualified Data.Text as Text
 import Data.Char (isPrint, isDigit, isSpace)
 import Language.Zilch.Syntax.Errors (LexerError(..))
@@ -35,10 +35,11 @@ toDiagnostic = error "not implemented"
 
 tokenizeModule :: Lexer m => m [LToken]
 tokenizeModule = catMaybes <$> MP.many (lexeme token) <* MP.eof
+{-# INLINE tokenizeModule #-}
 
 -- | Consumes any non-newline whitespace characters after running a parser.
 lexeme :: Lexer m => m a -> m a
-lexeme p = MPL.lexeme (MPL.space MPC.hspace1 (pure ()) (pure ())) p       -- NOTE: do not eta-reduce
+lexeme p = MPL.lexeme (MPL.space MPC.hspace1 empty empty) p       -- NOTE: do not eta-reduce
 {-# INLINE lexeme #-}
 
 -- | Transforms a simple parser into a parser returning a located value.
