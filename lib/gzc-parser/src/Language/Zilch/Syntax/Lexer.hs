@@ -17,13 +17,7 @@ import Data.Located (Located, IndentLocated (ILocated))
 import Control.Applicative (liftA2, (<|>))
 import qualified Data.Text as Text
 import Data.Char (isPrint, isDigit, isSpace)
-
-data LexerError
-  = InvalidEscapeSequence Char
-  deriving (Eq, Ord)
-
-instance Show LexerError where
-  show (InvalidEscapeSequence c) = "invalid escape sequence '\\" <> [c] <> "'"
+import Language.Zilch.Syntax.Errors (LexerError(..))
 
 type Lexer m = (MP.MonadParsec LexerError Text m, MonadState Int m)
 
