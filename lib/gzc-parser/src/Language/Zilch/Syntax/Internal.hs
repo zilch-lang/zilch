@@ -10,11 +10,11 @@ import qualified Data.Set as Set
 import Data.Bifunctor (bimap, second)
 
 -- | Transforms a megaparsec's 'MP.ParseErrorBundle' into a well formated 'Diagnostic'.
-megaparsecBundleToDiagnostic :: (MP.Stream s, Show e, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s)
+megaparsecBundleToDiagnostic :: (MP.Stream s, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s, Hintable e)
                              => String -> MP.ParseErrorBundle s e -> Diagnostic s2 String a
 megaparsecBundleToDiagnostic msg MP.ParseErrorBundle{..} =
   foldl (<++>) diagnostic (toLabeledPositions <$> bundleErrors)
- where toLabeledPositions :: (MP.Stream s, Show e, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s)
+ where toLabeledPositions :: (MP.Stream s, Hintable e, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s)
                           => MP.ParseError s e -> Report String
        toLabeledPositions err =
          let (_, pos) = MP.reachOffset (MP.errorOffset err) bundlePosState
@@ -30,10 +30,14 @@ megaparsecBundleToDiagnostic msg MP.ParseErrorBundle{..} =
              end   = second (+ 1) start
          in Position start end sourceName
 
-       errorHints :: (MP.Stream s, Show e) => MP.ParseError s e -> [Hint String]
+       errorHints :: (MP.Stream s, Hintable e) => MP.ParseError s e -> [Hint String]
        errorHints MP.TrivialError{}      = []
        errorHints (MP.FancyError _ errs) = Set.toList errs >>= \case
-         MP.ErrorCustom e -> [hint $ show e]
+         MP.ErrorCustom e -> hints e
          _                -> mempty
 
        both f = bimap f f
+
+-- | A type class for errors supporting diagnostic hints.
+class Hintable e where
+  hints :: e -> [Hint String]
