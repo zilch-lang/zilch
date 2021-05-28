@@ -6,3 +6,5 @@ cradle:
       component: "gzc-lib:lib"
     - path: "./app"
       component: "gzc:exe"
+    - path: "./lib/gzc-parser/src"
+      component: "gzc-parser:lib"
