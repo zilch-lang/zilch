@@ -8,7 +8,7 @@ import qualified Text.Megaparsec as MP
 import Control.Monad.State (evalState, MonadState, put, gets)
 import Data.Text (Text)
 import Language.Zilch.Core.Tokens (LToken, Token(..))
-import Text.Diagnose (Diagnostic, Position (Position))
+import Text.Diagnose (Diagnostic, Position(..))
 import Data.Bifunctor (Bifunctor(first))
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Text.Megaparsec.Char as MPC
@@ -17,6 +17,7 @@ import Data.Located (Located, IndentLocated (ILocated))
 import Control.Applicative (liftA2, (<|>), empty)
 import qualified Data.Text as Text
 import Data.Char (isPrint, isDigit, isSpace)
+import Language.Zilch.Syntax.Internal (megaparsecBundleToDiagnostic)
 import Language.Zilch.Syntax.Errors (LexerError(..))
 
 type Lexer m = (MP.MonadParsec LexerError Text m, MonadState Int m)
@@ -29,7 +30,7 @@ runLexer content filename = evalState (first toDiagnostic <$> MP.runParserT toke
 
 -- | Transforms a 'ParseErrorBundle' into a 'Diagnostic'.
 toDiagnostic :: MP.ParseErrorBundle Text LexerError -> Diagnostic [] String Char
-toDiagnostic = error "not implemented"
+toDiagnostic = megaparsecBundleToDiagnostic "Lexing error on input"
 
 -------------------------------------------------------------------------------------
 
