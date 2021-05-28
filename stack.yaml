@@ -1,7 +1,8 @@
-resolver: lts-16.10
+resolver: lts-17.3
 
 packages:
 - ./lib/gzc-core
+- ./lib/gzc-parser
 - .
 
 extra-deps:
@@ -11,3 +12,9 @@ extra-deps:
   commit: 8a9d1d5aa19fe6493c556ae3606c758829683762
   subdirs:
   - lib/nsc-core
+
+allow-newer: true
+
+nix:
+  shell-file: stack-shell.nix
+  add-gc-roots: true
