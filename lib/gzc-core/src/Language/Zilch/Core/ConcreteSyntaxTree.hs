@@ -3,9 +3,19 @@ module Language.Zilch.Core.ConcreteSyntaxTree where
 import Data.Located (Located)
 import Data.Text (Text)
 
--- | A Zilch program is composed of many located declarations.
-data Program
-  = Program [Located TopLevelDeclaration]
+-- | A Zilch module is composed of imports and many located declarations.
+data Module
+  = Module
+      [Located Import]               -- ^ A list of imports
+      [Located TopLevelDeclaration]  -- ^ All the available top-level declarations of the module
+
+-- | An @import@ statement at the top of a module.
+data Import
+  = Import
+      Bool                                                        -- ^ Is the import opened/unqualified?
+      (Located Identifier)                                        -- ^ The module imported
+      (Maybe (Located Identifier))                                -- ^ An optional alias for the imported module
+      (Maybe [(Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
 
 -- | A top-level declaration with meta-attributes introduced in the @#[...]@ construct.
 type TopLevelDeclaration = ([Located MetaSpecifier], Located Declaration)

@@ -3,7 +3,10 @@ module Language.Zilch.Core.AbstractSyntaxTree where
 import Data.Located (Located)
 import Data.Text (Text)
 
-data Program = Program [Located Declaration]
+data Module
+  = Module
+      (Located Identifier)   -- ^ The name of the module
+      [Located Declaration]  -- ^ The list of declarations in the module
 
 data Declaration
   = -- | Function definition
