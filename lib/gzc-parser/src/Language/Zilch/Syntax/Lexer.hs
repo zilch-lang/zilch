@@ -31,6 +31,7 @@ runLexer content filename = evalState (first toDiagnostic <$> MP.runParserT toke
 -- | Transforms a 'ParseErrorBundle' into a 'Diagnostic'.
 toDiagnostic :: MP.ParseErrorBundle Text LexerError -> Diagnostic [] String Char
 toDiagnostic = megaparsecBundleToDiagnostic "Lexing error on input"
+{-# INLINE toDiagnostic #-}
 
 -------------------------------------------------------------------------------------
 

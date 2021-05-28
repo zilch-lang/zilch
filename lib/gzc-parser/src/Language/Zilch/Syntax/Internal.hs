@@ -5,7 +5,7 @@
 module Language.Zilch.Syntax.Internal where
 
 import qualified Text.Megaparsec as MP
-import Text.Diagnose (Diagnostic, Report, Marker(..), Hint, hint, Position(..), reportError, (<++>), diagnostic)
+import Text.Diagnose (Diagnostic, Report, Marker(..), Hint, Position(..), reportError, (<++>), diagnostic)
 import qualified Data.Set as Set
 import Data.Bifunctor (bimap, second)
 
