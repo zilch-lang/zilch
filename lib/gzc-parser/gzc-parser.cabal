@@ -11,6 +11,7 @@ build-type:     Simple
 library
   exposed-modules:
       Language.Zilch.Syntax.Errors
+      Language.Zilch.Syntax.Internal
       Language.Zilch.Syntax.Lexer
   other-modules:
       Paths_gzc_parser
@@ -24,6 +25,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , containers
     , diagnose
     , gzc-core
     , megaparsec >=9.0.0

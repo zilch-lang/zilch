@@ -13,6 +13,7 @@ dependencies:
 - mtl
 - gzc-core
 - diagnose
+- containers
 
 ghc-options:
 - -Wall
