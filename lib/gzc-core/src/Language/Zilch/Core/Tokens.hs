@@ -109,7 +109,7 @@ data Token
   | String Text
     -- | Character
   | Character Text
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- | A static list of keywords to check mixfix operator backbones.
 staticKeywordsList :: [Text]

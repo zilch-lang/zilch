@@ -7,6 +7,7 @@ module Data.Located
 ) where
 
 import Text.Diagnose (Position)
+import Data.Function (on)
 
 type Located a = IndentLocated a
 
@@ -29,3 +30,6 @@ unwrapLocated (ILocated _ _ x) = x
 
 instance Eq a => Eq (IndentLocated a) where
   ILocated _ _ x1 == ILocated _ _ x2 = x1 == x2
+
+instance Eq a => Ord (IndentLocated a) where
+  compare = compare `on` position
