@@ -6,6 +6,8 @@ import Data.Text (Text)
 -- | A Zilch module is composed of imports and many located declarations.
 data Module
   = Module
+      (Located Identifier)           -- ^ The name of the module
+      [Located Identifier]           -- ^ The export list
       [Located Import]               -- ^ A list of imports
       [Located TopLevelDeclaration]  -- ^ All the available top-level declarations of the module
 
