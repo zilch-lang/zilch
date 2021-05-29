@@ -1,6 +1,9 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleInstances #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Zilch.Syntax.Internal where
 
@@ -8,6 +11,10 @@ import qualified Text.Megaparsec as MP
 import Text.Diagnose (Diagnostic, Report, Marker(..), Hint, Position(..), reportError, (<++>), diagnostic)
 import qualified Data.Set as Set
 import Data.Bifunctor (bimap, second)
+import Language.Zilch.Core.Tokens (LToken)
+import Data.Located (unwrapLocated, position)
+import qualified Data.List.NonEmpty as NE
+import Language.Zilch.Pretty.Tokens (pretty)
 
 -- | Transforms a megaparsec's 'MP.ParseErrorBundle' into a well formated 'Diagnostic'.
 megaparsecBundleToDiagnostic :: (MP.Stream s, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s, Hintable e)
@@ -41,3 +48,32 @@ megaparsecBundleToDiagnostic msg MP.ParseErrorBundle{..} =
 -- | A type class for errors supporting diagnostic hints.
 class Hintable e where
   hints :: e -> [Hint String]
+
+-------------------------------------------------------------------------------------------------
+
+instance MP.VisualStream [LToken] where
+  showTokens _ tokens = unwords . NE.toList $ show . pretty . unwrapLocated <$> tokens
+
+instance MP.TraversableStream [LToken] where
+  reachOffsetNoLine o MP.PosState{..} =
+    let (_, after) = splitAt (o - pstateOffset) pstateInput
+
+        currentTokenPosition = case after of
+          []  -> Nothing
+          t:_ -> Just (position t)
+
+        calculateNewPosition p Nothing  = p
+        calculateNewPosition _ (Just p) =
+          let (Position (bLine, bCol) _ file) = p
+          in MP.SourcePos
+                { MP.sourceName   = file
+                , MP.sourceLine   = MP.mkPos $ fromIntegral bLine
+                , MP.sourceColumn = MP.mkPos $ fromIntegral bCol
+                }
+    in MP.PosState
+        { MP.pstateInput      = after
+        , MP.pstateOffset     = max o pstateOffset
+        , MP.pstateSourcePos  = calculateNewPosition pstateSourcePos currentTokenPosition
+        , MP.pstateTabWidth   = pstateTabWidth
+        , MP.pstateLinePrefix = pstateLinePrefix
+        }
