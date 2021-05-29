@@ -152,8 +152,8 @@ escapeCharacter = (<>) <$> (Text.singleton <$> MPC.char '\\')
 -- | Parses any symbol, ranging from keywords to basic identifiers.
 anySymbol :: Lexer m => m LToken
 anySymbol = lexeme $ located do
-  h <- MP.satisfy \ c -> isPrint c && not (isDigit c) && not (isSpecial c)
-  r <- MP.many (MP.satisfy (not . isSpace))
+  h <- MP.satisfy \ c -> isPrint c && not (isDigit c) && not (isSpecial c) && not (isSpace c)
+  r <- MP.many (MP.satisfy \ c -> isPrint c && not (isSpecial c) && not (isSpace c))
   pure $ matchesKeyword (h : r)
   where
     matchesKeyword "forall"     = Forall
