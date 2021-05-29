@@ -7,7 +7,7 @@ import Data.Text (Text)
 data Module
   = Module
       (Located Identifier)           -- ^ The name of the module
-      [Located Identifier]           -- ^ The export list
+      (Maybe [Located Identifier])   -- ^ The export list
       [Located Import]               -- ^ A list of imports
       [Located TopLevelDeclaration]  -- ^ All the available top-level declarations of the module
 
