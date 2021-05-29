@@ -12,7 +12,7 @@ import Text.Diagnose (Diagnostic, Report, Marker(..), Hint, Position(..), report
 import qualified Data.Set as Set
 import Data.Bifunctor (bimap, second)
 import Language.Zilch.Core.Tokens (LToken)
-import Data.Located (unwrapLocated, position)
+import qualified Data.IndentLocated as IL (unwrapLocated, position)
 import qualified Data.List.NonEmpty as NE
 import Language.Zilch.Pretty.Tokens (pretty)
 
@@ -52,7 +52,7 @@ class Hintable e where
 -------------------------------------------------------------------------------------------------
 
 instance MP.VisualStream [LToken] where
-  showTokens _ tokens = unwords . NE.toList $ show . pretty . unwrapLocated <$> tokens
+  showTokens _ tokens = unwords . NE.toList $ show . pretty . IL.unwrapLocated <$> tokens
 
 instance MP.TraversableStream [LToken] where
   reachOffsetNoLine o MP.PosState{..} =
@@ -60,7 +60,7 @@ instance MP.TraversableStream [LToken] where
 
         currentTokenPosition = case after of
           []  -> Nothing
-          t:_ -> Just (position t)
+          t:_ -> Just (IL.position t)
 
         calculateNewPosition p Nothing  = p
         calculateNewPosition _ (Just p) =

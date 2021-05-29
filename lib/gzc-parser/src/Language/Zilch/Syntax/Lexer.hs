@@ -13,7 +13,7 @@ import Data.Bifunctor (Bifunctor(first))
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Text.Megaparsec.Char as MPC
 import Data.Maybe (catMaybes)
-import Data.Located (Located, IndentLocated (ILocated))
+import Data.IndentLocated (Located, IndentLocated (ILocated))
 import Control.Applicative (liftA2, (<|>), empty)
 import qualified Data.Text as Text
 import Data.Char (isPrint, isDigit, isSpace)
