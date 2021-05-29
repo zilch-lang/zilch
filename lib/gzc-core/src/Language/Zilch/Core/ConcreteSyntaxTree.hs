@@ -68,7 +68,7 @@ data FunctionDeclaration
 type Parameter t = (Located Identifier, Maybe (Located t))
 
 -- | The type of identifiers.
-type Identifier = ([Located Text], Located Text)
+type Identifier = Text
 
 -- | The associativity of an infix operator
 data Associativity
