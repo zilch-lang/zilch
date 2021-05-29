@@ -5,6 +5,8 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TupleSections #-}
 module Language.Zilch.Syntax.Internal where
 
 import qualified Text.Megaparsec as MP
@@ -15,6 +17,8 @@ import Language.Zilch.Core.Tokens (LToken)
 import qualified Data.IndentLocated as IL (unwrapLocated, position)
 import qualified Data.List.NonEmpty as NE
 import Language.Zilch.Pretty.Tokens (pretty)
+import Data.Vector (Vector)
+import qualified Data.Vector as V
 
 -- | Transforms a megaparsec's 'MP.ParseErrorBundle' into a well formated 'Diagnostic'.
 megaparsecBundleToDiagnostic :: (MP.Stream s, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s, Hintable e)
@@ -51,16 +55,29 @@ class Hintable e where
 
 -------------------------------------------------------------------------------------------------
 
-instance MP.VisualStream [LToken] where
+instance MP.Stream (Vector LToken) where
+  type Token (Vector LToken) = LToken
+  type Tokens (Vector LToken) = Vector LToken
+
+  tokenToChunk _ = V.singleton
+  tokensToChunk _ = V.fromList
+  chunkToTokens _ = V.toList
+  chunkLength _ = V.length
+  take1_ s = (, V.unsafeTail s) <$> (s V.!? 0)
+  takeN_ n s
+        | n <= 0    = Just (mempty, s)
+        | V.null s  = Nothing
+        | otherwise = Just $ V.splitAt n s
+  takeWhile_ = V.span
+
+instance MP.VisualStream (Vector LToken) where
   showTokens _ tokens = unwords . NE.toList $ show . pretty . IL.unwrapLocated <$> tokens
 
-instance MP.TraversableStream [LToken] where
+instance MP.TraversableStream (Vector LToken) where
   reachOffsetNoLine o MP.PosState{..} =
-    let (_, after) = splitAt (o - pstateOffset) pstateInput
+    let (_, after) = V.splitAt (o - pstateOffset) pstateInput
 
-        currentTokenPosition = case after of
-          []  -> Nothing
-          t:_ -> Just (IL.position t)
+        currentTokenPosition = IL.position <$> after V.!? 0
 
         calculateNewPosition p Nothing  = p
         calculateNewPosition _ (Just p) =

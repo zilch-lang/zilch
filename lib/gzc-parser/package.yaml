@@ -15,6 +15,7 @@ dependencies:
 - diagnose
 - containers
 - gzc-pretty
+- vector
 
 ghc-options:
 - -Wall
