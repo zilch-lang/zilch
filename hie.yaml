@@ -8,3 +8,5 @@ cradle:
       component: "gzc:exe"
     - path: "./lib/gzc-parser/src"
       component: "gzc-parser:lib"
+    - path: "./lib/gzc-pretty/src"
+      component: "gzc-pretty:lib"

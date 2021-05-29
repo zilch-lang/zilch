@@ -3,6 +3,7 @@ resolver: lts-17.3
 packages:
 - ./lib/gzc-core
 - ./lib/gzc-parser
+- ./lib/gzc-pretty
 - .
 
 extra-deps:
