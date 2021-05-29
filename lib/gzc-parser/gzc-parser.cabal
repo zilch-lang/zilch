@@ -28,6 +28,7 @@ library
     , containers
     , diagnose
     , gzc-core
+    , gzc-pretty
     , megaparsec >=9.0.0
     , mtl
     , text

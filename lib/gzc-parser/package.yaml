@@ -14,6 +14,7 @@ dependencies:
 - gzc-core
 - diagnose
 - containers
+- gzc-pretty
 
 ghc-options:
 - -Wall
