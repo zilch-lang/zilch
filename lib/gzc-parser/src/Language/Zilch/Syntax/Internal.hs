@@ -19,6 +19,7 @@ import qualified Data.List.NonEmpty as NE
 import Language.Zilch.Pretty.Tokens (pretty)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import Data.List (intercalate)
 
 -- | Transforms a megaparsec's 'MP.ParseErrorBundle' into a well formated 'Diagnostic'.
 megaparsecBundleToDiagnostic :: (MP.Stream s, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s, Hintable e)
@@ -71,7 +72,9 @@ instance MP.Stream (Vector LToken) where
   takeWhile_ = V.span
 
 instance MP.VisualStream (Vector LToken) where
-  showTokens _ tokens = unwords . NE.toList $ show . pretty . IL.unwrapLocated <$> tokens
+  showTokens _ = intercalate ", " . fmap (squotes . show . pretty . IL.unwrapLocated) . NE.toList
+    where
+      squotes x = '\'' : x <> "'"
 
 instance MP.TraversableStream (Vector LToken) where
   reachOffsetNoLine o MP.PosState{..} =
