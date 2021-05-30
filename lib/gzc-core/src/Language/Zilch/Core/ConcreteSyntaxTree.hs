@@ -59,11 +59,11 @@ data Declaration
 
 data FunctionDeclaration
   = Decl
-      (Located Identifier)        -- ^ The name of the declared function
-      [Located (Parameter Kind)]  -- ^ A list of type parameters with optional kind annotations
-      [Located Type]              -- ^ A list of type constraints
-      [Located (Parameter Type)]  -- ^ A list of parameters with optional types
-      (Maybe (Located Type))      -- ^ The optional return type
+      (Located Identifier)                -- ^ The name of the declared function
+      [Located (Parameter Kind)]          -- ^ A list of type parameters with optional kind annotations
+      [Located Type]                      -- ^ A list of type constraints
+      (Maybe [Located (Parameter Type)])  -- ^ A list of parameters with optional types
+      (Maybe (Located Type))              -- ^ The optional return type
 
 -- | A parameter is an identifier whose type may be specified (or not).
 type Parameter t = (Located Identifier, Maybe (Located t))
