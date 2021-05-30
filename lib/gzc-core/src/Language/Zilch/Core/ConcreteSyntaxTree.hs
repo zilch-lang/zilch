@@ -179,6 +179,10 @@ data TypeAtom
     ConstrainedT
       [Located Type]  -- ^ The type constraints
       (Located Type)  -- ^ The constrained type
+  | -- | A type function
+    FunctionT
+      [Located Type]  -- ^ The arguments of the function
+      (Located Type)  -- ^ The result of the function
   | -- | A type-level function application
     ApplicationT
       (Located Type)  -- ^ The type-level function
