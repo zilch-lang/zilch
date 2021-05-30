@@ -71,21 +71,9 @@ type Parameter t = (Located Identifier, Maybe (Located t))
 -- | The type of identifiers.
 type Identifier = Text
 
--- | The associativity of an infix operator
-data Associativity
-  = L | R | N
-
 -- | Meta-specifiers for top-level bindings.
 data MetaSpecifier
-  = -- | > infix  N
-    --   > infixl N
-    --   > infixr N
-    Infix Associativity Integer
-  | -- | > prefix N
-    Prefix Integer
-  | -- | > postfix N
-    Postfix Integer
-  | -- | > default
+  = -- | > default
     DefaultImpl
 
 data Expression
