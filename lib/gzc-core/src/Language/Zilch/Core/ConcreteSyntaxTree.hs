@@ -110,14 +110,11 @@ data Expression
       (Located Expression)  -- ^ The function to apply
       [Located Expression]  -- ^ The arguments of the application
   | -- | An integral number
-    IntegerE
-      (Located Text)
+    IntegerE Text
   | -- | A string
-    StringE
-      (Located Text)
+    StringE Text
   | -- | A character
-    CharE
-      (Located Text)
+    CharE Text
   | -- | A parenthesized expression
     ParensE
       (Located Expression)
