@@ -93,7 +93,7 @@ specialSymbol :: Lexer m => m LToken
 specialSymbol = lexeme . located $ MP.choice
   [ LParen <$ MPC.char '(', RParen <$ MPC.char ')'
   , LBrack <$ MPC.char '[', RBrack <$ MPC.char ']'
-  , LBrace <$ MPC.char '[', RBrace <$ MPC.char ']'
+  , LBrace <$ MPC.char '{', RBrace <$ MPC.char '}'
   , Comma  <$ MPC.char ','
   ]
 
