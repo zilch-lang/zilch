@@ -18,14 +18,20 @@ instance Hintable LexerError where
   hints _ = []
 
 data ParseError
-  = MissingEnumVariantParameter
+  = MissingEnumVariantParameterList
+  | HashWithSpaceInMetaAttributes
+  | UnsupportedEmptyEnums
   deriving (Eq, Ord)
 
 instance Show ParseError where
-  show MissingEnumVariantParameter = "missing parameter list for enumeration constructor"
+  show MissingEnumVariantParameterList = "missing parameter list for enumeration constructor"
+  show HashWithSpaceInMetaAttributes   = "there should not be any space between the two '#' and '[' tokens"
+  show UnsupportedEmptyEnums           = "enumerations with no constructors are not supported"
 
 instance MP.ShowErrorComponent ParseError where
   showErrorComponent = show
 
 instance Hintable ParseError where
-  hints MissingEnumVariantParameter = [hint "You can specify an empty parameter list '()' if your constructor does not take parameters."]
+  hints MissingEnumVariantParameterList = [hint "You can specify an empty parameter list '()' if your constructor does not take parameters."]
+  hints HashWithSpaceInMetaAttributes   = []
+  hints UnsupportedEmptyEnums           = []
