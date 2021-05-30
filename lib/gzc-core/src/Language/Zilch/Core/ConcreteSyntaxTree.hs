@@ -88,13 +88,7 @@ data MetaSpecifier
   | -- | > default
     DefaultImpl
 
--- | An expression is a list of atoms.
-type Expression = [Located ExpressionAtom]
-
--- | A type is a list of atoms.
-type Type = [Located TypeAtom]
-
-data ExpressionAtom
+data Expression
   = -- | A lambda abstraction
     FnE
       [Located (Parameter Type)]  -- ^ The parameters of the lambda with optional type annotations
@@ -151,10 +145,7 @@ data DoStatement
     ExprD
       (Located Expression)
 
--- | A pattern is a list of atoms.
-type Pattern = [Located PatternAtom]
-
-data PatternAtom
+data Pattern
   = -- | The wildcard pattern
     WildcardP
   | -- | An enumeration constructor
@@ -170,7 +161,7 @@ data PatternAtom
     ParensP
       (Located Pattern)
 
-data TypeAtom
+data Type
   = -- | A universally quantified type
     ForallT
       [Located (Parameter Kind)]   -- ^ The list of universally quantified type variables with optional kind quantification
