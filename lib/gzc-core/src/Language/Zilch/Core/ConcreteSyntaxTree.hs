@@ -75,7 +75,9 @@ data MetaSpecifier
   = -- | > default
     DefaultImpl
 
-data Expression
+type Expression = [Located ExpressionAtom]
+
+data ExpressionAtom
   = -- | A lambda abstraction
     FnE
       [Located (Parameter Type)]  -- ^ The parameters of the lambda with optional type annotations
