@@ -99,6 +99,9 @@ data Expression
   | -- | A variable
     IdentifierE
       (Located Identifier)  -- ^ The name of the identifier
+  | -- | AN operator
+    OperatorE
+      (Located Identifier)  -- ^ The name of the operator
   | -- | A typed hole
     TypedHoleE
   | -- | A record access
