@@ -15,8 +15,9 @@ instance Pretty Token where
   pretty Class             = text "class"
   pretty Impl              = text "impl"
   pretty Where             = text "where"
-  pretty Do                = text "do"
-  pretty Type              = text "type"
+  pretty Let               = text "let"
+  pretty In                = text "in"
+  pretty Alias             = text "alias"
   pretty Case              = text "case"
   pretty Of                = text "of"
   pretty Module            = text "module"
@@ -33,11 +34,8 @@ instance Pretty Token where
   pretty Pattern           = text "pattern"
   pretty ColonEquals       = text ":="
   pretty UniColonEquals    = text "≔"
-  pretty LeftArrow         = text "<-"
-  pretty UniLeftArrow      = text "←"
   pretty RightArrow        = text "->"
   pretty UniRightArrow     = text "→"
-  pretty LessColon         = text "<:"
   pretty Underscore        = text "_"
   pretty UniUnderscore     = text "·"
   pretty Dot               = text "."
@@ -51,7 +49,10 @@ instance Pretty Token where
   pretty Comma             = text ","
   pretty Colon             = text ":"
   pretty Hash              = text "#"
+  pretty LAngle            = text "<"
+  pretty RAngle            = text ">"
   pretty (Identifier i)    = text (Text.unpack i)
+  pretty (Operator o)      = text (Text.unpack o)
   pretty (InlineComment c) = text "-- " <> text (Text.unpack c)
   pretty (Integer i)       = text (Text.unpack i)
   pretty (Float f)         = text (Text.unpack f)

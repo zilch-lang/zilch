@@ -16,7 +16,7 @@ import Data.Maybe (catMaybes)
 import Data.IndentLocated (Located, IndentLocated (ILocated))
 import Control.Applicative (liftA2, (<|>), empty)
 import qualified Data.Text as Text
-import Data.Char (isPrint, isDigit, isSpace)
+import Data.Char (isSymbol, isPunctuation, isMark)
 import Language.Zilch.Syntax.Internal (megaparsecBundleToDiagnostic)
 import Language.Zilch.Syntax.Errors (LexerError(..))
 
@@ -72,6 +72,7 @@ token = MP.choice
   , Just    <$> numberLiteral
   , Just    <$> stringLiteral
   , Just    <$> characterLiteral
+  , Just    <$> anyIdentifier
   , Just    <$> anySymbol
   ]
   where
@@ -94,7 +95,8 @@ specialSymbol = lexeme . located $ MP.choice
   [ LParen <$ MPC.char '(', RParen <$ MPC.char ')'
   , LBrack <$ MPC.char '[', RBrack <$ MPC.char ']'
   , LBrace <$ MPC.char '{', RBrace <$ MPC.char '}'
-  , Comma  <$ MPC.char ','
+  , Comma  <$ MPC.char ',', UniForall <$ MPC.char '∀'
+  , Underscore <$ MPC.char '_', UniUnderscore <$ MPC.char '·'
   ]
 
 -- | Parses a number literal according to the specification.
@@ -150,22 +152,22 @@ escapeCharacter = (<>) <$> (Text.singleton <$> MPC.char '\\')
                                                          ])
 
 -- | Parses any symbol, ranging from keywords to basic identifiers.
-anySymbol :: Lexer m => m LToken
-anySymbol = lexeme $ located do
-  h <- MP.satisfy \ c -> isPrint c && not (isDigit c) && not (isSpecial c) && not (isSpace c)
-  r <- MP.many (MP.satisfy \ c -> isPrint c && not (isSpecial c) && not (isSpace c))
+anyIdentifier :: Lexer m => m LToken
+anyIdentifier = lexeme $ located do
+  h <- MPC.letterChar
+  r <- MP.many MPC.alphaNumChar
   pure $ matchesKeyword (h : r)
   where
     matchesKeyword "forall"     = Forall
-    matchesKeyword "∀"          = UniForall
     matchesKeyword "def"        = Def
     matchesKeyword "enum"       = Enum
     matchesKeyword "record"     = Record
     matchesKeyword "class"      = Class
     matchesKeyword "impl"       = Impl
     matchesKeyword "where"      = Where
-    matchesKeyword "do"         = Do
-    matchesKeyword "type"       = Type
+    matchesKeyword "let"        = Let
+    matchesKeyword "in"         = In
+    matchesKeyword "alias"      = Alias
     matchesKeyword "case"       = Case
     matchesKeyword "of"         = Of
     matchesKeyword "module"     = Module
@@ -180,20 +182,26 @@ anySymbol = lexeme $ located do
     matchesKeyword "then"       = Then
     matchesKeyword "else"       = Else
     matchesKeyword "pattern"    = Pattern
-    matchesKeyword ":="         = ColonEquals
-    matchesKeyword "≔"          = UniColonEquals
-    matchesKeyword "<-"         = LeftArrow
-    matchesKeyword "←"          = UniLeftArrow
-    matchesKeyword "<:"         = LessColon
-    matchesKeyword "->"         = RightArrow
-    matchesKeyword "→"          = UniRightArrow
-    matchesKeyword "_"          = Underscore
-    matchesKeyword "·"          = UniUnderscore
-    matchesKeyword "?"          = Question
-    matchesKeyword ":"          = Colon
-    matchesKeyword "#"          = Hash
     matchesKeyword name         = Identifier (Text.pack name)
     {-# INLINE matchesKeyword #-}
+
+anySymbol :: Lexer m => m LToken
+anySymbol = lexeme $ located do
+  h <- MP.satisfy \ c -> not (isSpecial c) && (isSymbol c || isPunctuation c || isMark c)
+  r <- MP.many $ MP.satisfy \ c -> not (isSpecial c) && (isSymbol c || isPunctuation c || isMark c)
+  pure (matchesSymbol (h : r))
+  where
+    matchesSymbol "."  = Dot
+    matchesSymbol "<"  = LAngle
+    matchesSymbol ">"  = RAngle
+    matchesSymbol ":=" = ColonEquals
+    matchesSymbol "≔"  = UniColonEquals
+    matchesSymbol "->" = RightArrow
+    matchesSymbol "→"  = UniRightArrow
+    matchesSymbol "?"  = Question
+    matchesSymbol ":"  = Colon
+    matchesSymbol "#"  = Hash
+    matchesSymbol sym  = Operator (Text.pack sym)
 
 -- | Checks whether the input character is a special character (which can be parsed with 'specialSymbol') that cannot be part of an identifier.
 isSpecial :: Char -> Bool
@@ -204,5 +212,7 @@ isSpecial ']' = True
 isSpecial '(' = True
 isSpecial ')' = True
 isSpecial ',' = True
+isSpecial '_' = True
+isSpecial '·' = True
 isSpecial _   = False
 {-# INLINE isSpecial #-}

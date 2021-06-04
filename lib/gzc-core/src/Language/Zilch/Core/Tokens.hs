@@ -25,10 +25,12 @@ data Token
   | Impl
     -- | Additional variable binders in function definition (@where@)
   | Where
-    -- | Do-expression
-  | Do
-    -- | Type alias definition and type kind (@type@)
-  | Type
+    -- | Let-expression (@let@)
+  | Let
+    -- | Let-expression (@in@)
+  | In
+    -- | Type alias definition and type kind (@alias@)
+  | Alias
     -- | Pattern matching beginning delimiter (@case@)
   | Case
     -- | Pattern matching middle delimiter (@of@)
@@ -61,16 +63,10 @@ data Token
   | ColonEquals
     -- | Definition symbol (@≔@ unicode variant)
   | UniColonEquals
-    -- | Assignment in do-expression (@<-@)
-  | LeftArrow
-    -- | Assignment in do-expression (@←@ unicode variant)
-  | UniLeftArrow
     -- | Function type/case delimiter in pattern matching (@->@)
   | RightArrow
     -- | Function type/case delimiter in pattern matching (@→@ unicode variant)
   | UniRightArrow
-    -- | Sub-permission declaration (@<:@)
-  | LessColon
     -- | Wildcard (@_@)
   | Underscore
     -- | Wildcard (@·@ unicode variant)
@@ -97,8 +93,14 @@ data Token
   | Colon
     -- | Meta-specifier beginning delimiter (@#@)
   | Hash
-    -- | Identifier or mixfix backbone part
+    -- | Left angle (@<@)
+  | LAngle
+    -- | Right angle (@>@)
+  | RAngle
+    -- | Identifier composed of only alphanumerical letters
   | Identifier Text
+    -- | Operator symbol
+  | Operator Text
     -- | Inline comments (@-- ...@)
   | InlineComment Text
     -- | Integral numbers
@@ -116,9 +118,9 @@ staticKeywordsList :: [Text]
 staticKeywordsList =
   [ -- keywords
     "forall", "∀"
-  , "def", "enum", "record", "type", "class", "impl"
+  , "def", "enum", "record", "alias", "class", "impl"
   , "where"
-  , "do", "case", "of", "fn", "if", "then", "else"
+  , "let", "in", "case", "of", "fn", "if", "then", "else"
   , "module", "import", "open", "foreign", "export", "as"
   , "pattern"
     -- reserved symbols
