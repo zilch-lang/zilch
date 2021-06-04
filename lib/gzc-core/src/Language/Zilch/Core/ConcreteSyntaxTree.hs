@@ -52,18 +52,17 @@ data Declaration
       [Located FunctionDeclaration]  -- ^ The members of the type class
   | -- | A type class implementation
     Impl
-      (Located Identifier)        -- ^ The name of the type class
-      [Located (Parameter Kind)]  -- ^ The type parameters with optional kind annotations
-      [Located Type]              -- ^ The types for which the type class is implemented
-      [Located Declaration]       -- ^ Member function definitions
+      (Located Identifier)                          -- ^ The name of the type class
+      ([Located (Parameter Kind)], [Located Type])  -- ^ The type parameters with optional kind annotations with type constraints
+      [Located Type]                                -- ^ The types for which the type class is implemented
+      [Located Declaration]                         -- ^ Member function definitions
 
 data FunctionDeclaration
   = Decl
-      (Located Identifier)                -- ^ The name of the declared function
-      [Located (Parameter Kind)]          -- ^ A list of type parameters with optional kind annotations
-      [Located Type]                      -- ^ A list of type constraints
-      (Maybe [Located (Parameter Type)])  -- ^ A list of parameters with optional types
-      (Maybe (Located Type))              -- ^ The optional return type
+      (Located Identifier)                         -- ^ The name of the declared function
+      ([Located (Parameter Kind)], [Located Type]) -- ^ A list of type parameters with optional kind annotations with type constraints
+      (Maybe [Located (Parameter Type)])           -- ^ A list of parameters with optional types
+      (Maybe (Located Type))                       -- ^ The optional return type
 
 -- | A parameter is an identifier whose type may be specified (or not).
 type Parameter t = (Located Identifier, Maybe (Located t))
@@ -86,9 +85,10 @@ data Expression
       (Located Expression)  -- ^ The condition
       (Located Expression)  -- ^ The expression returned if the condition is true
       (Located Expression)  -- ^ The expression returned if the condition is false
-  | -- | A do-block
-    DoE
-      [Located DoStatement] -- ^ The statements in the do-block
+  | -- | A let-in expression
+    LetE
+      (Located Declaration)  -- ^ The bound variable
+      (Located Expression)   -- ^ The expression
   | -- | A pattern-matching expression
     CaseE
       (Located Expression)                    -- ^ The expression whose value is to match
@@ -120,15 +120,6 @@ data Expression
       (Located Expression)
   | -- | The wildcard expression for lambda construction
     WildcardE
-
-data DoStatement
-  = -- | A function binding
-    BindingD
-      (Located Identifier)  -- ^ The name of the function
-      (Located Expression)  -- ^ The value of the function
-  | -- | A single expression
-    ExprD
-      (Located Expression)
 
 data Pattern
   = -- | The wildcard pattern
