@@ -97,6 +97,8 @@ data Token
   | LAngle
     -- | Right angle (@>@)
   | RAngle
+    -- | Pipe (@|@)
+  | Pipe
     -- | Identifier composed of only alphanumerical letters
   | Identifier Text
     -- | Operator symbol

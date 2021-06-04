@@ -51,6 +51,7 @@ instance Pretty Token where
   pretty Hash              = text "#"
   pretty LAngle            = text "<"
   pretty RAngle            = text ">"
+  pretty Pipe              = text "|"
   pretty (Identifier i)    = text (Text.unpack i)
   pretty (Operator o)      = text (Text.unpack o)
   pretty (InlineComment c) = text "-- " <> text (Text.unpack c)

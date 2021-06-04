@@ -201,6 +201,7 @@ anySymbol = lexeme $ located do
     matchesSymbol "?"  = Question
     matchesSymbol ":"  = Colon
     matchesSymbol "#"  = Hash
+    matchesSymbol "|"  = Pipe
     matchesSymbol sym  = Operator (Text.pack sym)
 
 -- | Checks whether the input character is a special character (which can be parsed with 'specialSymbol') that cannot be part of an identifier.
