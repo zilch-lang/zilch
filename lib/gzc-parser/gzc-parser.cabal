@@ -13,6 +13,7 @@ library
       Language.Zilch.Syntax.Errors
       Language.Zilch.Syntax.Internal
       Language.Zilch.Syntax.Lexer
+      Language.Zilch.Syntax.Parser
   other-modules:
       Paths_gzc_parser
   hs-source-dirs:
