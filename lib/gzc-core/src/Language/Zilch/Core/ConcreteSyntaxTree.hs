@@ -133,16 +133,19 @@ data PatternAtom
     WildcardP
   | -- | An enumeration constructor
     ConstructorP
-      [Located Pattern]  -- ^ The constructor parameters
+      (Located Identifier)  -- ^ The name of the constructor
+      [Located Pattern]     -- ^ The constructor parameters
   | -- | An integral number
-    IntegerP
-      (Located Text)
+    IntegerP Text
   | -- | A variable binding
     VariableP
       (Located Identifier)  -- ^ The name of the variable
   | -- | A parenthesized pattern
     ParensP
       (Located Pattern)
+  | -- | A pattern operator
+    OperatorP
+      (Located Identifier)
 
 data Type
   = -- | A universally quantified type
