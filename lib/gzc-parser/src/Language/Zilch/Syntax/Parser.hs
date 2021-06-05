@@ -28,7 +28,7 @@ import Data.List (foldl')
 type Parser m = (MP.MonadParsec ParseError (Vector LToken) m, MonadFail m)
 
 -- | Runs the parser on a list of tokens obtained through lexing.
-runParser :: [LToken] -> String -> Either (Diagnostic [] String Char) [CST.Module]
+runParser :: [LToken] -> String -> Either (Diagnostic [] String Char) CST.Module
 runParser tks filename = first toDiagnostic (MP.runParser parseFile filename (V.fromList tks))
 
 -- | Transforms a 'ParseErrorBundle' into a 'Diagnostic'.
@@ -130,22 +130,22 @@ parseToken p = MP.satisfy (p . IL.unwrapLocated)
 -------------------------------------------------------------------------------------------------------------------------------
 
 -- | Parses many modules composing a source file.
-parseFile :: Parser m => m [CST.Module]
-parseFile = lexeme (pure ()) *> MP.many (lexeme parseModule) <* MP.eof
+parseFile :: Parser m => m CST.Module
+parseFile = lexeme (pure ()) *> lexeme parseModule <* MP.eof
 
 -- | Parses a module, composed of a header, a list of imports and many declarations.
 parseModule :: Parser m => m CST.Module
 parseModule =
-  uncurry CST.Module <$> lexeme (nonIndented parseModuleHeader)
-                     <*> MP.many (lexeme $ nonIndented parseImport)
-                     <*> MP.many (lexeme $ nonIndented parseTopLevelDeclaration)
+  CST.Module <$> lexeme parseModuleHeader
+             <*> MP.many (lexeme $ nonIndented parseImport)
+             <*> MP.many (lexeme $ nonIndented parseTopLevelDeclaration)
 
 -- | Parses a module header, containing the name of the module and the optional export list.
-parseModuleHeader :: Parser m => m (Located CST.Identifier, Maybe [Located CST.Identifier])
+parseModuleHeader :: Parser m => m (Maybe [Located CST.Identifier])
 parseModuleHeader =
-  parseSymbol L.Module *> do
-    (,) <$> parseQualifiedIdentifier
-        <*> MP.optional (betweenParens (parseQualifiedIdentifier `MP.sepBy` parseSymbol L.Comma))
+  MP.optional do
+    lexeme (parseSymbol L.Export)
+    betweenParens (parseQualifiedIdentifier `MP.sepBy` parseSymbol L.Comma)
 
 -- | Parses a module import.
 parseImport :: Parser m => m (Located CST.Import)
