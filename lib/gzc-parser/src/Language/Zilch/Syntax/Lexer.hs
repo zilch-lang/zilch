@@ -129,21 +129,19 @@ numberLiteral = lexeme . located $ MP.choice
 -- | Parses a string literal with escape characters.
 stringLiteral :: Lexer m => m LToken
 stringLiteral = lexeme . located $ String . mconcat <$> do
-  sep1 <- Text.singleton <$> MPC.char '"'
-  content <- mconcat <$> MP.many (escapeCharacter <|> anyCharacter)
-  sep2 <- Text.singleton <$> MPC.char '"'
-  pure [sep1, content, sep2]
+  _ <- MPC.char '"'
+  MP.manyTill (escapeCharacter <|> anyCharacter) (MPC.char '"')
   where
-    anyCharacter = Text.singleton <$> MP.satisfy \ c -> (c /= '\n') && (c /= '\r') && (c /= '\'')
+    anyCharacter = Text.singleton <$> MP.satisfy \ c -> (c /= '\n') && (c /= '\r') && (c /= '\"')
     {-# INLINE anyCharacter #-}
 
 -- | Parses a character literal with escape characters.
 characterLiteral :: Lexer m => m LToken
-characterLiteral = lexeme . located $ Character . mconcat <$> do
-  sep1 <- Text.singleton <$> MPC.char '\''
+characterLiteral = lexeme . located $ Character <$> do
+  _ <- MPC.char '\''
   char <- escapeCharacter <|> anyCharacter
-  sep2 <- Text.singleton <$> MPC.char '\''
-  pure [sep1, char, sep2]
+  _ <- MPC.char '\''
+  pure char
   where
     anyCharacter = Text.singleton <$> MP.satisfy \ c -> (c /= '\n') && (c /= '\r') && (c /= '\'')
     {-# INLINE anyCharacter #-}
