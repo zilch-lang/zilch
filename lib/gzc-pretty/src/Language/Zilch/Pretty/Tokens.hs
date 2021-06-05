@@ -57,5 +57,5 @@ instance Pretty Token where
   pretty (InlineComment c) = text "-- " <> text (Text.unpack c)
   pretty (Integer i)       = text (Text.unpack i)
   pretty (Float f)         = text (Text.unpack f)
-  pretty (String s)        = text (Text.unpack s)
-  pretty (Character c)     = text (Text.unpack c)
+  pretty (String s)        = dquotes $ text (Text.unpack s)
+  pretty (Character c)     = squotes $ text (Text.unpack c)
