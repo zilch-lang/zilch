@@ -68,7 +68,7 @@ data FunctionDeclaration
 type Parameter t = (Located Identifier, Maybe (Located t))
 
 -- | The type of identifiers.
-type Identifier = Text
+type Identifier = ([Text], Text)
 
 -- | Meta-specifiers for top-level bindings.
 data MetaSpecifier

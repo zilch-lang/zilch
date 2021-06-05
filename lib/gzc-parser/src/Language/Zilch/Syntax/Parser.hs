@@ -173,8 +173,20 @@ parseTopLevelDeclaration = located do
 
 -- | Parses an identifier.
 parseQualifiedIdentifier :: Parser m => m (Located CST.Identifier)
-parseQualifiedIdentifier = located $ identifierName . IL.unwrapLocated <$> (betweenParens operator <|> identifier)
+parseQualifiedIdentifier = located (toIdentifier <$> qualIdentifier)
   where
+    qualIdentifier = MP.choice
+      [ MP.try $ (:) <$> symbol False <*> (parseSymbol L.Dot *> qualIdentifier)
+      , pure <$> symbol True
+      ]
+
+    toIdentifier l = (init l, last l)
+    {-# INLINE toIdentifier #-}
+
+    symbol False = identifierName . IL.unwrapLocated <$> identifier
+    symbol True  = identifierName . IL.unwrapLocated <$> (betweenParens operator <|> identifier)
+    {-# INLINE symbol #-}
+
     operator = parseToken \ case
       L.Operator _ -> True
       _            -> False
@@ -345,7 +357,7 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
           in pure $ CST.RecordAccessE expr a :@ pos
 
     operator = located do
-      CST.OperatorE . (\ (IL.ILocated p _ (L.Operator o)) -> o :@ p) <$> parseToken \ case
+      CST.OperatorE . (\ (IL.ILocated p _ (L.Operator o)) -> ([], o) :@ p) <$> parseToken \ case
         L.Operator _ -> True
         _            -> False
     {-# INLINE operator #-}
@@ -431,7 +443,7 @@ parsePattern s = MP.label "a pattern" . located $ lexeme patternAtom `MP.sepBy1`
       , CST.ParensP <$> betweenParens (parsePattern s) ]
 
     operator = located do
-      CST.OperatorP . (\ (IL.ILocated p _ (L.Operator o)) -> o :@ p) <$> parseToken \ case
+      CST.OperatorP . (\ (IL.ILocated p _ (L.Operator o)) -> ([], o) :@ p) <$> parseToken \ case
         L.Operator _ -> True
         _            -> False
     {-# INLINE operator #-}
