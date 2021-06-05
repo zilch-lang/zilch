@@ -1,10 +1,11 @@
 module Common where
 
 import Test.Hspec
-import Text.Diagnose (Diagnostic, PrettyText, prettyText, (<~<))
+import Text.Diagnose (Diagnostic, PrettyText, prettyText, (<~<), Position (Position))
 import Text.PrettyPrint.ANSI.Leijen (plain)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.IndentLocated as I
 
 fails :: Either (Diagnostic [] String Char) b -> Expectation
 fails (Left d)    = pure ()
@@ -20,3 +21,8 @@ right (Right x) = x
 
 left :: Either a b -> a
 left (Left x) = x
+
+infix 5 @@
+(@@) :: a -> (Integer, Integer, Integer, Integer, Integer, String) -> I.Located a
+x @@ (bl, bc, el, ec, i, f) = I.ILocated (Position (bl, bc) (el, ec) f) i x
+{-# INLINE (@@) #-}
