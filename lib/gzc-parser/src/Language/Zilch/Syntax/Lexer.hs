@@ -36,12 +36,16 @@ toDiagnostic = megaparsecBundleToDiagnostic "Lexing error on input"
 -------------------------------------------------------------------------------------
 
 tokenizeModule :: Lexer m => m [LToken]
-tokenizeModule = catMaybes <$> MP.many (lexeme token) <* MP.eof
+tokenizeModule = removeFrontSpaces *> (catMaybes <$> MP.many (lexeme token)) <* MP.eof
+  where
+    removeFrontSpaces = lexeme (pure ())
 {-# INLINE tokenizeModule #-}
 
 -- | Consumes any non-newline whitespace characters after running a parser.
 lexeme :: Lexer m => m a -> m a
-lexeme p = MPL.lexeme (MPL.space MPC.hspace1 empty empty) p       -- NOTE: do not eta-reduce
+lexeme p = MPL.lexeme (MPL.space anySpace empty empty) p       -- NOTE: do not eta-reduce
+  where
+    anySpace = MPC.hspace1 <|> MP.skipSome (MP.satisfy (== '\r'))
 {-# INLINE lexeme #-}
 
 -- | Transforms a simple parser into a parser returning a located value.
@@ -80,6 +84,7 @@ token = MP.choice
       o1 <- MP.getOffset
       o2 <- lexeme MP.getOffset    -- NOTE: a space counts as a parsed token; because `getSourcePos` is not cheap,
       put (o2 - o1)                --       `getOffset` works just as well to get the indentation level of the current line
+      lexeme (pure ())
 
 -- | Parses an inline comment, beginning with @--@ and a space character.
 inlineComment :: Lexer m => m LToken
