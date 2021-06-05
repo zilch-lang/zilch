@@ -1,0 +1,11 @@
+export (factorial, factorial2)
+
+def factorial(n : u64) : u64 := case n of
+  0 | 1 -> 1
+  _     -> n * factorial(n - 1)
+
+def factorial2 : (u64) -> u64 := aux(1, _)
+  where
+    def aux(acc : u64, n : u64) : u64 := case n of
+      0 | 1 -> acc
+      _     -> aux(acc * n, n - 1)
