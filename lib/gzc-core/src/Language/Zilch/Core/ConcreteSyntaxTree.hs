@@ -126,7 +126,9 @@ data ExpressionAtom
   | -- | The wildcard expression for lambda construction
     WildcardE
 
-data Pattern
+type Pattern = [Located PatternAtom]
+
+data PatternAtom
   = -- | The wildcard pattern
     WildcardP
   | -- | An enumeration constructor
