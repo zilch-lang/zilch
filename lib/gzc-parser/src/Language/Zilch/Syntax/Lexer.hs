@@ -88,7 +88,7 @@ token = MP.choice
 
 -- | Parses an inline comment, beginning with @--@ and a space character.
 inlineComment :: Lexer m => m LToken
-inlineComment = lexeme . located $ InlineComment . Text.pack <$> (MPC.string "--" *> MPC.hspace *> MP.manyTill (f (&&) (/=)) (f (||) (==)))
+inlineComment = lexeme . located $ InlineComment . Text.pack <$> (MPC.string "--" *> MPC.hspace *> MP.manyTill (f (&&) (/=)) (() <$ f (||) (==) <|> MP.eof))
   where f comb op = MP.satisfy (liftA2 comb (`op` '\n') (`op` '\r'))
         {-# INLINE f #-}
 
