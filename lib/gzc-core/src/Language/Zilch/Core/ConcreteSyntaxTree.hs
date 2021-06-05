@@ -9,6 +9,7 @@ data Module
       (Maybe [Located Identifier])   -- ^ The export list
       [Located Import]               -- ^ A list of imports
       [Located TopLevelDeclaration]  -- ^ All the available top-level declarations of the module
+  deriving (Show, Eq)
 
 -- | An @import@ statement at the top of a module.
 data Import
@@ -17,6 +18,7 @@ data Import
       (Located Identifier)                                        -- ^ The module imported
       (Maybe (Located Identifier))                                -- ^ An optional alias for the imported module
       (Maybe [(Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
+  deriving (Show, Eq)
 
 -- | A top-level declaration with meta-attributes introduced in the @#[...]@ construct.
 type TopLevelDeclaration = ([Located MetaSpecifier], Located Declaration)
@@ -55,6 +57,7 @@ data Declaration
       ([Located (Parameter Kind)], [Located Type])  -- ^ The type parameters with optional kind annotations with type constraints
       [Located Type]                                -- ^ The types for which the type class is implemented
       [Located Declaration]                         -- ^ Member function definitions
+  deriving (Show, Eq)
 
 data FunctionDeclaration
   = Decl
@@ -62,6 +65,7 @@ data FunctionDeclaration
       ([Located (Parameter Kind)], [Located Type]) -- ^ A list of type parameters with optional kind annotations with type constraints
       (Maybe [Located (Parameter Type)])           -- ^ A list of parameters with optional types
       (Maybe (Located Type))                       -- ^ The optional return type
+  deriving (Show, Eq)
 
 -- | A parameter is an identifier whose type may be specified (or not).
 type Parameter t = (Located Identifier, Maybe (Located t))
@@ -73,6 +77,7 @@ type Identifier = ([Text], Text)
 data MetaSpecifier
   = -- | > default
     DefaultImpl
+  deriving (Show, Eq)
 
 type Expression = [Located ExpressionAtom]
 
@@ -124,6 +129,7 @@ data ExpressionAtom
       (Located Expression)
   | -- | The wildcard expression for lambda construction
     WildcardE
+  deriving (Show, Eq)
 
 type Pattern = [Located PatternAtom]
 
@@ -145,6 +151,7 @@ data PatternAtom
   | -- | A pattern operator
     OperatorP
       (Located Identifier)
+  deriving (Show, Eq)
 
 data Type
   = -- | A universally quantified type
@@ -184,6 +191,7 @@ data Type
       Integer  -- ^ The width of the integer
   | -- | A character
     CharT
+  deriving (Show, Eq)
 
 -- | The type of types
 data Kind
@@ -196,3 +204,4 @@ data Kind
   | -- | A parenthesized kind
     ParensK
       (Located Kind)
+  deriving (Show, Eq)
