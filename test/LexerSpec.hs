@@ -1,9 +1,13 @@
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module LexerSpec (spec) where
 
 import Test.Hspec
 import Language.Zilch.Syntax.Lexer (runLexer)
 import Data.Either (fromRight)
 import Common
+import Text.RawString.QQ
 
 spec :: Spec
 spec = parallel do
@@ -11,6 +15,7 @@ spec = parallel do
   spaceStream
 
 -------------------------------------------------------------------------
+----- HINT: use [r|...|] for raw strings
 
 specFilename :: String
 specFilename = "<test>"

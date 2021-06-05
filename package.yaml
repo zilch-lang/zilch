@@ -52,3 +52,4 @@ tests:
     - ansi-wl-pprint
     - gzc-core
     - gzc-parser
+    - raw-strings-qq

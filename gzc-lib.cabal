@@ -78,5 +78,6 @@ test-suite unit-tests
     , gzc-lib
     , gzc-parser
     , hspec
+    , raw-strings-qq
     , text
   default-language: Haskell2010
