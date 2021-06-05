@@ -108,7 +108,7 @@ invalidEscapeStream = describe "on an invalid escape character string stream" do
 
 stringAndCharStream :: Spec
 stringAndCharStream = describe "on a string stream" do
-  let content = [r|"hello" 'w' 'o 'r' 'l' 'd'|]
+  let content = [r|"hello" 'w' 'o' 'r' 'l' 'd'|]
   let result = runLexer content specFilename
   it "successfully runs" do
     succeeds result (specFilename, content)
