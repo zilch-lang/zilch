@@ -61,6 +61,7 @@ test-suite unit-tests
   other-modules:
       Common
       LexerSpec
+      ParserSpec
       Paths_gzc_lib
   hs-source-dirs:
       test

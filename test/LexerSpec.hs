@@ -53,11 +53,11 @@ onlyKeywordStream = describe "on a keyword-only stream" do
   it "successfully runs" do
     succeeds result (specFilename, content)
   it "generates keywords" do
-    right result `shouldBe` [ L.Case @@ (1, 1, 1, 5, 0, specFilename)
-                            , L.Module @@ (1, 6, 1, 12, 0, specFilename)
-                            , L.Export @@ (1, 13, 1, 19, 0, specFilename)
-                            , L.Let @@ (1, 20, 1, 23, 0, specFilename)
-                            , L.Def @@ (1, 24, 1, 27, 0, specFilename) ]
+    right result `shouldBe` [ L.Case @- (1, 1, 1, 5, 0, specFilename)
+                            , L.Module @- (1, 6, 1, 12, 0, specFilename)
+                            , L.Export @- (1, 13, 1, 19, 0, specFilename)
+                            , L.Let @- (1, 20, 1, 23, 0, specFilename)
+                            , L.Def @- (1, 24, 1, 27, 0, specFilename) ]
 
 identifierStream :: Spec
 identifierStream = describe "on an identifier stream" do
@@ -66,16 +66,16 @@ identifierStream = describe "on an identifier stream" do
   it "successfully runs" do
     succeeds result (specFilename, content)
   it "generates identifiers" do
-    right result `shouldBe` [ L.Identifier "someId" @@ (1, 1, 1, 7, 0, specFilename)
-                            , L.Identifier "idk" @@ (1, 8, 1, 11, 0, specFilename)
-                            , L.Identifier "IDK" @@ (1, 12, 1, 15, 0, specFilename)
-                            , L.Identifier "Something" @@ (1, 16, 1, 25, 0, specFilename)
-                            , L.LParen @@ (1, 18, 1, 19, 0, specFilename)
-                            , L.Operator "+++-" @@ (1, 19, 1, 23, 0, specFilename)
-                            , L.RParen @@ (1, 23, 1, 24, 0, specFilename)
-                            , L.Identifier "A" @@ (1, 26, 1, 27, 0, specFilename)
-                            , L.Dot @@ (1, 17, 1, 28, 0, specFilename)
-                            , L.Identifier "B" @@ (1, 28, 1, 29, 0, specFilename) ]
+    right result `shouldBe` [ L.Identifier "someId" @- (1, 1, 1, 7, 0, specFilename)
+                            , L.Identifier "idk" @- (1, 8, 1, 11, 0, specFilename)
+                            , L.Identifier "IDK" @- (1, 12, 1, 15, 0, specFilename)
+                            , L.Identifier "Something" @- (1, 16, 1, 25, 0, specFilename)
+                            , L.LParen @- (1, 18, 1, 19, 0, specFilename)
+                            , L.Operator "+++-" @- (1, 19, 1, 23, 0, specFilename)
+                            , L.RParen @- (1, 23, 1, 24, 0, specFilename)
+                            , L.Identifier "A" @- (1, 26, 1, 27, 0, specFilename)
+                            , L.Dot @- (1, 17, 1, 28, 0, specFilename)
+                            , L.Identifier "B" @- (1, 28, 1, 29, 0, specFilename) ]
 
 operatorStream :: Spec
 operatorStream = describe "on an operator stream" do
@@ -84,11 +84,11 @@ operatorStream = describe "on an operator stream" do
   it "successfully runs" do
     succeeds result (specFilename, content)
   it "generates symbols" do
-    right result `shouldBe` [ L.Operator "++.--" @@ (1, 1, 1, 6, 0, specFilename)
-                            , L.LParen @@ (1, 6, 1, 7, 0, specFilename)
-                            , L.Hash @@ (1, 7, 1, 8, 0, specFilename)
-                            , L.RParen @@ (1, 8, 1, 9, 0, specFilename)
-                            , L.Operator "~" @@ (1, 9, 1, 10, 0, specFilename) ]
+    right result `shouldBe` [ L.Operator "++.--" @- (1, 1, 1, 6, 0, specFilename)
+                            , L.LParen @- (1, 6, 1, 7, 0, specFilename)
+                            , L.Hash @- (1, 7, 1, 8, 0, specFilename)
+                            , L.RParen @- (1, 8, 1, 9, 0, specFilename)
+                            , L.Operator "~" @- (1, 9, 1, 10, 0, specFilename) ]
 
 commentStream :: Spec
 commentStream = describe "on a comment stream" do
@@ -97,7 +97,7 @@ commentStream = describe "on a comment stream" do
   it "successfully runs" do
     succeeds result (specFilename, content)
   it "generates a comment" do
-    right result `shouldBe` [ L.InlineComment "Hello, world!" @@ (1, 1, 1, 17, 0, specFilename) ]
+    right result `shouldBe` [ L.InlineComment "Hello, world!" @- (1, 1, 1, 17, 0, specFilename) ]
 
 invalidEscapeStream :: Spec
 invalidEscapeStream = describe "on an invalid escape character string stream" do
@@ -113,9 +113,9 @@ stringAndCharStream = describe "on a string stream" do
   it "successfully runs" do
     succeeds result (specFilename, content)
   it "generates strings and characters" do
-    right result `shouldBe` [ L.String "hello" @@ (1, 1, 1, 8, 0, specFilename)
-                            , L.Character "w" @@ (1, 9, 1, 12, 0, specFilename)
-                            , L.Character "o" @@ (1, 13, 1, 16, 0, specFilename)
-                            , L.Character "r" @@ (1, 17, 1, 20, 0, specFilename)
-                            , L.Character "l" @@ (1, 21, 1, 24, 0, specFilename)
-                            , L.Character "d" @@ (1, 25, 1, 28, 0, specFilename) ]
+    right result `shouldBe` [ L.String "hello" @- (1, 1, 1, 8, 0, specFilename)
+                            , L.Character "w" @- (1, 9, 1, 12, 0, specFilename)
+                            , L.Character "o" @- (1, 13, 1, 16, 0, specFilename)
+                            , L.Character "r" @- (1, 17, 1, 20, 0, specFilename)
+                            , L.Character "l" @- (1, 21, 1, 24, 0, specFilename)
+                            , L.Character "d" @- (1, 25, 1, 28, 0, specFilename) ]
