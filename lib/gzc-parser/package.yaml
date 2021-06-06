@@ -16,6 +16,7 @@ dependencies:
 - containers
 - gzc-pretty
 - vector
+- unordered-containers
 
 ghc-options:
 - -Wall
