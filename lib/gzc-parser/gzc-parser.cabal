@@ -13,6 +13,7 @@ library
       Language.Zilch.Syntax.Errors
       Language.Zilch.Syntax.Internal
       Language.Zilch.Syntax.Lexer
+      Language.Zilch.Syntax.ModuleResolver
       Language.Zilch.Syntax.Parser
       Language.Zilch.Syntax.ScopeChecker
   other-modules:
@@ -26,9 +27,12 @@ library
       OverloadedStrings
   ghc-options: -Wall -Wextra
   build-depends:
-      base >=4.7 && <5
+      algebraic-graphs
+    , base >=4.7 && <5
     , containers
     , diagnose
+    , directory
+    , filepath
     , gzc-core
     , gzc-pretty
     , megaparsec >=9.0.0

@@ -17,6 +17,9 @@ dependencies:
 - gzc-pretty
 - vector
 - unordered-containers
+- directory
+- filepath
+- algebraic-graphs
 
 ghc-options:
 - -Wall
