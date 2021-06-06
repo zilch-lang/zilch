@@ -2,8 +2,13 @@ module Language.Zilch.Syntax.Errors where
 
 import qualified Text.Megaparsec as MP
 import Language.Zilch.Syntax.Internal (Hintable(..))
-import Text.Diagnose (hint, Diagnostic, Position)
+import Text.Diagnose (hint, Diagnostic, Position, diagnostic, (<++>), reportError, Marker(..))
 import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Vector as V
+import Data.Vector (Vector)
+import Data.List (intercalate)
+import Data.Functor ((<&>))
 
 data LexerError
   = InvalidEscapeSequence Char
@@ -43,3 +48,26 @@ data ResolverError
   | CyclicImports [(Text, Text)] Position          -- ^ @A@ includes @B@, which ends up including @A@
   | FileNotFoundInIncludePath FilePath Position    -- ^ A filename was not found in the include path
   | MultipleFilesFound Text [FilePath] Position    -- ^ Multiple files with the same name were found in the include path
+
+fromResolverError :: (?includePath :: Vector Text) => ResolverError -> Diagnostic [] String Char
+fromResolverError (Lexing d)                      = d
+fromResolverError (Parsing d)                     = d
+fromResolverError (CyclicImports ids p)           =
+  diagnostic <++> reportError "Cyclic imports detected"
+                              [(p, Where showCycle)]
+                              []
+  where
+    showCycle = "From top to bottom:\n- " <> intercalate "\n- " (ids <&> \ (f, i) -> "'" <> Text.unpack f <> "' is included by '" <> Text.unpack i <> "'")
+fromResolverError (FileNotFoundInIncludePath f p) =
+  diagnostic <++> reportError ("File '" <> f <> "' not found in the include path.")
+                              [(p, Where . showIncludePath $ V.toList ?includePath)]
+                              []
+  where
+    showIncludePath [] = ""
+    showIncludePath l  = "Current include path:\n- " <> intercalate "\n- " (Text.unpack <$> l)
+fromResolverError (MultipleFilesFound m fs p)     =
+  diagnostic <++> reportError ("Multiple files were found to match the import of '" <> Text.unpack m <> "'")
+                              [(p, Where showFiles)]
+                              []
+  where
+    showFiles = "These files match the import:\n- " <> intercalate "\n- " fs
