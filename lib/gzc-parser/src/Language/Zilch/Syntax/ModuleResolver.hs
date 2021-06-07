@@ -63,19 +63,23 @@ parseAndResolveModules moduleName = do
   bimap (first fromResolverError) getModules <$> runStateT (runExceptT $ parseFile moduleName "@@main" commandLine) mempty
   where getModules (RState mods graph fs) = (H.toList fs, mods, fromJust $ GA.topSort <$> GA.toAcyclic graph)
 
-        commandLine = Position (1, 1) (1, 1) "<command-line>"
+        commandLine = Position (1, 1) (1, 1) "@@main"
 
 parseFile :: ModuleResolver m => Text -> Text -> Position -> m ()
 parseFile moduleName from pos = do
-  let filename = toFilePath moduleName
-  filepath <- queryIncludePath filename moduleName pos
+  RState mods _ _ <- get
+  mod <- case mods H.!? moduleName of
+    Nothing -> do
+      let filename = toFilePath moduleName
+      filepath <- queryIncludePath filename moduleName pos
 
-  content <- liftIO $ T.readFile filepath
+      content <- liftIO $ T.readFile filepath
 
-  insertFileContent filepath content
+      insertFileContent filepath content
 
-  tks <- liftEither (first Lexing $ runLexer content filepath)
-  mod <- liftEither (first Parsing $ runParser tks filepath)
+      tks <- liftEither (first Lexing $ runLexer content filepath)
+      liftEither (first Parsing $ runParser tks filepath)
+    Just m -> pure m
 
   insertDependencies moduleName mod from pos
 
