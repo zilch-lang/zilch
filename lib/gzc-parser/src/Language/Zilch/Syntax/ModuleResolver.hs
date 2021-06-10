@@ -52,6 +52,8 @@ type ModuleResolver m = (?includePath :: Vector Text, MonadIO m, MonadError Reso
 --
 --   Returns a hashmap mapping module names to parsed modules,
 --   alongside a topological sort (import order) of those.
+--   You may want to reverse the topological order to start
+--   with "non-importing" modules first.
 parseAndResolveModules :: (?includePath :: Vector Text, MonadIO m) => Text -> m (Either (Diagnostic [] String Char) (), ([(FilePath, [String])], HashMap Text CST.Module, [Text]))
 parseAndResolveModules moduleName = do
   includePath <- liftIO $ V.toList <$> mapM (canonicalizePath . Text.unpack) ?includePath
