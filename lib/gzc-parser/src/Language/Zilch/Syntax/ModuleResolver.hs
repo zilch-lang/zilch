@@ -61,7 +61,7 @@ parseAndResolveModules moduleName = do
   -- Canonicalize and eliminate duplicated include paths; also make them relative to the current directory
 
   bimap (first fromResolverError) getModules <$> runStateT (runExceptT $ parseFile moduleName "@@main" commandLine) mempty
-  where getModules (RState mods graph fs) = (H.toList fs, mods, fromJust $ GA.topSort <$> GA.toAcyclic graph)
+  where getModules (RState mods graph fs) = (H.toList fs, mods, fromJust $ GA.topSort . GA.removeVertex "@@main" <$> GA.toAcyclic graph)
 
         commandLine = Position (1, 1) (1, 1) "@@main"
 
