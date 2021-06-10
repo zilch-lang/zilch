@@ -1,8 +1,10 @@
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
 module Language.Zilch.Syntax.Errors where
 
 import qualified Text.Megaparsec as MP
 import Language.Zilch.Syntax.Internal (Hintable(..))
-import Text.Diagnose (hint, Diagnostic, Position, diagnostic, (<++>), reportError, Marker(..))
+import Text.Diagnose (hint, Diagnostic, Position, diagnostic, (<++>), reportError, Marker(..), Report)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Vector as V
@@ -59,7 +61,7 @@ fromResolverError (CyclicImports ids p)           =
   where
     showCycle = "From top to bottom:\n- " <> intercalate "\n- " (ids <&> \ (f, i) -> "'" <> Text.unpack f <> "' is included by '" <> Text.unpack i <> "'")
 fromResolverError (FileNotFoundInIncludePath f p) =
-  diagnostic <++> reportError ("File '" <> f <> "' not found in the include path.")
+  diagnostic <++> reportError ("File '" <> f <> "' not found in the include path")
                               [(p, Where . showIncludePath $ V.toList ?includePath)]
                               []
   where
@@ -71,3 +73,34 @@ fromResolverError (MultipleFilesFound m fs p)     =
                               []
   where
     showFiles = "These files match the import:\n- " <> intercalate "\n- " fs
+
+data ScopeCheckError
+  = UnboundExportedFunction Text Position
+  | MultipleDefinitionsForExportedFunction Text Position [Position]
+  | ModuleDoesNotExportFunction Text Position
+  | AmbiguousFunctionUsage Text Position [(Text, Position)]
+
+fromScopeCheckError :: ScopeCheckError -> Report String
+fromScopeCheckError (UnboundExportedFunction f p) =
+  reportError ("Cannot export function '" <> Text.unpack f <> "' because it is not bound in this module")
+    [(p, This "")]
+    []
+fromScopeCheckError (MultipleDefinitionsForExportedFunction f p ps) =
+  reportError ("Trying to export function '" <> Text.unpack f <> "' but it has been defined multiple times")
+    ((p, This "") : generateDefinitionSites 0 ps)
+    []
+  where
+    generateDefinitionSites :: Int -> [Position] -> [(Position, Marker String)]
+    generateDefinitionSites _ []     = []
+    generateDefinitionSites i (p:ps) = (p, Where $ "Definition #" <> show i) : generateDefinitionSites (i + 1) ps
+fromScopeCheckError (ModuleDoesNotExportFunction f p) =
+  reportError ("Module does not export function '" <> Text.unpack f <> "'")
+    [(p, This "")]
+    []
+fromScopeCheckError (AmbiguousFunctionUsage f p is) =
+  reportError ("Ambiguous occurrence of function '" <> Text.unpack f <> "'")
+    ((p, This "here") : generateAmbiguousImports)
+    [hint "You may resolve this issue by restricting what functions are imported using explicit import lists."
+    ,hint "Alternatively, you may also import modules qualified or using 'as'-aliases."]
+  where
+    generateAmbiguousImports = is <&> \ (i, p) -> (p, Where $ "Importing the module '" <> Text.unpack i <> "' exposes a function named '" <> Text.unpack f <> "'")
