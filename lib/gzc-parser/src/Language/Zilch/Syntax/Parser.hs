@@ -24,6 +24,7 @@ import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Language.Zilch.Pretty.Tokens (pretty)
 import Data.List (foldl')
+import qualified Data.Text as Text
 
 type Parser m = (MP.MonadParsec ParseError (Vector LToken) m, MonadFail m)
 
@@ -247,10 +248,26 @@ parseMetaAttributes = do
 parseMetaSpecifier :: Parser m => m (Located CST.MetaSpecifier)
 parseMetaSpecifier = located $ MP.choice
   [ parseDefault
+  , CST.OpFix <$> parseInfixL
+  , CST.OpFix <$> parseInfixR
+  , CST.OpFix <$> parseInfix
   ]
   where
     parseDefault = CST.DefaultImpl <$ parseSymbol (L.Identifier "default")
     {-# INLINE parseDefault #-}
+
+    parseInfixL = CST.InfixL <$> (parseSymbol (L.Identifier "infixl") *> parseInteger)
+    {-# INLINE parseInfixL #-}
+
+    parseInfixR = CST.InfixR <$> (parseSymbol (L.Identifier "infixr") *> parseInteger)
+    {-# INLINE parseInfixR #-}
+
+    parseInfix = CST.Infix <$> (parseSymbol (L.Identifier "infix") *> parseInteger)
+    {-# INLINE parseInfix #-}
+
+    parseInteger = (\ (L.Integer i) -> read (Text.unpack i)) . IL.unwrapLocated <$> parseToken \ case
+      L.Integer _ -> True
+      _           -> False
 
 -- | Parses an enumeration definition.
 parseEnumDefinition :: Parser m => m (Located CST.Declaration)
