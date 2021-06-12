@@ -73,10 +73,18 @@ type Parameter t = (Located Identifier, Maybe (Located t))
 -- | The type of identifiers.
 type Identifier = ([Text], Text)
 
+-- | The fixity of an operator (associativity + precedence).
+data Fixity
+  = InfixL Integer
+  | InfixR Integer
+  | Infix  Integer
+  deriving (Show, Eq)
+
 -- | Meta-specifiers for top-level bindings.
 data MetaSpecifier
   = -- | > default
     DefaultImpl
+  | OpFix Fixity
   deriving (Show, Eq)
 
 type Expression = [Located ExpressionAtom]
