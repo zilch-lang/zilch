@@ -8,7 +8,7 @@ module Language.Zilch.Syntax.ModuleResolver (parseAndResolveModules) where
 import Data.Text (Text)
 import Data.Vector (Vector)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Text.Diagnose (Diagnostic, (<++>), reportError, diagnostic, Marker(..))
+import Text.Diagnose (Diagnostic)
 import Control.Monad.Except (MonadError (throwError), runExceptT, liftEither)
 import Data.HashMap.Strict (HashMap)
 import qualified Language.Zilch.Core.ConcreteSyntaxTree as CST
@@ -27,9 +27,8 @@ import qualified Data.HashMap.Strict as H
 import qualified Algebra.Graph.AdjacencyMap as G
 import qualified Data.Text.IO as T
 import qualified Algebra.Graph.Acyclic.AdjacencyMap as GA
-import Data.Located (Located((:@)), Position(..), unwrapLocated)
-import Data.List (groupBy, intersperse, intercalate)
-import Data.Functor ((<&>))
+import Data.Located (Located((:@)), Position(..))
+import Data.List (groupBy)
 
 data ResolverState
   = RState
