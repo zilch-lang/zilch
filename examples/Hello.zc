@@ -2,6 +2,6 @@ export (main)
 
 open import System.IO (puts as putstr, io)
 
-def main() : io u64 :=
-  let () := putstr("Hello, world!\n") in
+let main() : io u64 :=
+  let _ := putstr("Hello, world!\n") in
   0
