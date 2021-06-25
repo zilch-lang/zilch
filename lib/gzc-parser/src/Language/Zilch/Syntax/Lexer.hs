@@ -162,7 +162,6 @@ anyIdentifier = lexeme $ located do
   pure $ matchesKeyword (h : r)
   where
     matchesKeyword "forall"     = Forall
-    matchesKeyword "def"        = Def
     matchesKeyword "enum"       = Enum
     matchesKeyword "record"     = Record
     matchesKeyword "class"      = Class
@@ -173,14 +172,11 @@ anyIdentifier = lexeme $ located do
     matchesKeyword "alias"      = Alias
     matchesKeyword "case"       = Case
     matchesKeyword "of"         = Of
-    matchesKeyword "module"     = Module
-    matchesKeyword "fn"         = Fn
-    matchesKeyword "foreign"    = Foreign
     matchesKeyword "as"         = As
     matchesKeyword "open"       = Open
     matchesKeyword "import"     = Import
     matchesKeyword "export"     = Export
-    matchesKeyword "perm"       = Perm
+    matchesKeyword "effect"     = Effect
     matchesKeyword "if"         = If
     matchesKeyword "then"       = Then
     matchesKeyword "else"       = Else

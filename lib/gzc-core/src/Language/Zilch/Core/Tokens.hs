@@ -13,8 +13,6 @@ data Token
     Forall
     -- | Forall type-variable binder (@∀@ unicode variant)
   | UniForall
-    -- | Function definition (@def@)
-  | Def
     -- | Enumeration definition (@enum@)
   | Enum
     -- | Record definition (@record@)
@@ -25,7 +23,7 @@ data Token
   | Impl
     -- | Additional variable binders in function definition (@where@)
   | Where
-    -- | Let-expression (@let@)
+    -- | Let-expression (@let@) or function definition
   | Let
     -- | Let-expression (@in@)
   | In
@@ -35,12 +33,6 @@ data Token
   | Case
     -- | Pattern matching middle delimiter (@of@)
   | Of
-    -- | Module definition (@module@)
-  | Module
-    -- | Anonymous function definition (@fn@)
-  | Fn
-    -- | FFI specifier on imports/exports (@foreign@)
-  | Foreign
     -- | Alias creation (@as@)
   | As
     -- | Open import (@open@)
@@ -49,8 +41,8 @@ data Token
   | Import
     -- | Module/FFI export (@export@)
   | Export
-    -- | Permission declaration (@perm@)
-  | Perm
+    -- | Permission declaration (@effect@)
+  | Effect
     -- | Conditional beginning delimiter (@if@)
   | If
     -- | Conditional middle delimiter (@then@)
@@ -120,15 +112,14 @@ staticKeywordsList :: [Text]
 staticKeywordsList =
   [ -- keywords
     "forall", "∀"
-  , "def", "enum", "record", "alias", "class", "impl"
+  , "enum", "record", "alias", "class", "impl", "effect"
   , "where"
-  , "let", "in", "case", "of", "fn", "if", "then", "else"
-  , "module", "import", "open", "foreign", "export", "as"
+  , "let", "in", "case", "of", "if", "then", "else"
+  , "import", "open", "export", "as"
   , "pattern"
     -- reserved symbols
   , ":=", "≔"
   , "->", "→"
-  , "<-", "←"
   , "<:"
   , "_", "·"
   , "."

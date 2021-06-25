@@ -213,7 +213,7 @@ parseFunctionDefinition = located $ lineFold \ s ->
 -- | Parses a function header.
 parseFunctionDeclaration :: Parser m => m CST.FunctionDeclaration
 parseFunctionDeclaration = lineFold \ s -> do
-  lexeme (parseSymbol L.Def)
+  lexeme (parseSymbol L.Let)
   universal <- MP.option ([], []) . lexeme $ betweenAngles ((,) <$> parseParameters (lexeme $ parseKind s) <*> MP.option [] (parseConstraints s))
   name <- lexeme parseQualifiedIdentifier
   parameters <- MP.optional . lexeme $ betweenParens (parseParameters (lexeme $ parseType s))
