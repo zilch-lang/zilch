@@ -2,10 +2,11 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
 module Language.Zilch.Syntax.Lexer (runLexer) where
 
 import qualified Text.Megaparsec as MP
-import Control.Monad.State (evalState, MonadState, put, gets)
 import Data.Text (Text)
 import Language.Zilch.Core.Tokens (LToken, Token(..))
 import Text.Diagnose (Diagnostic, Position(..))
@@ -20,13 +21,13 @@ import Data.Char (isSymbol, isPunctuation, isMark)
 import Language.Zilch.Syntax.Internal (megaparsecBundleToDiagnostic)
 import Language.Zilch.Syntax.Errors (LexerError(..))
 
-type Lexer m = (MP.MonadParsec LexerError Text m, MonadState Int m)
+type Lexer m = (MP.MonadParsec LexerError Text m)
 
 -- | Runs the lexer on a given input file.
 runLexer :: Text                                         -- ^ The content of the file
          -> String                                       -- ^ The name of the file
          -> Either (Diagnostic [] String Char) [LToken]  -- ^ Either an error or a list of tokens
-runLexer content filename = evalState (first toDiagnostic <$> MP.runParserT tokenizeModule filename content) 0
+runLexer content filename = first toDiagnostic $ MP.runParser tokenizeModule filename content
 
 -- | Transforms a 'ParseErrorBundle' into a 'Diagnostic'.
 toDiagnostic :: MP.ParseErrorBundle Text LexerError -> Diagnostic [] String Char
@@ -43,16 +44,12 @@ tokenizeModule = removeFrontSpaces *> (catMaybes <$> MP.many (lexeme token)) <* 
 
 -- | Consumes any non-newline whitespace characters after running a parser.
 lexeme :: Lexer m => m a -> m a
-lexeme p = MPL.lexeme (MPL.space anySpace empty empty) p       -- NOTE: do not eta-reduce
-  where
-    anySpace = MPC.hspace1 <|> MP.skipSome (MP.satisfy (== '\r'))
+lexeme p = MPL.lexeme (MPL.space MPC.space1 empty empty) p       -- NOTE: do not eta-reduce
 {-# INLINE lexeme #-}
 
 -- | Transforms a simple parser into a parser returning a located value.
 located :: Lexer m => m a -> m (Located a)
 located p = do
-  currentIndent <- gets fromIntegral
-
   MP.SourcePos file beginLine beginColumn <- MP.getSourcePos
   res <- p
   MP.SourcePos _ endLine endColumn <- MP.getSourcePos
@@ -70,8 +67,7 @@ located p = do
 --   Returns 'Nothing' if nothing is to be returned (for example in the case of an end-of-line).
 token :: Lexer m => m (Maybe LToken)
 token = MP.choice
-  [ Nothing <$  eol
-  , Just    <$> MP.try inlineComment
+  [ Just    <$> MP.try inlineComment
   , Just    <$> specialSymbol
   , Just    <$> numberLiteral
   , Just    <$> stringLiteral
@@ -79,12 +75,6 @@ token = MP.choice
   , Just    <$> anyIdentifier
   , Just    <$> anySymbol
   ]
-  where
-    eol = MP.some $ MPC.eol *> do
-      o1 <- MP.getOffset
-      o2 <- lexeme MP.getOffset    -- NOTE: a space counts as a parsed token; because `getSourcePos` is not cheap,
-      put (o2 - o1)                --       `getOffset` works just as well to get the indentation level of the current line
-      lexeme (pure ())
 
 -- | Parses an inline comment, beginning with @--@ and a space character.
 inlineComment :: Lexer m => m LToken

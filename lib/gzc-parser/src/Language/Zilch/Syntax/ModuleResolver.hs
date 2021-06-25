@@ -116,7 +116,7 @@ insertDependencies modName mod from pos = do
 
   forM_ is \ i@(_ :@ p) -> parseFile (importName i) modName p
   where
-    importName (CST.Import _ ((qual, i) :@ _) _ _ :@ p) = Text.intercalate "." (qual <> [i])
+    importName (CST.Import _ ((qual, i) :@ _) _ _ :@ _) = Text.intercalate "." (qual <> [i])
 
 checkDependencyCycle :: ModuleResolver m => G.AdjacencyMap Text -> Text -> Text -> Position -> m ()
 checkDependencyCycle g root from pos = dfs g root [(root, from)]
