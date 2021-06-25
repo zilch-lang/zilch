@@ -14,7 +14,7 @@ import Text.Diagnose (Diagnostic, Report, Marker(..), Hint, Position(..), report
 import qualified Data.Set as Set
 import Data.Bifunctor (bimap, second)
 import Language.Zilch.Core.Tokens (LToken)
-import qualified Data.IndentLocated as IL (unwrapLocated, position)
+import qualified Data.Located as L (unwrapLocated, position)
 import qualified Data.List.NonEmpty as NE
 import Language.Zilch.Pretty.Tokens (pretty)
 import Data.Vector (Vector)
@@ -72,7 +72,7 @@ instance MP.Stream (Vector LToken) where
   takeWhile_ = V.span
 
 instance MP.VisualStream (Vector LToken) where
-  showTokens _ = intercalate ", " . fmap (squotes . show . pretty . IL.unwrapLocated) . NE.toList
+  showTokens _ = intercalate ", " . fmap (squotes . show . pretty . L.unwrapLocated) . NE.toList
     where
       squotes x = '\'' : x <> "'"
 
@@ -80,7 +80,7 @@ instance MP.TraversableStream (Vector LToken) where
   reachOffsetNoLine o MP.PosState{..} =
     let (_, after) = V.splitAt (o - pstateOffset) pstateInput
 
-        currentTokenPosition = IL.position <$> after V.!? 0
+        currentTokenPosition = L.position <$> after V.!? 0
 
         calculateNewPosition p Nothing  = p
         calculateNewPosition _ (Just p) =

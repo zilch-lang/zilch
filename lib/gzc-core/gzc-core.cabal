@@ -10,7 +10,6 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Data.IndentLocated
       Data.Located
       Language.Zilch.Core.AbstractSyntaxTree
       Language.Zilch.Core.ConcreteSyntaxTree

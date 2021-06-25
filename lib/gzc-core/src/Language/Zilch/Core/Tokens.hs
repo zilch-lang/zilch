@@ -1,6 +1,6 @@
 module Language.Zilch.Core.Tokens where
 
-import Data.IndentLocated (Located)
+import Data.Located (Located)
 import Data.Text (Text)
 
 -- | A simple type alias for located tokens (tokens with an additional position information).
@@ -113,7 +113,7 @@ data Token
   | String Text
     -- | Character
   | Character Text
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 -- | A static list of keywords to check mixfix operator backbones.
 staticKeywordsList :: [Text]

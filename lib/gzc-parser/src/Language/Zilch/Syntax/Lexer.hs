@@ -13,7 +13,7 @@ import Data.Bifunctor (Bifunctor(first))
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Text.Megaparsec.Char as MPC
 import Data.Maybe (catMaybes)
-import Data.IndentLocated (Located, IndentLocated (ILocated))
+import Data.Located (Located((:@)))
 import Control.Applicative (liftA2, (<|>), empty)
 import qualified Data.Text as Text
 import Data.Char (isSymbol, isPunctuation, isMark)
@@ -61,7 +61,7 @@ located p = do
                      (fromIntegral $ MP.unPos endLine, fromIntegral $ MP.unPos endColumn)
                      file
 
-  pure (ILocated pos currentIndent res)
+  pure $ res :@ pos
 
 ------------------------------------------------------------------------------------
 

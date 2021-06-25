@@ -18,7 +18,6 @@ import Language.Zilch.Syntax.Internal (megaparsecBundleToDiagnostic)
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import Control.Applicative (empty, (<|>))
 import Data.Located (Located(..), Position(..), position, unwrapLocated)
-import qualified Data.IndentLocated as IL (unwrapLocated, position, IndentLocated (ILocated))
 import qualified Language.Zilch.Core.Tokens as L
 import Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -72,7 +71,7 @@ located p = do
   res <- p
 
   MP.State input offset _ _ <- MP.getParserState -- NOTE: @offset@ can never be 0
-  let Position _ (endLine, endColumn) _ = IL.position $ input V.! (offset - 1)
+  let Position _ (endLine, endColumn) _ = position $ input V.! (offset - 1)
 
   -- NOTE: We need to fetch the last token parsed, which is located right before the
   --       currently available token.
@@ -83,7 +82,7 @@ located p = do
                      (endLine, endColumn)
                      file
 
-  pure (res :@ pos)
+  pure $ res :@ pos
 
 -- | See @'MPL.indentGuard'@.
 indentGuard :: Parser m => Ordering -> MP.Pos -> m MP.Pos
@@ -121,11 +120,11 @@ betweenAngles p = MP.between (parseSymbol L.LAngle) (parseSymbol L.RAngle) p
 
 -- | Parses a given token in the stream.
 parseSymbol :: Parser m => L.Token -> m LToken
-parseSymbol tk = MP.satisfy ((== tk) . IL.unwrapLocated) MP.<?> show (pretty tk)
+parseSymbol tk = MP.satisfy ((== tk) . unwrapLocated) MP.<?> show (pretty tk)
 {-# INLINE parseSymbol #-}
 
 parseToken :: Parser m => (L.Token -> Bool) -> m LToken
-parseToken p = MP.satisfy (p . IL.unwrapLocated)
+parseToken p = MP.satisfy (p . unwrapLocated)
 {-# INLINE parseToken #-}
 
 -------------------------------------------------------------------------------------------------------------------------------
@@ -184,8 +183,8 @@ parseQualifiedIdentifier = located (toIdentifier <$> qualIdentifier)
     toIdentifier l = (init l, last l)
     {-# INLINE toIdentifier #-}
 
-    symbol False = identifierName . IL.unwrapLocated <$> identifier
-    symbol True  = identifierName . IL.unwrapLocated <$> (betweenParens operator <|> identifier)
+    symbol False = identifierName . unwrapLocated <$> identifier
+    symbol True  = identifierName . unwrapLocated <$> (betweenParens operator <|> identifier)
     {-# INLINE symbol #-}
 
     operator = parseToken \ case
@@ -265,7 +264,7 @@ parseMetaSpecifier = located $ MP.choice
     parseInfix = CST.Infix <$> (parseSymbol (L.Identifier "infix") *> parseInteger)
     {-# INLINE parseInfix #-}
 
-    parseInteger = (\ (L.Integer i) -> read (Text.unpack i)) . IL.unwrapLocated <$> parseToken \ case
+    parseInteger = (\ (L.Integer i) -> read (Text.unpack i)) . unwrapLocated <$> parseToken \ case
       L.Integer _ -> True
       _           -> False
 
@@ -374,7 +373,7 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
           in pure $ CST.RecordAccessE expr a :@ pos
 
     operator = located do
-      CST.OperatorE . (\ (IL.ILocated p _ (L.Operator o)) -> ([], o) :@ p) <$> parseToken \ case
+      CST.OperatorE . (\ (L.Operator o :@ p) -> ([], o) :@ p) <$> parseToken \ case
         L.Operator _ -> True
         _            -> False
     {-# INLINE operator #-}
@@ -436,13 +435,13 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
     {-# INLINE recordField #-}
 
     literalExpression = MP.choice
-      [ CST.IntegerE . (\ (L.Integer i) -> i) . IL.unwrapLocated <$> parseToken \ case
+      [ CST.IntegerE . (\ (L.Integer i) -> i) . unwrapLocated <$> parseToken \ case
           L.Integer _ -> True
           _           -> False
-      , CST.StringE . (\ (L.String s) -> s) . IL.unwrapLocated <$> parseToken \ case
+      , CST.StringE . (\ (L.String s) -> s) . unwrapLocated <$> parseToken \ case
           L.String _ -> True
           _          -> False
-      , CST.CharE . (\ (L.Character c) -> c) . IL.unwrapLocated <$> parseToken \ case
+      , CST.CharE . (\ (L.Character c) -> c) . unwrapLocated <$> parseToken \ case
           L.Character _ -> True
           _             -> False
       ]
@@ -460,12 +459,12 @@ parsePattern s = MP.label "a pattern" . located $ lexeme patternAtom `MP.sepBy1`
       , CST.ParensP <$> betweenParens (parsePattern s) ]
 
     operator = located do
-      CST.OperatorP . (\ (IL.ILocated p _ (L.Operator o)) -> ([], o) :@ p) <$> parseToken \ case
+      CST.OperatorP . (\ (L.Operator o :@ p) -> ([], o) :@ p) <$> parseToken \ case
         L.Operator _ -> True
         _            -> False
     {-# INLINE operator #-}
 
-    integerPattern = CST.IntegerP . (\ (L.Integer i) -> i) . IL.unwrapLocated <$> parseToken \ case
+    integerPattern = CST.IntegerP . (\ (L.Integer i) -> i) . unwrapLocated <$> parseToken \ case
       L.Integer _ -> True
       _           -> False
     {-# INLINE integerPattern #-}
