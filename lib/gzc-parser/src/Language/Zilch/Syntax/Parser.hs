@@ -321,7 +321,11 @@ parseTypeclassDefinition = lineFold \ s -> located do
   CST.Class <$> lexeme parseQualifiedIdentifier
             <*> MP.option [] (lexeme $ betweenParens (parseParameters (lexeme $ parseKind s)))
             <*> MP.option [] (lexeme (parseSymbol L.Pipe *> (lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))))
-            <*> (lexeme (parseSymbol L.ColonEquals) *> MP.option [] (indentBlock (lexeme $ located parseFunctionDeclaration)))
+            <*> (lexeme (parseSymbol L.ColonEquals) *> MP.option [] (indentBlock $ lexeme parseClassMember))
+  where
+    parseClassMember = lineFold \ s -> do
+      (,) <$> (lexeme parseQualifiedIdentifier <* s <* lexeme (parseSymbol L.Colon) <* s)
+          <*> parseType s
 
 -- | Parses a type class implementation.
 parseImplementationDefinition :: Parser m => m (Located CST.Declaration)

@@ -47,10 +47,10 @@ data Declaration
       (Located Type)              -- ^ The type aliased
   | -- | A type class declaration
     Class
-      (Located Identifier)           -- ^ The name of the type class
-      [Located (Parameter Kind)]     -- ^ The parameters with optional kind annotations
-      [Located Type]                 -- ^ The constraints on the type class head
-      [Located FunctionDeclaration]  -- ^ The members of the type class
+      (Located Identifier)                  -- ^ The name of the type class
+      [Located (Parameter Kind)]            -- ^ The parameters with optional kind annotations
+      [Located Type]                        -- ^ The constraints on the type class head
+      [(Located Identifier, Located Type)]  -- ^ The members of the type class
   | -- | A type class implementation
     Impl
       (Located Identifier)                          -- ^ The name of the type class
