@@ -9,8 +9,9 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Vector as V
 import Data.Vector (Vector)
-import Data.List (intercalate)
+import Data.List (intercalate, foldl')
 import Data.Functor ((<&>))
+import Language.Zilch.Core.ConcreteSyntaxTree (Fixity(..))
 
 data LexerError
   = InvalidEscapeSequence Char
@@ -74,33 +75,13 @@ fromResolverError (MultipleFilesFound m fs p)     =
   where
     showFiles = "These files match the import:\n- " <> intercalate "\n- " fs
 
-data ScopeCheckError
-  = UnboundExportedFunction Text Position
-  | MultipleDefinitionsForExportedFunction Text Position [Position]
-  | ModuleDoesNotExportFunction Text Position
-  | AmbiguousFunctionUsage Text Position [(Text, Position)]
+data DesugarerError
+  = AmbiguousOperatorSequence [(Text, Fixity, Position)] Position
 
-fromScopeCheckError :: ScopeCheckError -> Report String
-fromScopeCheckError (UnboundExportedFunction f p) =
-  reportError ("Cannot export function '" <> Text.unpack f <> "' because it is not bound in this module")
-    [(p, This "")]
-    []
-fromScopeCheckError (MultipleDefinitionsForExportedFunction f p ps) =
-  reportError ("Trying to export function '" <> Text.unpack f <> "' but it has been defined multiple times")
-    ((p, This "") : generateDefinitionSites 0 ps)
+fromDesugarerError :: DesugarerError -> Report String
+fromDesugarerError (AmbiguousOperatorSequence ops p) =
+  reportError "Ambiguous operator sequence can be parsed in multiple ways"
+    (foldl' merge [ (p, This "while desugaring this expression") ] ops)
     []
   where
-    generateDefinitionSites :: Int -> [Position] -> [(Position, Marker String)]
-    generateDefinitionSites _ []     = []
-    generateDefinitionSites i (p:ps) = (p, Where $ "Definition #" <> show i) : generateDefinitionSites (i + 1) ps
-fromScopeCheckError (ModuleDoesNotExportFunction f p) =
-  reportError ("Module does not export function '" <> Text.unpack f <> "'")
-    [(p, This "")]
-    []
-fromScopeCheckError (AmbiguousFunctionUsage f p is) =
-  reportError ("Ambiguous occurrence of function '" <> Text.unpack f <> "'")
-    ((p, This "here") : generateAmbiguousImports)
-    [hint "You may resolve this issue by restricting what functions are imported using explicit import lists."
-    ,hint "Alternatively, you may also import modules qualified or using 'as'-aliases."]
-  where
-    generateAmbiguousImports = is <&> \ (i, p) -> (p, Where $ "Importing the module '" <> Text.unpack i <> "' exposes a function named '" <> Text.unpack f <> "'")
+    merge acc (_, opFix, opPos) = acc <> [ (opPos, Where $ "Found fixity '" <> show opFix <> "' for this operator") ]
