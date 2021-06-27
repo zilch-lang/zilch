@@ -394,7 +394,7 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
     {-# INLINE ifExpression #-}
 
     letExpression = lineFold \ s -> do
-      CST.LetE <$> (MP.some $ parseFunctionDefinition False)
+      CST.LetE <$> MP.some (parseFunctionDefinition False)
                <*> (s *> lexeme (parseSymbol L.In) *> s *> parseExpression s)
     {-# INLINE letExpression #-}
 

@@ -15,7 +15,6 @@ library
       Language.Zilch.Syntax.Lexer
       Language.Zilch.Syntax.ModuleResolver
       Language.Zilch.Syntax.Parser
-      Language.Zilch.Syntax.ScopeChecker
   other-modules:
       Paths_gzc_parser
   hs-source-dirs:
