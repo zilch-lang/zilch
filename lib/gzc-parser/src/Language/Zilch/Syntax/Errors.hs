@@ -12,6 +12,7 @@ import Data.Vector (Vector)
 import Data.List (intercalate, foldl')
 import Data.Functor ((<&>))
 import Language.Zilch.Core.ConcreteSyntaxTree (Fixity(..))
+import Data.Bifunctor (second)
 
 data LexerError
   = InvalidEscapeSequence Char
@@ -77,6 +78,7 @@ fromResolverError (MultipleFilesFound m fs p)     =
 
 data DesugarerError
   = AmbiguousOperatorSequence [(Text, Fixity, Position)] Position
+  | ConflictingFixitySpecifiers [(Position, Fixity)]
 
 fromDesugarerError :: DesugarerError -> Report String
 fromDesugarerError (AmbiguousOperatorSequence ops p) =
@@ -85,3 +87,7 @@ fromDesugarerError (AmbiguousOperatorSequence ops p) =
     []
   where
     merge acc (_, opFix, opPos) = acc <> [ (opPos, Where $ "Found fixity '" <> show opFix <> "' for this operator") ]
+fromDesugarerError (ConflictingFixitySpecifiers fixs) =
+  reportError "Conflicting fixity specifications for operator"
+    (fixs <&> second (Where . (<>) "Found fixity: " . show))
+    []
