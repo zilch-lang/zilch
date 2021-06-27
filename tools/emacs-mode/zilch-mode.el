@@ -52,7 +52,7 @@
 (defvar zilch-mode-syntax-table
   (let ((st (make-syntax-table)))
     (modify-syntax-entry ?\n "> b" st)
-    (modify-syntax-entry ?-  ". 12" st)
+    (modify-syntax-entry ?-  ". 12b" st)
     (modify-syntax-entry ?_  "w" st)
     (modify-syntax-entry ?\" "|" st)
     (modify-syntax-entry ?'  "|" st)
@@ -72,11 +72,8 @@ Only provides syntax highlighting."
   (setq-local font-lock-defaults '(zilch-font-lock-keywords))
 ;  (set-syntax-table (make-syntax-table zilch-mode-syntax-table))
 
-  (setq-local comment-start "--")
-  (setq-local comment-add 1)
+  (setq-local comment-start "-- ")
   (setq-local comment-end "")
-
-  (setq-local comment-multi-line 1)
   )
 
 
