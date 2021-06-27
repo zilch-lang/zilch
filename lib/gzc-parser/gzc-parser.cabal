@@ -10,6 +10,7 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Language.Zilch.Syntax.Desugarer
       Language.Zilch.Syntax.Errors
       Language.Zilch.Syntax.Internal
       Language.Zilch.Syntax.Lexer
