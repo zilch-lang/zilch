@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -69,16 +70,16 @@ parseAndResolveModules moduleName = do
 parseFile :: ModuleResolver m => Text -> Text -> Position -> m ()
 parseFile moduleName from pos = do
   RState mods _ _ <- get
-  mod <- case mods H.!? moduleName of
+  !mod <- case mods H.!? moduleName of
     Nothing -> do
       let filename = toFilePath moduleName
       filepath <- queryIncludePath filename moduleName pos
 
-      content <- liftIO $ T.readFile filepath
+      !content <- liftIO $ T.readFile filepath
 
       insertFileContent filepath content
 
-      tks <- liftEither (first Lexing $ runLexer content filepath)
+      !tks <- liftEither (first Lexing $ runLexer content filepath)
       liftEither (first Parsing $ runParser tks filepath)
     Just m -> pure m
 
