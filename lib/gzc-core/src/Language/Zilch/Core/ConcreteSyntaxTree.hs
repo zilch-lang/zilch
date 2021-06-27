@@ -61,6 +61,7 @@ data Declaration
 
 data FunctionDeclaration
   = Decl
+      Bool                                         -- ^ Is the binding recursive?
       (Located Identifier)                         -- ^ The name of the declared function
       ([Located (Parameter Kind)], [Located Type]) -- ^ A list of type parameters with optional kind annotations with type constraints
       (Maybe [Located (Parameter Type)])           -- ^ A list of parameters with optional types
@@ -101,7 +102,7 @@ data ExpressionAtom
       (Located Expression)  -- ^ The expression returned if the condition is false
   | -- | A let-in expression
     LetE
-      (Located Declaration)  -- ^ The bound variable
+      [Located Declaration]  -- ^ The bound variable
       (Located Expression)   -- ^ The expression
   | -- | A pattern-matching expression
     CaseE

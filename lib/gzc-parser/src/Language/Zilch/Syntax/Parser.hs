@@ -163,7 +163,7 @@ parseTopLevelDeclaration :: Parser m => m (Located CST.TopLevelDeclaration)
 parseTopLevelDeclaration = located do
   (,) <$> MP.option [] (lexeme parseMetaAttributes)
       <*> lexeme do
-            MP.choice [ parseFunctionDefinition
+            MP.choice [ parseFunctionDefinition True
                       , parseEnumDefinition
                       , parseRecordDefinition
                       , parseTypeAliasDefinition
@@ -202,23 +202,23 @@ parseQualifiedIdentifier = located (toIdentifier <$> qualIdentifier)
     {-# INLINE identifierName #-}
 
 -- | Parses a function definition.
-parseFunctionDefinition :: Parser m => m (Located CST.Declaration)
-parseFunctionDefinition = located $ lineFold \ s ->
+parseFunctionDefinition :: Parser m => Bool -> m (Located CST.Declaration)
+parseFunctionDefinition withWhere = located $ lineFold \ s ->
   CST.Def <$> parseFunctionDeclaration
           <*> (lexeme (parseSymbol L.ColonEquals) *> lexeme (parseExpression s))
-          <*> MP.option [] whereBlock
+          <*> if withWhere then MP.option [] whereBlock else pure []
   where
-    whereBlock = lexeme (parseSymbol L.Where) *> indentBlock (lexeme parseFunctionDefinition)
+    whereBlock = lexeme (parseSymbol L.Where) *> indentBlock (lexeme $ parseFunctionDefinition False)
 
 -- | Parses a function header.
 parseFunctionDeclaration :: Parser m => m CST.FunctionDeclaration
 parseFunctionDeclaration = lineFold \ s -> do
-  lexeme (parseSymbol L.Let)
+  recursive <- lexeme (MP.choice [ False <$ parseSymbol L.Let, True <$ parseSymbol L.Rec ])
   universal <- MP.option ([], []) . lexeme $ betweenAngles ((,) <$> parseParameters (lexeme $ parseKind s) <*> MP.option [] (parseConstraints s))
   name <- lexeme parseQualifiedIdentifier
   parameters <- MP.optional . lexeme $ betweenParens (parseParameters (lexeme $ parseType s))
   returnType <- MP.optional $ lexeme (parseSymbol L.Colon) *> lexeme (parseType s)
-  pure (CST.Decl name universal parameters returnType)
+  pure (CST.Decl recursive name universal parameters returnType)
   where
     parseConstraints s = do
       lexeme (parseSymbol L.Pipe)
@@ -334,7 +334,7 @@ parseImplementationDefinition = lineFold \ s -> located do
   flip CST.Impl <$> MP.option ([], []) (lexeme $ betweenAngles ((,) <$> parseParameters (parseKind s) <*> MP.option [] (parseConstraints s)))
                 <*> lexeme parseQualifiedIdentifier
                 <*> MP.option [] (lexeme $ betweenParens (lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma)))
-                <*> (lexeme (parseSymbol L.ColonEquals) *> MP.option [] (indentBlock (lexeme parseFunctionDefinition)))
+                <*> (lexeme (parseSymbol L.ColonEquals) *> MP.option [] (indentBlock (lexeme $ parseFunctionDefinition True)))
   where
     parseConstraints s = do
       lexeme (parseSymbol L.Pipe)
@@ -394,19 +394,9 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
     {-# INLINE ifExpression #-}
 
     letExpression = lineFold \ s -> do
-      lexeme (parseSymbol L.Let) <* s
-      funDef <- located do
-        CST.Def <$> letFunDecl s
-                <*> (lexeme (parseSymbol L.ColonEquals) *> parseExpression s)
-                <*> pure []
-      CST.LetE funDef <$> (s *> lexeme (parseSymbol L.In) *> s *> parseExpression s)
+      CST.LetE <$> (MP.some $ parseFunctionDefinition False)
+               <*> (s *> lexeme (parseSymbol L.In) *> s *> parseExpression s)
     {-# INLINE letExpression #-}
-
-    letFunDecl s = do
-      CST.Decl <$> parseQualifiedIdentifier
-               <*> pure ([], [])
-               <*> MP.optional (betweenParens $ parseParameters (parseType s))
-               <*> MP.optional (lexeme (parseSymbol L.Colon) *> parseType s)
 
     caseExpression = do
       lexeme (parseSymbol L.Case) <* s
