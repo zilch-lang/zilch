@@ -24,6 +24,7 @@ import qualified Data.Vector as V
 import Language.Zilch.Pretty.Tokens (pretty)
 import Data.List (foldl')
 import qualified Data.Text as Text
+import Debug.Trace (traceShow)
 
 type Parser m = (MP.MonadParsec ParseError (Vector LToken) m, MonadFail m)
 
@@ -68,10 +69,14 @@ lineFold = MPL.lineFold whitespace
 located :: Parser m => m a -> m (Located a)
 located p = do
   MP.SourcePos file beginLine beginColumn <- MP.getSourcePos
+  MP.State input0 offset0 _ _ <- MP.getParserState
+  -- NOTE: we need to fetch the input stream before, because it is not complete
+  -- (it does not necessarily contain all tokens at once).
+
   res <- p
 
-  MP.State input offset _ _ <- MP.getParserState -- NOTE: @offset@ can never be 0
-  let Position _ (endLine, endColumn) _ = position $ input V.! (offset - 1)
+  MP.State _ offset _ _ <- MP.getParserState
+  let Position _ (endLine, endColumn) _ = position $ input0 V.! (offset - 1 - offset0)
 
   -- NOTE: We need to fetch the last token parsed, which is located right before the
   --       currently available token.
