@@ -15,6 +15,7 @@ instance Pretty Token where
   pretty Impl              = text "impl"
   pretty Where             = text "where"
   pretty Let               = text "let"
+  pretty Rec               = text "rec"
   pretty In                = text "in"
   pretty Alias             = text "alias"
   pretty Case              = text "case"

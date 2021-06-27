@@ -25,6 +25,8 @@ data Token
   | Where
     -- | Let-expression (@let@) or function definition
   | Let
+    -- | Recursive function definition (@rec@)
+  | Rec
     -- | Let-expression (@in@)
   | In
     -- | Type alias definition and type kind (@alias@)

@@ -158,6 +158,7 @@ anyIdentifier = lexeme $ located do
     matchesKeyword "impl"       = Impl
     matchesKeyword "where"      = Where
     matchesKeyword "let"        = Let
+    matchesKeyword "rec"        = Rec
     matchesKeyword "in"         = In
     matchesKeyword "alias"      = Alias
     matchesKeyword "case"       = Case
