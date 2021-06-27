@@ -33,8 +33,8 @@
     (,(rx-to-string `(: bow (| ,@zilch-keywords) eow))
      . font-lock-keyword-face)
     ; keywords
-    (,(rx-to-string '(: "#[" (*? anychar) "]"))
-     . font-lock-type-face)
+    (,(rx-to-string '(: "#[" (*? nonl) "]"))
+      0 font-lock-type-face)
     ; meta-specifiers
     (,(rx-to-string `(: bow (| ,@zilch-builtin-types) eow))
      . font-lock-builtin-face)
@@ -56,6 +56,9 @@
     (modify-syntax-entry ?_  "w" st)
     (modify-syntax-entry ?\" "|" st)
     (modify-syntax-entry ?'  "|" st)
+    (modify-syntax-entry ?#  "! 1" st)
+    (modify-syntax-entry ?\[ "! 2c" st)
+    (modify-syntax-entry ?\] "> c" st)
     st)
   "Syntax table used while in Zilch mode.")
 
