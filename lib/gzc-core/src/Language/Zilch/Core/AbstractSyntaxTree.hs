@@ -5,8 +5,24 @@ import Data.Text (Text)
 
 data Module
   = Module
-      (Located Identifier)   -- ^ The name of the module
+      ModuleHeader           -- ^ The header of the module, containing the export and import list
       [Located Declaration]  -- ^ The list of declarations in the module
+  deriving (Show, Eq)
+
+data ModuleHeader
+  = ModHead
+      [Located Identifier]
+      [Located Import]
+  deriving (Show, Eq)
+
+-- | An @import@ statement at the top of a module.
+data Import
+  = Import
+      Bool                                                        -- ^ Is the import opened/unqualified?
+      (Located Identifier)                                        -- ^ The module imported
+      (Maybe (Located Identifier))                                -- ^ An optional alias for the imported module
+      (Maybe [(Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
+  deriving (Show, Eq)
 
 data Declaration
   = -- | Function definition
@@ -30,16 +46,17 @@ data Declaration
         [(Located Identifier, Located Type)]  -- ^ Record fields
   | -- | Type class declaration
     Class
-        (Located Identifier)           -- ^ Class name
-        [Located (Parameter Kind)]     -- ^ Optionally kind-annotated type parameters
-        [Located Type]                 -- ^ Type constraints on class head
-        [Located FunctionDeclaration]  -- ^ Type class member functions
+        (Located Identifier)                  -- ^ Class name
+        [Located (Parameter Kind)]            -- ^ Optionally kind-annotated type parameters
+        [Located Type]                        -- ^ Type constraints on class head
+        [(Located Identifier, Located Type)]  -- ^ Type class member functions
   | -- | Type class implementation
     Impl
         (Located Identifier)        -- ^ The name of the type class implemented
         [Located (Parameter Kind)]  -- ^ Universally quantified type variables in the head of the implementation, optionally kind-annotated
         [Located Type]              -- ^ The types whose implementation is defined for
         [Located Declaration]       -- ^ The definition of the function members
+  deriving (Show, Eq)
 
 -- | The head of a function declaration/definition.
 data FunctionDeclaration
@@ -47,9 +64,10 @@ data FunctionDeclaration
         (Located Identifier)        -- ^ The name of the function
         [Located (Parameter Kind)]  -- ^ Type parameters with optional kind annotations
         [Located Type]              -- ^ Type constraints on function head
+  deriving (Show, Eq)
 
 -- | A qualified identifier
-type Identifier = ([Located Text], Located Text)
+type Identifier = ([Text], Text)
 
 -- | An optionally @t@-annotated parameter.
 type Parameter t = (Located Identifier, Maybe (Located t))
@@ -67,11 +85,8 @@ data Type
   | -- | A universally quantified type
     ForallT
         [Located (Parameter Kind)]  -- ^ The universally bound type variables with optional kind annotations
+        [Located Type]              -- ^ Optional constraints on the universally bound variables
         (Located Type)              -- ^ The quantified type
-  | -- | A constrained type
-    ConstrainedT
-        [Located Type]  -- ^ The constraints
-        (Located Type)  -- ^ The constrained type
   | -- | A type identified by its name
     NameT
         (Located Identifier) -- ^ The name of the type
@@ -88,6 +103,7 @@ data Type
         Integer
   | -- | The type of characters
     CharT
+  deriving (Show, Eq)
 
 -- | Types at the kind-level
 data Kind
@@ -97,6 +113,7 @@ data Kind
     FunctionK
         [Located Kind]  -- ^ The parameters of the function
         (Located Kind)  -- ^ The result kind
+  deriving (Show, Eq)
 
 -- | An expression
 data Expression
@@ -109,9 +126,10 @@ data Expression
       (Located Expression)  -- ^ The condition
       (Located Expression)  -- ^ The expression returned if the condition is true
       (Located Expression)  -- ^ The expression returned if the condition is false
-  | -- | A do-block
-    DoE
-      [Located DoStatement] -- ^ The statements in the do-block
+  | -- | A @let@-@in@ expression
+    LetE
+      [Located Declaration]  -- ^ The variables bound in the @let@ expression
+      (Located Expression)   -- ^ The result of the @let@ expression
   | -- | A pattern-matching expression
     CaseE
       (Located Expression)                    -- ^ The expression whose value is to match
@@ -141,15 +159,7 @@ data Expression
   | -- | A character
     CharE
       (Located Text)
-
-data DoStatement
-  = -- | A function binding
-    BindingD
-      (Located Identifier)  -- ^ The name of the function
-      (Located Expression)  -- ^ The value of the function
-  | -- | A single expression
-    ExprD
-      (Located Expression)
+  deriving (Show, Eq)
 
 data Pattern
   = -- | The wildcard pattern
@@ -163,3 +173,4 @@ data Pattern
   | -- | A variable binding
     VariableP
       (Located Identifier)  -- ^ The name of the variable
+  deriving (Show, Eq)
