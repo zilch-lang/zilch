@@ -21,6 +21,9 @@ default-extensions: !include "default-extensions.yaml"
 
 dependencies:
 - base >= 4.7 && < 5
+- text
+- gzc-parser
+- diagnose
 
 library:
   source-dirs: src
