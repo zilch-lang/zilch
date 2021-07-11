@@ -79,7 +79,7 @@ fromResolverError (MultipleFilesFound m fs p)     =
 data DesugarerError
   = AmbiguousOperatorSequence [(Text, Fixity, Position)] Position
   | ConflictingFixitySpecifiers [(Position, Fixity)]
-  | AliasedOperatorInImport Text Position
+  | AliasedOperatorInImport Text Text Position
 
 fromDesugarerError :: DesugarerError -> Report String
 fromDesugarerError (AmbiguousOperatorSequence ops p) =
@@ -92,7 +92,7 @@ fromDesugarerError (ConflictingFixitySpecifiers fixs) =
   reportError "Conflicting fixity specifications for operator"
     (fixs <&> second (Where . (<>) "Found fixity: " . show))
     []
-fromDesugarerError (AliasedOperatorInImport op pos) =
-  reportError ("Cannot alias operator '" <> Text.unpack op <> "' in import")
+fromDesugarerError (AliasedOperatorInImport op1 op2 pos) =
+  reportError ("Cannot alias operator '" <> Text.unpack op1 <> "' to another operator '" <> Text.unpack op2 <> "' in import")
     [(pos, This "")]
     [hint "Aliasing operators leads to grammar problems with fixity declarations.\nThis is the reason why this has been disallowed in Zilch."]
