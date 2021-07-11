@@ -22,7 +22,7 @@ import Data.Maybe (catMaybes, fromJust)
 import Control.Monad (forM, when, forM_)
 import qualified Data.Vector as V
 import qualified Data.Text as Text
-import System.FilePath ((</>), joinPath, (<.>), equalFilePath)
+import System.FilePath ((</>), equalFilePath)
 import System.Directory (doesFileExist, canonicalizePath, makeRelativeToCurrentDirectory)
 import qualified Data.HashMap.Strict as H
 import qualified Algebra.Graph.AdjacencyMap as G
@@ -30,6 +30,7 @@ import qualified Data.Text.IO as T
 import qualified Algebra.Graph.Acyclic.AdjacencyMap as GA
 import Data.Located (Located((:@)), Position(..))
 import Data.List (groupBy)
+import Language.Zilch.Syntax.Internal (moduleNameToFilePath)
 
 data ResolverState
   = RState
@@ -72,7 +73,7 @@ parseFile moduleName from pos = do
   RState mods _ _ <- get
   !mod <- case mods H.!? moduleName of
     Nothing -> do
-      let filename = toFilePath moduleName
+      let filename = moduleNameToFilePath moduleName
       filepath <- queryIncludePath filename moduleName pos
 
       !content <- liftIO $ T.readFile filepath
@@ -126,7 +127,3 @@ checkDependencyCycle g root from pos = dfs g root [(root, from)]
       when ((p, root) `elem` stack) do
         throwError (flip CyclicImports pos . dropWhile ((/= p) . fst) . reverse $ stack)
       dfs graph p ((p, root) : stack)
-
--- | Transforms a @.@ separated module-name by a @/@ separated include path-relative file path.
-toFilePath :: Text -> FilePath
-toFilePath = (<.> "zc") . joinPath . fmap Text.unpack . Text.split (== '.')

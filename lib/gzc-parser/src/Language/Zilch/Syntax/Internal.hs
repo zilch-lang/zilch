@@ -20,6 +20,10 @@ import Language.Zilch.Pretty.Tokens (pretty)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.List (intercalate)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import System.FilePath ((<.>), joinPath)
+import qualified Language.Zilch.Core.ConcreteSyntaxTree as CST
 
 -- | Transforms a megaparsec's 'MP.ParseErrorBundle' into a well formated 'Diagnostic'.
 megaparsecBundleToDiagnostic :: (MP.Stream s, MP.ShowErrorComponent e, MP.TraversableStream s, MP.VisualStream s, Hintable e)
@@ -97,3 +101,14 @@ instance MP.TraversableStream (Vector LToken) where
         , MP.pstateTabWidth   = pstateTabWidth
         , MP.pstateLinePrefix = pstateLinePrefix
         }
+
+-------------------------------------------------------------------------------------
+
+-- | Transforms a @.@-separated module name into a @/@-separated include path-relative file path.
+moduleNameToFilePath :: Text -> FilePath
+moduleNameToFilePath = (<.> "zc") . joinPath . fmap Text.unpack . Text.split (== '.')
+
+-- | Transforms a qualified concrete identifier into a @.@-separated module name.
+qualIdentToModuleName :: CST.Identifier -> Text
+qualIdentToModuleName (qualification, ident) =
+  (if not (null qualification) then Text.intercalate "." qualification <> "." else "") <> ident
