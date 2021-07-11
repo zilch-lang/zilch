@@ -11,7 +11,7 @@ data Module
 
 data ModuleHeader
   = ModHead
-      [Located Identifier]
+      (Maybe [Located Identifier])
       [Located Import]
   deriving (Show, Eq)
 
