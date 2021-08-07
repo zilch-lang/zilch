@@ -510,9 +510,16 @@ parseType s = MP.choice
       , MP.try functionType
       ]
 
-    applicationType = located do
-      CST.ApplicationT <$> typeAtom
-                       <*> betweenParens (lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))
+    applicationType = do
+      fun <- typeAtom
+      args <- MP.some $ located $ betweenParens (lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))
+
+      let mkApp f x =
+            let Position begin _ file = position f
+                Position _ end _      = position x
+            in CST.ApplicationT f (unwrapLocated x) :@ Position begin end file
+
+      pure $ foldl' mkApp fun args
     {-# INLINE applicationType #-}
 
     forallType = do
