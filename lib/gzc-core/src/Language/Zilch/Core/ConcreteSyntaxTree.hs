@@ -6,18 +6,38 @@ import Data.Text (Text)
 -- | A Zilch module is composed of imports and many located declarations.
 data Module
   = Module
-      (Maybe [Located Identifier])   -- ^ The export list
-      [Located Import]               -- ^ A list of imports
-      [Located TopLevelDeclaration]  -- ^ All the available top-level declarations of the module
+      (Maybe [Located Export])        -- ^ The export list
+      [Located Import]                -- ^ A list of imports
+      [Located TopLevelDeclaration]   -- ^ All the available top-level declarations of the module
+  deriving (Show, Eq)
+
+-- | An @export@ header at the very top of a module.
+data Export
+  = Export
+      (Maybe IEType)        -- ^ The type of entity that is exported
+      (Located Identifier)  -- ^ The entity exported
   deriving (Show, Eq)
 
 -- | An @import@ statement at the top of a module.
 data Import
   = Import
-      Bool                                                        -- ^ Is the import opened/unqualified?
-      (Located Identifier)                                        -- ^ The module imported
-      (Maybe (Located Identifier))                                -- ^ An optional alias for the imported module
-      (Maybe [(Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
+      Bool                            -- ^ Is the import opened/unqualified?
+      (Located Identifier)            -- ^ The module imported
+      (Maybe (Located Identifier))    -- ^ An optional alias for the imported module
+      (Maybe [Located ImportList])    -- ^ An optional import list with optional aliasing
+  deriving (Show, Eq)
+
+data ImportList
+  = ImportList
+    (Maybe IEType)                    -- ^ The type of entity imported
+    (Located Identifier)              -- ^ The name of the entity
+    (Maybe (Located Identifier))      -- ^ The optional alias of the entity
+  deriving (Show, Eq)
+
+data IEType
+  = ModuleIE      -- ^ Entity is a module name
+  | TypeIE        -- ^ Entity is a type (typeclass, enum, record) name
+  | EffectIE      -- ^ Entity is an effect name
   deriving (Show, Eq)
 
 -- | A top-level declaration with meta-attributes introduced in the @#[...]@ construct.

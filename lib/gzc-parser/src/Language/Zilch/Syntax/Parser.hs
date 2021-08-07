@@ -24,7 +24,6 @@ import qualified Data.Vector as V
 import Language.Zilch.Pretty.Tokens (pretty)
 import Data.List (foldl')
 import qualified Data.Text as Text
-import Debug.Trace (traceShow)
 
 type Parser m = (MP.MonadParsec ParseError (Vector LToken) m, MonadFail m)
 
@@ -146,11 +145,15 @@ parseModule =
              <*> MP.many (lexeme $ nonIndented parseTopLevelDeclaration)
 
 -- | Parses a module header, containing the name of the module and the optional export list.
-parseModuleHeader :: Parser m => m (Maybe [Located CST.Identifier])
+parseModuleHeader :: Parser m => m (Maybe [Located CST.Export])
 parseModuleHeader =
   MP.optional do
     lexeme (parseSymbol L.Export)
-    betweenParens (parseQualifiedIdentifier `MP.sepBy` parseSymbol L.Comma)
+    betweenParens (parseExport `MP.sepBy` parseSymbol L.Comma)
+  where
+    parseExport = located $
+      CST.Export <$> lexeme (MP.optional parseImportExportType)
+                 <*> parseQualifiedIdentifier
 
 -- | Parses a module import.
 parseImport :: Parser m => m (Located CST.Import)
@@ -160,8 +163,17 @@ parseImport = located do
              <*> MP.optional (parseSymbol L.As *> parseQualifiedIdentifier)
              <*> MP.optional (betweenParens $ parseImportUnit `MP.sepBy` parseSymbol L.Comma)
   where
-    parseImportUnit = (,) <$> parseQualifiedIdentifier
-                          <*> MP.optional (parseSymbol L.As *> parseQualifiedIdentifier)
+    parseImportUnit = located $
+      CST.ImportList <$> MP.optional parseImportExportType
+                     <*> parseQualifiedIdentifier
+                     <*> MP.optional (parseSymbol L.As *> parseQualifiedIdentifier)
+
+parseImportExportType :: Parser m => m CST.IEType
+parseImportExportType = MP.choice
+  [ CST.ModuleIE <$ parseSymbol L.Module
+  , CST.TypeIE   <$ parseSymbol L.Type
+  , CST.EffectIE <$ parseSymbol L.Effect
+  ]
 
 -- | Parses any top-level declaration
 parseTopLevelDeclaration :: Parser m => m (Located CST.TopLevelDeclaration)
