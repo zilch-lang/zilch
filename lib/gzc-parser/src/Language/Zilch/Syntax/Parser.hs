@@ -400,7 +400,8 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
     {-# INLINE operator #-}
 
     lambdaExpression = do
-      CST.FnE <$> lexeme (betweenParens $ parseParameters (lexeme (parseType s)))
+      CST.FnE <$> lexeme (MP.choice [ betweenParens (parseParameters (lexeme (parseType s)))
+                                    , pure . fmap (, Nothing) <$> located parseQualifiedIdentifier ])
               <*> (s *> lexeme (parseSymbol L.RightArrow) *> s *> parseExpression s)
     {-# INLINE lambdaExpression #-}
 
@@ -525,7 +526,11 @@ parseType s = lexeme typeAtom
     {-# INLINE constrainedType #-}
 
     functionType = do
-      CST.FunctionT <$> lexeme (betweenParens $ lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))
+      CST.FunctionT <$> lexeme (MP.choice
+                                [ betweenParens $ lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma)
+                                , pure <$> located identifierType
+                                , pure <$> located wildcardType
+                                , pure <$> betweenParens (parseType s) ])
                     <*> (s *> lexeme (parseSymbol L.RightArrow) *> s *> parseType s)
 
     identifierType =
@@ -541,8 +546,13 @@ parseType s = lexeme typeAtom
 -- | Parses a kind expression.
 parseKind :: Parser m => m () -> m (Located CST.Kind)
 parseKind s = located $ s *> MP.choice
-  [ CST.FunctionK <$> lexeme (betweenParens $ lexeme (parseKind s) `MP.sepBy1` lexeme (parseSymbol L.Comma))
-                  <*> (lexeme (parseSymbol L.RightArrow) *> parseKind s)
+  [ MP.try $ CST.FunctionK <$> lexeme (betweenParens (lexeme (parseKind s) `MP.sepBy1` lexeme (parseSymbol L.Comma)) MP.<|> (pure <$> kindAtom))
+                           <*> (lexeme (parseSymbol L.RightArrow) *> parseKind s)
+  , unwrapLocated <$> kindAtom
   , CST.ParensK <$> betweenParens (lexeme $ parseKind s)
-  , CST.TypeK <$ parseSymbol (L.Identifier "type")
   ]
+  where
+    kindAtom = MP.choice
+      [ located $ CST.TypeK <$ parseSymbol L.Type
+      , betweenParens (parseKind s)
+      ]
