@@ -156,6 +156,7 @@ anyIdentifier = lexeme $ located do
     matchesKeyword "record"     = Record
     matchesKeyword "class"      = Class
     matchesKeyword "impl"       = Impl
+    matchesKeyword "type"       = Type
     matchesKeyword "where"      = Where
     matchesKeyword "let"        = Let
     matchesKeyword "rec"        = Rec

@@ -21,6 +21,8 @@ data Token
   | Class
     -- | Type class implementation (@impl@)
   | Impl
+    -- | @type@ kind and import/export specifier
+  | Type
     -- | Additional variable binders in function definition (@where@)
   | Where
     -- | Let-expression (@let@) or function definition
@@ -114,7 +116,7 @@ staticKeywordsList :: [Text]
 staticKeywordsList =
   [ -- keywords
     "forall", "∀"
-  , "enum", "record", "alias", "class", "impl", "effect"
+  , "enum", "record", "alias", "class", "impl", "effect", "type"
   , "where"
   , "let", "in", "case", "of", "if", "then", "else"
   , "import", "open", "export", "as"

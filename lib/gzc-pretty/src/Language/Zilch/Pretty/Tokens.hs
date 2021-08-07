@@ -13,6 +13,7 @@ instance Pretty Token where
   pretty Record            = text "record"
   pretty Class             = text "class"
   pretty Impl              = text "impl"
+  pretty Type              = text "type"
   pretty Where             = text "where"
   pretty Let               = text "let"
   pretty Rec               = text "rec"
