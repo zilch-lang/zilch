@@ -491,28 +491,29 @@ parsePattern s = MP.label "a pattern" . located $ lexeme patternAtom `MP.sepBy1`
 
 -- | Parses a type expression.
 parseType :: Parser m => m () -> m (Located CST.Type)
-parseType s = lexeme typeAtom
+parseType s = MP.choice
+  [ located complexTypeAtom
+  , MP.try applicationType
+  , typeAtom
+  ]
   where
     typeAtom = do
-      fun <- lexeme . located $ MP.choice
-        [ forallType
-        , constrainedType
-        , MP.try functionType
-        , identifierType
+      lexeme . located $ MP.choice
+        [ identifierType
         , wildcardType
         , CST.ParensT <$> betweenParens (lexeme (parseType s))
         ]
-      args <- MP.many . lexeme . located $ s *> MP.choice
-        [ betweenParens $ (s *> lexeme (parseType s)) `MP.sepBy` (s *> lexeme (parseSymbol L.Comma))
-        , pure <$> (s *> parseType s)
-        ]
 
-      let makeApp f x =
-            let Position begin _ file = position f
-                Position _ end _      = position x
-            in CST.ApplicationT f (unwrapLocated x) :@ Position begin end file
+    complexTypeAtom = MP.choice
+      [ forallType
+      , constrainedType
+      , MP.try functionType
+      ]
 
-      pure (foldl' makeApp fun args)
+    applicationType = located do
+      CST.ApplicationT <$> typeAtom
+                       <*> betweenParens (lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))
+    {-# INLINE applicationType #-}
 
     forallType = do
       lexeme (parseSymbol L.Forall) <* s
@@ -528,6 +529,7 @@ parseType s = lexeme typeAtom
     functionType = do
       CST.FunctionT <$> lexeme (MP.choice
                                 [ betweenParens $ lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma)
+                                , pure <$> MP.try applicationType
                                 , pure <$> located identifierType
                                 , pure <$> located wildcardType
                                 , pure <$> betweenParens (parseType s) ])
