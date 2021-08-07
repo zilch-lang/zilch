@@ -506,7 +506,6 @@ parseType s = MP.choice
 
     complexTypeAtom = MP.choice
       [ forallType
-      , constrainedType
       , MP.try functionType
       ]
 
@@ -524,14 +523,11 @@ parseType s = MP.choice
 
     forallType = do
       lexeme (parseSymbol L.Forall) <* s
-      CST.ForallT <$> lexeme (betweenAngles $ s *> parseParameters (parseKind s) <* s)
-                  <*> parseType s
+      (tvars, cnstrs) <- lexeme $ betweenAngles do
+        (,) <$> parseParameters (parseKind s)
+            <*> (parseSymbol L.Pipe *> (parseType s `MP.sepBy` parseSymbol L.Comma))
+      CST.ForallT tvars cnstrs <$> parseType s
     {-# INLINE forallType #-}
-
-    constrainedType =
-      CST.ConstrainedT <$> lexeme (betweenBrackets $ lexeme (parseType s) `MP.sepBy` lexeme (parseSymbol L.Comma))
-                       <*> (s *> parseType s)
-    {-# INLINE constrainedType #-}
 
     functionType = do
       CST.FunctionT <$> lexeme (MP.choice

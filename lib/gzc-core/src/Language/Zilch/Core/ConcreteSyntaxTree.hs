@@ -186,11 +186,8 @@ data Type
   = -- | A universally quantified type
     ForallT
       [Located (Parameter Kind)]   -- ^ The list of universally quantified type variables with optional kind quantification
+      [Located Type]               -- ^  Type constraints
       (Located Type)               -- ^ The universally quantified type
-  | -- | A contrained type
-    ConstrainedT
-      [Located Type]  -- ^ The type constraints
-      (Located Type)  -- ^ The constrained type
   | -- | A type function
     FunctionT
       [Located Type]  -- ^ The arguments of the function
