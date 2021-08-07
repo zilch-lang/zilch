@@ -19,7 +19,7 @@
   :group 'languages)
 
 (defconst zilch-keywords
-  '("let" "rec" "in" "alias" "enum" "record" "import" "export" "case" "of" "forall" "∀"
+  '("let" "rec" "in" "alias" "enum" "record" "type" "module" "import" "export" "case" "of" "forall" "∀"
     "class" "impl" "where" "as" "open" "effect" "if" "then" "else" "pattern" "_" "·")
   "The list of Zilch keywords.")
 
