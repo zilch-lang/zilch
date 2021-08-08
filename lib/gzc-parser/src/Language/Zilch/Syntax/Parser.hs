@@ -400,8 +400,8 @@ parseExpression s = MP.label "an expression" . located $ lexeme expressionAtom `
     {-# INLINE operator #-}
 
     lambdaExpression = do
-      CST.FnE <$> lexeme (MP.choice [ betweenParens (parseParameters (lexeme (parseType s)))
-                                    , pure . fmap (, Nothing) <$> located parseQualifiedIdentifier ])
+      CST.FnE <$> lexeme (MP.some $ MP.choice [ betweenParens (parseParameters (lexeme (parseType s)))
+                                              , pure . fmap (, Nothing) <$> located parseQualifiedIdentifier ])
               <*> (s *> lexeme (parseSymbol L.RightArrow) *> s *> parseExpression s)
     {-# INLINE lambdaExpression #-}
 

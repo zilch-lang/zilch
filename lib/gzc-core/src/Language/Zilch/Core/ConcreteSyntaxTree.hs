@@ -113,8 +113,8 @@ type Expression = [Located ExpressionAtom]
 data ExpressionAtom
   = -- | A lambda abstraction
     FnE
-      [Located (Parameter Type)]  -- ^ The parameters of the lambda with optional type annotations
-      (Located Expression)        -- ^ The return expression
+      [[Located (Parameter Type)]]  -- ^ The parameters of the lambda with optional type annotations
+      (Located Expression)          -- ^ The return expression
   | -- | A conditional expression
     IfE
       (Located Expression)  -- ^ The condition
