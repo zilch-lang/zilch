@@ -11,17 +11,23 @@ data Module
 
 data ModuleHeader
   = ModHead
-      (Maybe [Located Identifier])
+      (Maybe [(Maybe IEType, Located Identifier)])
       [Located Import]
   deriving (Show, Eq)
 
 -- | An @import@ statement at the top of a module.
 data Import
   = Import
-      Bool                                                        -- ^ Is the import opened/unqualified?
-      (Located Identifier)                                        -- ^ The module imported
-      (Maybe (Located Identifier))                                -- ^ An optional alias for the imported module
-      (Maybe [(Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
+      Bool                                                                      -- ^ Is the import opened/unqualified?
+      (Located Identifier)                                                      -- ^ The module imported
+      (Maybe (Located Identifier))                                              -- ^ An optional alias for the imported module
+      (Maybe [(Maybe IEType, Located Identifier, Maybe (Located Identifier))])  -- ^ An optional import list with optional aliasing
+  deriving (Show, Eq)
+
+data IEType
+  = ModuleIE
+  | TypeIE
+  | EffectIE
   deriving (Show, Eq)
 
 data Declaration
