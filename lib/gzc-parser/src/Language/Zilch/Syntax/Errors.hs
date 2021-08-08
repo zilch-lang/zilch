@@ -80,6 +80,7 @@ data DesugarerError
   = AmbiguousOperatorSequence [(Text, Fixity, Position)] Position
   | ConflictingFixitySpecifiers [(Position, Fixity)]
   | AliasedOperatorInImport Text Text Position
+  | ConflictingOperatorFixities Text Position [Fixity]
 
 fromDesugarerError :: DesugarerError -> Report String
 fromDesugarerError (AmbiguousOperatorSequence ops p) =
@@ -96,3 +97,7 @@ fromDesugarerError (AliasedOperatorInImport op1 op2 pos) =
   reportError ("Cannot alias operator '" <> Text.unpack op1 <> "' to another operator '" <> Text.unpack op2 <> "' in import")
     [(pos, This "")]
     [hint "Aliasing operators leads to grammar problems with fixity declarations.\nThis is the reason why this has been disallowed in Zilch."]
+fromDesugarerError (ConflictingOperatorFixities op pos fixs) =
+  reportError ("Operator '" <> Text.unpack op <> "' was found to have multiple possible fixities:\n" <> unlines (mappend "- " . show <$> fixs))
+    [(pos, This "")]
+    []

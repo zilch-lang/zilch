@@ -12,7 +12,7 @@ import qualified Language.Zilch.Core.ConcreteSyntaxTree as CST
 import qualified Language.Zilch.Core.AbstractSyntaxTree as AST
 import Text.Diagnose (Diagnostic, (<++>), diagnostic)
 import Control.Monad.Except (MonadError, runExcept, throwError)
-import Language.Zilch.Syntax.Errors (DesugarerError (ConflictingFixitySpecifiers, AliasedOperatorInImport), fromDesugarerError)
+import Language.Zilch.Syntax.Errors (DesugarerError(..), fromDesugarerError)
 import Data.Bifunctor (first)
 import qualified Data.HashMap.Strict as H
 import Control.Monad (void, forM, when)
@@ -25,6 +25,7 @@ import qualified Data.Text as Text
 import Data.Char (isSymbol, isPunctuation)
 import Debug.Trace (trace, traceShow)
 import Control.Applicative (liftA2)
+import Data.Located (Position)
 
 type Desugarer m = (MonadState DesugarerState m, MonadError DesugarerError m)
 
@@ -76,8 +77,9 @@ desugarModule (CST.Module exportList imports declarations) = do
   -- TODO:
   -- 3. desugar all top-level bindings
 
+  DesugarerState st <- get
+
   (modImports, operatorFixities) <- unzip <$> forM imports \ (CST.Import open m@(modName :@ p1) qual importedDefs :@ p) -> do
-    DesugarerState st <- get
     let modN = qualIdentToModuleName modName :@ p1
 
     ops <- case importedDefs of
@@ -90,7 +92,7 @@ desugarModule (CST.Module exportList imports declarations) = do
 
         pure $ (d, ) <$> st H.! unwrapLocated modN H.!? d
 
-    pure (AST.Import open m qual (desugarImportList <$> importedDefs) {- TODO -} :@ p, ops)
+    pure (AST.Import open m qual (desugarImportList <$> importedDefs) :@ p, ops)
 
   let modHeader = AST.ModHead (desugarExportList <$> exportList) modImports
 
@@ -100,8 +102,10 @@ desugarModule (CST.Module exportList imports declarations) = do
     {-# INLINE mapMaybeM #-}
 
     desugarExportList = fmap \ (CST.Export iety name :@ _) -> (desugarIEType <$> iety, name)
+    {-# INLINE desugarExportList #-}
 
     desugarImportList = fmap \ (CST.ImportList iety modN alias :@ _) -> (desugarIEType <$> iety, modN, alias)
+    {-# INLINE desugarImportList #-}
 
     desugarIEType CST.ModuleIE = AST.ModuleIE
     desugarIEType CST.TypeIE   = AST.TypeIE
@@ -109,3 +113,13 @@ desugarModule (CST.Module exportList imports declarations) = do
 
 isOperator :: CST.Identifier -> Bool
 isOperator (_, ident) = Text.any (liftA2 (||) isSymbol isPunctuation) ident
+
+searchOperator :: Desugarer m => CST.Identifier -> Position -> m CST.Fixity
+searchOperator op pos = do
+  DesugarerState st <- get
+
+  let ops = H.elems $ H.mapMaybe (H.!? op) st
+  case ops of
+    []  -> undefined -- not found
+    [f] -> pure f
+    fs  -> throwError $ ConflictingOperatorFixities (snd op) pos fs
