@@ -84,7 +84,7 @@ data FunctionDeclaration
       Bool                                         -- ^ Is the binding recursive?
       (Located Identifier)                         -- ^ The name of the declared function
       ([Located (Parameter Kind)], [Located Type]) -- ^ A list of type parameters with optional kind annotations with type constraints
-      (Maybe [Located (Parameter Type)])           -- ^ A list of parameters with optional types
+      (Maybe [[Located (Parameter Type)]])         -- ^ A list of parameters with optional types
       (Maybe (Located Type))                       -- ^ The optional return type
   deriving (Show, Eq)
 

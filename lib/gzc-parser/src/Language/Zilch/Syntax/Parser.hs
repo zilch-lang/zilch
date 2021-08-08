@@ -233,7 +233,7 @@ parseFunctionDeclaration = lineFold \ s -> do
   recursive <- lexeme (MP.choice [ False <$ parseSymbol L.Let, True <$ parseSymbol L.Rec ])
   universal <- MP.option ([], []) . lexeme $ betweenAngles ((,) <$> parseParameters (lexeme $ parseKind s) <*> MP.option [] (parseConstraints s))
   name <- lexeme parseQualifiedIdentifier
-  parameters <- MP.optional . lexeme $ betweenParens (parseParameters (lexeme $ parseType s))
+  parameters <- MP.optional . lexeme . MP.some $ betweenParens (parseParameters (lexeme $ parseType s))
   returnType <- MP.optional $ lexeme (parseSymbol L.Colon) *> lexeme (parseType s)
   pure (CST.Decl recursive name universal parameters returnType)
   where
