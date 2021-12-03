@@ -56,7 +56,7 @@ executable gzc
     , gzc-lib
   default-language: Haskell2010
 
-test-suite gzc-test
+test-suite gzc-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
