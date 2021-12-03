@@ -1,6 +1,6 @@
-name:                gzc
-version:             0.1.0.0
-github:              "zilch-lang/gzc"
+name:                gzc-lib
+version:             !include "version.yaml"
+github:              "zilch-lang/zilch"
 license:             BSD3
 author:              "Mesabloo"
 copyright:           "2021 Mesabloo"
@@ -20,11 +20,17 @@ description:         Please see the README on GitHub at <https://github.com/zilc
 dependencies:
 - base >= 4.7 && < 5
 
+ghc-options:
+- -Wall
+- -Wextra
+
+default-extensions: !include "default-extensions.yaml"
+
 library:
   source-dirs: src
 
 executables:
-  gzc-exe:
+  gzc:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -32,7 +38,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - gzc
+    - gzc-lib
 
 tests:
   gzc-test:
@@ -43,4 +49,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - gzc
+    - gzc-lib
