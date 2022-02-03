@@ -1,0 +1,14 @@
+name: gzc-core
+version: !include "../../version.yaml"
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -Wextra
+
+default-extensions: !include "../../default-extensions.yaml"
+
+dependencies:
+- base >=4.7 && <5
+- text ==1.2.4.1
