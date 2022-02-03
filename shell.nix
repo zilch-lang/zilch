@@ -8,5 +8,7 @@ pkgs.mkShell {
     stack
 
     haskellPackages.hoogle
+
+    plantuml
   ];
 }
