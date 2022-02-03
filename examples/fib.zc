@@ -1,0 +1,22 @@
+export {fib}
+
+/--
+  fib : (n : nat) -> nat
+  ---
+  
+  Computes the fibonacci sequence starting with values `(0, 1)`.
+-/
+let fib
+  : nat -> nat :=
+  
+  #[inline]
+  rec aux
+    (-2 : nat, -1 : nat) (n : nat)
+    : nat :=
+
+    match n with 
+      0 -> -2
+      1 -> -1
+      _ -> aux (-1, -2 + -1) (n - 1)
+
+  aux (0, 1)

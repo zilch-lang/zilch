@@ -1,0 +1,29 @@
+export {fact}
+
+/-- 
+  fact : (n : nat) -> nat
+  ---
+
+  Computes the factorial of the given parameter `n` (denoted as `n!`).
+
+  Equivalent to the formula $$
+    \begin{equation}
+      0! &= 1 \\
+      1! &= 1 \\
+      n! &= n * (n - 1)!
+    \end{equation}
+  $$ but implemented more efficiently using tail calls.
+-/
+let fact
+  : nat -> nat :=
+
+  #[inline]
+  let aux 
+    (acc : nat) (n : nat)
+    : nat :=
+    
+    match n with
+      0 | 1 -> acc 
+      _     -> aux (acc * n) (n - 1)
+
+  aux 1

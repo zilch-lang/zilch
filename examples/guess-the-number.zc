@@ -1,0 +1,48 @@
+export {main}
+
+open import data::{
+  function::{_<<_, _<|_},
+  result::{result, _>>=_},
+  string::string,
+  unit::unit
+}
+open import ops::cmp::{cmp, compare}
+open import system::{
+  io::{effect io, readline, print, impl _},
+  partial::{effect partial, unsafe-partial},
+  random::{effect random, random-seeded} as random
+}
+
+
+let guess
+  (lives : u64) (number : u64)
+  : io (result str unit) :=
+
+  let guessed := str::parse u64 (readline ())
+  guess >>= lam guessed -> 
+    match compare number guessed with
+      cmp::= -> print "Yay!"
+      cmp::< -> 
+        print "Lower"
+        guess (lives - 1) number
+      cmp::> ->
+        print "Higher"
+        guess (lives - 1) number
+
+    result::ok(unit::unit)
+
+
+let main'
+  ()
+  : < io, random, partial > unit :=
+  
+  let number := random::u64(0, 1000)
+  result::unwrap (guess 3 number)
+
+
+let main
+  ()
+  : io unit := 
+  
+  (unsafe-partial << random-seeded) 
+    <| main' ()

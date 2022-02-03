@@ -1,0 +1,12 @@
+export {main}
+
+import data::unit::unit
+import system::{
+  io::{effect io, print}
+}
+
+let main
+	()
+	: io unit :=
+
+	println "Hello, world!"
