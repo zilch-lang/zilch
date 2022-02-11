@@ -1,11 +1,9 @@
-export {main}
-
 import data::unit::unit
 import system::{
   io::{effect io, print}
 }
 
-let main
+public let main
 	()
 	: io unit :=
 

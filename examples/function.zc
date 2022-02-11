@@ -1,16 +1,10 @@
-/-
-  Module `data.function`, defining some functions for better composability
-  and/or/readability.
--/
-export {_<|_, _<<_}
-
 /--
   ---
 
   Function composition defined as $(g \circ f)(x) = g(f(x))$.
 -/
 #[inline, infixr 1]
-let _<<_ 
+public let _<<_ 
   {e e' : effect} {a b c : type} 
   (g : b -> e' c) (f : a -> e b) (x : a)
   : < | e, e' > c :=
@@ -23,7 +17,7 @@ let _<<_
   Function application defined as an infix operator for convenience.
 -/
 #[infixl 0]
-let _<|_ 
+public let _<|_ 
   {e : effect} {a b : type}
   (f : a -> e b) (x : a)
   : e b :=
@@ -36,7 +30,7 @@ let _<|_
   Flip function arguments to compose better with other functions.
 -/
 #[inline]
-let flip
+public let flip
   {e : effect} {a b c : type}
   (f : a -> b -> e c)
   : b -> a -> e c :=

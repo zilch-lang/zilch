@@ -1,5 +1,3 @@
-export {fact}
-
 /-- 
   fact : (n : nat) -> nat
   ---
@@ -14,7 +12,7 @@ export {fact}
     \end{equation}
   $$ but implemented more efficiently using tail calls.
 -/
-let fact
+public let fact
   : nat -> nat :=
 
   #[inline]

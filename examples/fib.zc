@@ -1,12 +1,10 @@
-export {fib}
-
 /--
   fib : (n : nat) -> nat
   ---
   
   Computes the fibonacci sequence starting with values `(0, 1)`.
 -/
-let fib
+public let fib
   : nat -> nat :=
   
   #[inline]

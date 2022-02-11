@@ -1,25 +1,22 @@
-export {monoid, mempty, +-monoid-u64, ×-monoid-u64}
-
-record monoid
+public record monoid
   (a : type) :=
 
-  constructor monoid
   val mempty : a
 
-open {{monoid}}
+public open {{monoid}}
 
 /--
   Additive monoid on unsigned 64-bis integer.
 -/
-let +-monoid-u64 
+public let +-monoid-u64 
   : monoid u64 :=
   
-  monoid 0 
+  {{ let mempty := 0 }}
 
 /--
   Multiplicative monoid on unsigned 64-bis integer.
 -/
-let ×-monoid-u64 
+public let ×-monoid-u64 
   : monoid u64 :=
 
-  monoid 1
+  {{ let mempty := 1 }}
