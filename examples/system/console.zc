@@ -1,0 +1,51 @@
+import foreign::c-string::{new-c-string, c-string}  -- ptr char
+import system::handle::{handle, io-mode::*, stdin, stdout, stderr}
+
+public effect console :=
+  /--
+    Outputs the given string to the write-only handle `stdout` given to the handler
+    `do-console` (defaults to `stdout`).
+  -/
+  val puts : {r : region} -> c-string r -> ()
+  /--
+    Retrieves maximum `N` characters (either `N` characters or until a newline is encountered)
+    from the `handle` given to the handle `do-console` (defaults to `stdin`).
+
+    Returns a string allocated in the implicit surrounding region.
+  -/
+  val gets : {r : region} -> (N : i32) -> c-string r
+-- export functions in the effect, but prevent from handling the effect outside of this module
+public open {{console}}
+
+#[import ccall "fputs"]
+val c-fputs : {r : region} -> (c-string r, handle W) -> ()
+#[import ccall "fgets"]
+val c-fgets : {r : region} -> (mut _ : c-string r, i32, handle R) -> c-string r
+
+
+/-- bla bla bla documentation -/
+public let do-console :
+  {e : effect} {a : type} {r : region}
+  (stdin : handle R, stdout : handle W, stderr : handle W)
+  (action : () -> < console | e > a)
+  : e a :=
+
+  with console::puts str := c-fputs (str, stdout)
+  with console::gets {r} N :=
+    -- the `r` parameter can be completely infered but o'well
+    let mut str := new-c-string {r} N
+    c-fgets(str, N, stdin) -- returns `str`
+  
+  action ()
+
+
+/--
+  Default handler for the `console` effect, outputting to `stdout` and reading from `stdin`.
+-/
+#[handler]
+public let do-default-console :
+  {e : effect} {a : type} {r : region}
+  (action : () -> < console | e > a)
+  : e a :=
+
+  do-console (stdin, stdout, stderr)

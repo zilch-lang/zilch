@@ -1,0 +1,20 @@
+public open import data::monoid::{monoid, mempty}
+
+
+public record semigroup
+	(a : type)
+  {{ m : monoid a }}
+	:=
+
+	val mappend
+    : (a, a) -> a
+
+public open {{semigroup}}
+
+
+
+public let +-semigroup-u64
+	: semigroup u64
+  :=
+
+  {{ let mappend := _+_ }}
