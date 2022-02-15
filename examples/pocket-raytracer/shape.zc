@@ -1,0 +1,37 @@
+open import data::prim::bool::{bool::*, *}
+open import data::prim::float::*
+open import vec::{vec3::*, *}
+open import ops::num::*
+open import material::material
+
+
+public record sphere :=
+  public constructor sphere
+
+  public val center : vec3 f32
+  public val radius : f32
+  public val material : material
+
+
+public let ray-intersects-sphere
+  (orig : vec3 f32, dir : vec3 f32)
+  (s : sphere)
+  : (f32, bool) :=
+
+  let L := s::center - orig
+  let tca := L · dir
+  let d2 := L · L - tca * tca 
+  let radius2 := s::radius * s::radius
+
+  if d2 > radius2
+  then (+∞, false)
+  else 
+    let thc := sqrt (radius2 - d2)
+    let t0 := tca - thc
+    let t1 := tca + thc
+
+    if t0 < 0 && t1 < 0
+    then (+∞, false)
+    else if t0 < 0
+    then (t1, true)
+    else (t0, true)

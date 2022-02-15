@@ -1,0 +1,61 @@
+open import vec::*
+open import material::ivory -- nobody cares lol
+open import shape::{sphere::*}
+
+open import data::prim::array::{array, iter as array-iter, set as array-set}
+open import data::prim::float::{tan, sqrt, +∞, π}
+open import data::prim::list::{list::*, map, min-by_or_, filter}
+open import data::prim::tuple::{fst, snd}
+open import control::loops::{for}
+open import system::fs::{open-file, write-file, close-file}
+open import control::todo::todo!
+
+
+public let cast-ray 
+  (orig : vec3 f32, dir : vec3 f32)
+  (spheres : list sphere)
+  : vec3 f32 :=
+
+  let dist := min-by (fst, filter (snd _) (map (ray-intersects-sphere (orig, dir)) spheres))
+              or (+∞, false)
+  
+  if not (snd dist)
+  then vec3 0.2 0.7 0.8 -- background color
+  else vec3 0.4 0.4 0.3 -- spheres color
+
+
+public let render
+  (spheres : list sphere)
+  : < io > () :=
+
+  let WIDTH  := 1024
+  let HEIGHT := 768
+  let mut framebuffer : array (WIDTH * HEIGHT) (vec3 f32)
+
+  let ORIG : vec3 f32 := vec3::vec3 0.0 0.0 0.0
+  let FOV := π / 2.0
+
+  for 0 HEIGHT lam i ->
+    for 0 WIDTH lam j ->
+      let dir-x := (2.0 * (i + 0.5) / WIDTH - 1.0) * tan (FOV / 2.0) * WIDTH / HEIGHT
+      let dir-y := - (2.0 * (j + 0.5) / HEIGHT - 1.0) * tan (FOV / 2.0)
+
+      let diri := normalize (vec3 dir-x dir-y -1.0)
+
+      let point := cast-ray (vec3 0.0 0.0 0.0, dir) spheres
+      array-set framebuffer (i + j * WIDTH) point
+
+  -- output a PPM image here
+
+  ()
+
+
+
+public let main
+  ()
+  : < io > () :=
+
+  let spheres := cons (sphere (vec3 -3.0 0.0 -16.0) 2 ivory) nil
+--  let lights := cons (light ) nil
+
+  render spheres

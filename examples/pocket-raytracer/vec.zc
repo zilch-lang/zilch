@@ -1,0 +1,66 @@
+open import data::prim::float::{sqrt}
+open import ops::{num::*}
+
+
+public record vec3 (a : type) :=
+  public constructor vec3
+
+  public val x : a
+  public val y : a
+  public val z : a
+
+public record vec4 (a : type) :=
+  public constructor vec4
+
+  public val w : a
+  public val x : a
+  public val y : a
+  public val z : a
+
+
+let vec3-is-num : 
+  {a : type} {{_ : num a}}
+  : num (vec3 a) :=
+
+  {{ 
+    let _+_ v1 v2 := vec3 (v1::x + v2::x) (v1::y + v2::y) (v1::z + v2::z)
+    let _-_ v1 v2 := vec3 (v1::x - v2::x) (v1::y - v2::y) (v1::z - v2::z)
+    -- cross product
+    let _*_ v1 v2 := vec3 (v1::y * v2::z - v1::z * v2::y)
+                          (v1::z * v2::x - v1::x * v2::z)
+                          (v1::x * v2::y - v1::y * v2::x)
+    let _/_ v1 v2 := undefined -- ???
+  }}
+
+
+public alias vec3f := vec3 f32
+
+
+-- norm of the vector
+#[inline]
+public let ||_|| 
+  (v : vec3 f32)
+  : f32 :=
+
+  sqrt (v::x * v::x + v::y * v::y + v::z * v::z)
+
+
+-- normalize the vector
+#[inline]
+public let normalize
+  (v : vec3 f32)
+  : vec3 f32 :=
+
+  v * (1 / || v ||)
+
+
+-- dot product
+public let _·_
+  (v1 : vec3 f32) (v2 : vec3 f32)
+  : f32 :=
+
+  v1::x * v2::x + v1::y * v2::y + v1::z * v2::z
+
+
+-- cross product
+public let _×_ := _*_ {_} {_ := vec3-is-num {f32} }
