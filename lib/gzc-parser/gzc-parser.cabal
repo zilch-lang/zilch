@@ -4,18 +4,17 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           gzc-core
+name:           gzc-parser
 version:        1.0.0
 build-type:     Simple
 
 library
   exposed-modules:
-      Data.Located
-      Language.Zilch.Parser.Core
-      Language.Zilch.Parser.Core.CST
-      Language.Zilch.Parser.Core.Lexeme
+      Language.Zilch.Parser.Errors
+      Language.Zilch.Parser.Internal
+      Language.Zilch.Parser.Lexer
   other-modules:
-      Paths_gzc_core
+      Paths_gzc_parser
   hs-source-dirs:
       src
   default-extensions:
@@ -23,9 +22,12 @@ library
       OverloadedStrings
       OverloadedLists
       BlockArguments
-  ghc-options: -Wall -Wextra
+  ghc-options: -Wall -Wextra -Wno-name-shadowing -Wall -Wextra
   build-depends:
       base >=4.7 && <5
-    , nsc-core
+    , diagnose
+    , gzc-core
+    , megaparsec >=9.0 && <10
+    , mtl ==2.2.2
     , text ==1.2.4.1
   default-language: Haskell2010

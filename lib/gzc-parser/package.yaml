@@ -1,0 +1,23 @@
+name: gzc-parser
+version: !include "../../version.yaml"
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -Wextra
+
+default-extensions: !include "../../default-extensions.yaml"
+
+dependencies:
+- base >=4.7 && <5
+- text ==1.2.4.1
+- gzc-core
+- megaparsec >=9.0 && <10
+- mtl ==2.2.2
+- diagnose
+
+ghc-options:
+- -Wall
+- -Wextra
+- -Wno-name-shadowing

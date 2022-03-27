@@ -1,5 +1,5 @@
 module Language.Zilch.Parser.Core.CST where
-
+    
 import Data.Located (Located)
 import Data.Text (Text)
 

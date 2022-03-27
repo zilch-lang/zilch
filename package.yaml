@@ -19,6 +19,9 @@ description:         Please see the README on GitHub at <https://github.com/zilc
 
 dependencies:
 - base >= 4.7 && < 5
+- diagnose
+- gzc-core
+- gzc-parser
 
 ghc-options:
 - -Wall

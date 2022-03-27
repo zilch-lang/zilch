@@ -70,4 +70,6 @@ data Token
     TkCharacter Text
   | -- | A sequence of characters enclosed in @"@
     TkString Text
+  | -- | The end of the file (EOF)
+    TkEOF
   deriving (Show, Eq, Ord)
