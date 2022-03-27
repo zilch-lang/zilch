@@ -18,6 +18,8 @@ data Token
     TkLam
   | -- | @λ@: @lam@ but Unicode
     TkUniLam
+  | -- | @do@: anonymous function without parameter (alias to @lam() ->@)
+    TkDo
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition
@@ -48,6 +50,14 @@ data Token
     TkRightArrow
   | -- | @→@: @->@ but Unicode
     TkUniRightArrow
+  | -- | @forall@: universal type quantifier
+    TkForall
+  | -- | @∀@: @forall@ but Unicode
+    TkUniForall
+  | -- | @exists@: existential type quantifier
+    TkExists
+  | -- | @∃@: @exists@ but Unicode
+    TkUniExists
   | -- | @,@: common separator
     TkComma
   | -- | @_@: wildcard pattern
