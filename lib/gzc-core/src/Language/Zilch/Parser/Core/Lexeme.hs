@@ -8,14 +8,22 @@ data Token
     TkLet
   | -- | @rec@: recursive function binding in the current scope
     TkRec
-  | -- | @exporŧ@: module export group
-    TkExport
+  | -- | @enum@: enumeration declarator
+    TkEnum
+  | -- | @record@: record declarator
+    TkRecord
+  | -- | @public@: export from module
+    TkPublic
+  | -- | @val@: field declarator
+    TkVal
   | -- | @import@: module import
     TkImport
   | -- | @as@: binding aliasing in import group
     TkAs
   | -- | @lam@: anonymous function introduction
     TkLam
+  | -- | @open@: introduce functions from records/enums
+    TkOpen
   | -- | @λ@: @lam@ but Unicode
     TkUniLam
   | -- | @do@: anonymous function without parameter (alias to @lam() ->@)
@@ -72,4 +80,8 @@ data Token
     TkString Text
   | -- | The end of the file (EOF)
     TkEOF
+  | -- | Inline comment started with @--@ until the next end of line
+    TkInlineComment Text
+  | -- | Multiline comment, enclosed by @/-@ and  @-/@
+    TkMultilineComment Text
   deriving (Show, Eq, Ord)

@@ -78,7 +78,11 @@ commaSeparated l = intercalate ", " $ filter (/= "") l
 showToken :: Token -> String
 showToken Core.TkLet = "'let'"
 showToken Core.TkRec = "'rec'"
-showToken Core.TkExport = "'export'"
+showToken Core.TkVal = "'val'"
+showToken Core.TkOpen = "'open'"
+showToken Core.TkEnum = "'enum'"
+showToken Core.TkRecord = "'record'"
+showToken Core.TkPublic = "'public'"
 showToken Core.TkImport = "'import'"
 showToken Core.TkAs = "'as'"
 showToken Core.TkLam = "'lam'"
@@ -110,3 +114,5 @@ showToken (Core.TkNumber txt) = "'" <> Text.unpack txt <> "'"
 showToken (Core.TkCharacter txt) = "''" <> Text.unpack txt <> "''"
 showToken (Core.TkString txt) = "'\"" <> Text.unpack txt <> "\"'"
 showToken Core.TkEOF = "<eof>"
+showToken (Core.TkInlineComment c) = "--" <> Text.unpack c
+showToken (Core.TkMultilineComment c) = "/-" <> Text.unpack c <> "-/"
