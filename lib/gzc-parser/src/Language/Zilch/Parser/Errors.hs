@@ -21,3 +21,19 @@ instance MP.ShowErrorComponent LexicalError where
 
 instance HasHints LexicalError String where
   hints _ = []
+
+----------------------------------------------
+
+data ParsingWarning
+
+fromParsingWarning :: ParsingWarning -> Report String
+fromParsingWarning _ = warn "sorry" [] []
+
+data ParsingError
+  deriving (Show, Eq, Ord)
+
+instance MP.ShowErrorComponent ParsingError where
+  showErrorComponent = show
+
+instance HasHints ParsingError String where
+  hints _ = []
