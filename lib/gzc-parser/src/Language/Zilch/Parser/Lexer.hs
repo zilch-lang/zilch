@@ -48,7 +48,7 @@ lexProgram = removeFrontSpace *> ((<>) <$> MP.many (lexeme token) <*> (pure <$> 
     removeFrontSpace = lexeme (pure ())
 
 token :: forall m. MonadLexer m => m (Located Token)
-token = MP.choice ([MP.try character, comment, identifierOrReserved] :: [m (Located Token)])
+token = MP.choice ([MP.try character, comment, number, identifierOrReserved] :: [m (Located Token)])
 
 eof :: MonadLexer m => m (Located Token)
 eof = located (TkEOF <$ MP.eof)
@@ -125,3 +125,17 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken "do" = TkDo
     toToken "_" = TkUnderscore
     toToken s = TkSymbol (Text.pack s)
+
+number :: forall m. MonadLexer m => m (Located Token)
+number = located $ TkNumber <$> (hexadecimal <|> octal <|> binary <|> floating <|> decimal)
+  where
+    hexadecimal = (<>) <$> MPC.string' "0x" <*> (Text.pack <$> MP.some hexDigit)
+    octal = (<>) <$> MPC.string' "0o" <*> (Text.pack <$> MP.some octalDigit)
+    binary = (<>) <$> MPC.string' "0b" <*> (Text.pack <$> MP.some binDigit)
+    floating = MP.empty
+    decimal = Text.pack <$> MP.some digit
+
+    hexDigit = MP.oneOf ("0123456789ABCDEFabcdef" :: String)
+    octalDigit = MP.oneOf ("01234567" :: String)
+    binDigit = MP.oneOf ("01" :: String)
+    digit = MP.oneOf ("0123456789" :: String)
