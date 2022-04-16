@@ -112,8 +112,9 @@ parseTopLevelDefinition = located do
 
 parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do
-  _ <- lexeme (token TkLet)
-  Let <$> lexeme parseIdentifier
+  tk <- lexeme (token TkLet <|> token TkRec)
+  (if unLoc tk == TkLet then Let else Rec)
+    <$> lexeme parseIdentifier
     <*> MP.many (lexeme $ parseParameter s)
     <*> MP.optional (lexeme (token TkColon) *> lexeme (parseExpression s))
     <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> parseExpression s)

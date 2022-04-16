@@ -1,5 +1,5 @@
 module Language.Zilch.Parser.Core.CST where
-    
+
 import Data.Located (Located)
 import Data.Text (Text)
 
@@ -31,7 +31,14 @@ data MetaAttribute
   deriving (Show)
 
 data Definition
-  = Let
+  = -- | A non-recursive value definition
+    Let
+      (Located Text)
+      [Located Parameter]
+      (Maybe (Located Expression))
+      (Located Expression)
+  | -- | A (potentially) recursive value definition
+    Rec
       (Located Text)
       [Located Parameter]
       (Maybe (Located Expression))
