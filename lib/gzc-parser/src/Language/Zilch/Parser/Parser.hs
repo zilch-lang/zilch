@@ -143,7 +143,8 @@ parseExpression s = located do
         parseDo s,
         ELet <$> lexeme (parseLet s) <*> parseExpression s,
         parseForall s,
-        parseExists s
+        parseExists s,
+        EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
       ] ::
         [m Expression]
     )

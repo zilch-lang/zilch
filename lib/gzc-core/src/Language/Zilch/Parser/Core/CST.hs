@@ -87,4 +87,5 @@ data Expression
   | EExists
       [Located Parameter]
       (Located Expression)
+  | EParens (Located Expression)
   deriving (Show)
