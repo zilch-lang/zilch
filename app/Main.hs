@@ -2,8 +2,9 @@
 
 module Main where
 
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Error.Diagnose (printDiagnostic)
+import Error.Diagnose (addFile, printDiagnostic)
 import Language.Zilch.Parser.Lexer (lexFile)
 import Language.Zilch.Parser.Parser (parseTokens)
 import System.IO
@@ -16,10 +17,10 @@ main = do
         lexFile "stdin" stdin
           >>= \(tks, warns) -> (,warns) <$> parseTokens "stdin" tks
   case cst of
-    Left diag -> printDiagnostic stderr True True diag
+    Left diag -> printDiagnostic stderr True True (addFile diag "stdin" $ Text.unpack stdin)
     Right ((cst, diag2), diag1) -> do
-      printDiagnostic stderr True True diag1
-      printDiagnostic stderr True True diag2
+      printDiagnostic stderr True True (addFile diag1 "stdin" $ Text.unpack stdin)
+      printDiagnostic stderr True True (addFile diag2 "stdin" $ Text.unpack stdin)
       print cst
 
   pure ()
