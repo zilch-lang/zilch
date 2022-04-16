@@ -112,26 +112,26 @@ parseTopLevelDefinition = located do
 
 parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do
-  tk <- lexeme (token TkLet <|> token TkRec)
+  tk <- lexeme (token TkLet <|> token TkRec) <* s
   (if unLoc tk == TkLet then Let else Rec)
-    <$> lexeme parseIdentifier
-    <*> MP.many (lexeme $ parseParameter s)
-    <*> MP.optional (lexeme (token TkColon) *> lexeme (parseExpression s))
-    <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> parseExpression s)
+    <$> (lexeme parseIdentifier <* s)
+    <*> (MP.many (lexeme $ parseParameter s) <* s)
+    <*> (MP.optional (lexeme (token TkColon) *> s *> lexeme (parseExpression s)) <* s)
+    <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> s *> parseExpression s)
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =
   located $
     MP.choice
-      ( [ lexeme (token TkLeftParen) *> lexeme explicit <* token TkRightParen,
-          lexeme (token TkLeftBrace) *> lexeme implicit <* token TkRightBrace,
+      ( [ lexeme (token TkLeftParen) *> s *> lexeme explicit <* s <* token TkRightParen,
+          lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace,
           Explicit <$> parseIdentifier <*> pure Nothing
         ] ::
           [m Parameter]
       )
   where
-    explicit = Explicit <$> lexeme parseIdentifier <*> MP.optional (lexeme (token TkColon) *> parseExpression s)
-    implicit = Implicit <$> lexeme parseIdentifier <*> MP.optional (lexeme (token TkColon) *> parseExpression s)
+    explicit = Explicit <$> (lexeme parseIdentifier <* s) <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+    implicit = Implicit <$> (lexeme parseIdentifier <* s) <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
@@ -151,31 +151,31 @@ parseExpression s = located do
 
 parseLambda :: forall m. MonadParser m => m () -> m Expression
 parseLambda s = do
-  _ <- lexeme (token TkLam <|> token TkUniLam)
-  param <- lexeme $ parseParameter s
+  _ <- lexeme (token TkLam <|> token TkUniLam) <* s
+  param <- lexeme $ parseParameter s <* s
   -- TODO: check if explicit parameter
-  _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow)
-  expr <- lineFold parseExpression
+  _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
+  expr <- parseExpression s
   pure $ ELam param expr
 
 parseDo :: forall m. MonadParser m => m () -> m Expression
 parseDo s = do
-  _ <- lexeme (token TkDo)
-  expr <- lineFold parseExpression
+  _ <- lexeme (token TkDo) <* s
+  expr <- parseExpression s
   pure $ EDo expr
 
 parseForall :: forall m. MonadParser m => m () -> m Expression
 parseForall s = do
-  _ <- lexeme (token TkForall <|> token TkUniForall)
-  params <- lexeme $ MP.many (parseParameter s)
-  _ <- lexeme (token TkComma)
+  _ <- lexeme (token TkForall <|> token TkUniForall) <* s
+  params <- lexeme $ MP.many (parseParameter s) <* s
+  _ <- lexeme (token TkComma) <* s
   expr <- parseExpression s
   pure $ EForall params expr
 
 parseExists :: forall m. MonadParser m => m () -> m Expression
 parseExists s = do
-  _ <- lexeme (token TkExists <|> token TkUniExists)
-  params <- lexeme $ MP.many (parseParameter s)
-  _ <- lexeme (token TkComma)
+  _ <- lexeme (token TkExists <|> token TkUniExists) <* s
+  params <- lexeme $ MP.many (parseParameter s) <* s
+  _ <- lexeme (token TkComma) <* s
   expr <- parseExpression s
   pure $ EExists params expr
