@@ -34,18 +34,51 @@ parseIdentifier = do
 
   pure $ ident :@ p
 
+parseNumber :: forall m. MonadParser m => m (Located Text)
+parseNumber = do
+  let isNumber (TkNumber _) = True
+      isNumber _ = False
+
+  TkNumber nb :@ p <- MP.satisfy (isNumber . unLoc)
+
+  pure $ nb :@ p
+
 lexeme :: forall m a. MonadParser m => m a -> m a
-lexeme = MPL.lexeme (MPL.space (pure ()) skipInlineComment skipMultilineComment)
+lexeme = MPL.lexeme whitespace
+
+whitespace :: forall m. MonadParser m => m ()
+whitespace = MPL.space MP.empty skipInlineComment skipMultilineComment
   where
-    skipInlineComment = do
+    skipInlineComment = MP.skipSome do
       let isInlineComment (TkInlineComment _) = True
           isInlineComment _ = False
       () <$ MP.satisfy (isInlineComment . unLoc)
 
-    skipMultilineComment = do
+    skipMultilineComment = MP.skipSome do
       let isMultilineComment (TkMultilineComment _) = True
           isMultilineComment _ = False
       () <$ MP.satisfy (isMultilineComment . unLoc)
+
+-- | See @'MPL.nonIndented'@.
+nonIndented :: forall m a. MonadParser m => m a -> m a
+nonIndented = MPL.nonIndented whitespace
+{-# INLINE nonIndented #-}
+
+-- | See @'MPL.indentBlock'@.
+indentBlock :: forall m a. MonadParser m => m a -> m [a]
+indentBlock p = do
+  pos <- whitespace *> MPL.indentLevel
+  p `MP.sepBy1` indentGuard EQ pos
+
+-- | See @'MPL.lineFold'@.
+lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
+lineFold = MPL.lineFold whitespace
+{-# INLINE lineFold #-}
+
+-- | See @'MPL.indentGuard'@.
+indentGuard :: forall m. MonadParser m => Ordering -> MP.Pos -> m MP.Pos
+indentGuard = MPL.indentGuard whitespace
+{-# INLINE indentGuard #-}
 
 --------------------------------------------------
 
@@ -62,27 +95,48 @@ parseModule :: forall m. MonadParser m => m (Located Module)
 parseModule =
   located do
     removeFrontComments
-    Mod <$> pure []
+    Mod
+      <$> pure []
       <*> MP.many (lexeme parseTopLevelDefinition)
+      <* token TkEOF
   where
     removeFrontComments = lexeme (pure ())
 
 parseTopLevelDefinition :: forall m. MonadParser m => m (Located TopLevelDefinition)
 parseTopLevelDefinition = located do
-  TopLevel <$> pure []
+  TopLevel
+    <$> pure []
     <*> (isJust <$> MP.optional (lexeme $ token TkPublic))
     <*> MP.choice
-      ([parseLet] :: [m (Located Definition)])
+      ([nonIndented $ lineFold parseLet] :: [m (Located Definition)])
 
-parseLet :: forall m. MonadParser m => m (Located Definition)
-parseLet = lexeme $ located do
+parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
+parseLet s = lexeme $ located do
+  _ <- lexeme (token TkLet)
   Let <$> lexeme parseIdentifier
-    <*> MP.many (lexeme parseParameter)
-    <*> MP.optional (lexeme (token TkColon) *> lexeme parseExpression)
-    <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> parseExpression)
+    <*> MP.many (lexeme $ parseParameter s)
+    <*> MP.optional (lexeme (token TkColon) *> lexeme (parseExpression s))
+    <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> parseExpression s)
 
-parseParameter :: forall m. MonadParser m => m (Located Parameter)
-parseParameter = MP.empty -- TODO
+parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
+parseParameter s =
+  located $
+    MP.choice
+      ( [ lexeme (token TkLeftParen) *> lexeme explicit <* token TkRightParen,
+          lexeme (token TkLeftBrace) *> lexeme implicit <* token TkRightBrace,
+          Explicit <$> parseIdentifier <*> pure Nothing
+        ] ::
+          [m Parameter]
+      )
+  where
+    explicit = Explicit <$> lexeme parseIdentifier <*> MP.optional (lexeme (token TkColon) *> parseExpression s)
+    implicit = Implicit <$> lexeme parseIdentifier <*> MP.optional (lexeme (token TkColon) *> parseExpression s)
 
-parseExpression :: forall m. MonadParser m => m (Located Expression)
-parseExpression = MP.empty -- TODO
+parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
+parseExpression s = located do
+  MP.choice
+    ( [ EId <$> parseIdentifier,
+        EInt . unLoc <$> parseNumber
+      ] ::
+        [m Expression]
+    )
