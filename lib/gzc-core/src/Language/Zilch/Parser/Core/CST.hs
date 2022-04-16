@@ -63,14 +63,8 @@ data Expression
     EString Text
   | EStringConcat [Text]
   | EApplication
-      (Located Expression)
       [Located Expression]
-      -- ^ Implicit arguments, whenever they are made explicit
-      [Located Expression]
-      -- ^ Explicit arguments
-  | EInfix
-      (Located Expression)
-      Text
+  | EImplicit
       (Located Expression)
   | ELam
       (Located Parameter)

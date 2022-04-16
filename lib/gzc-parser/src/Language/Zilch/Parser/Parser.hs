@@ -103,12 +103,13 @@ parseModule =
     removeFrontComments = lexeme (pure ())
 
 parseTopLevelDefinition :: forall m. MonadParser m => m (Located TopLevelDefinition)
-parseTopLevelDefinition = located do
-  TopLevel
-    <$> pure []
-    <*> (isJust <$> MP.optional (lexeme $ token TkPublic))
-    <*> MP.choice
-      ([nonIndented $ lineFold parseLet] :: [m (Located Definition)])
+parseTopLevelDefinition = located $
+  nonIndented $ lineFold \s -> do
+    TopLevel
+      <$> pure []
+      <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
+      <*> MP.choice
+        ([parseLet s] :: [m (Located Definition)])
 
 parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do
@@ -136,18 +137,25 @@ parseParameter s =
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
   MP.choice
-    ( [ EId <$> parseIdentifier,
-        EInt . unLoc
-          <$> parseNumber,
-        parseLambda s,
-        parseDo s,
-        ELet <$> lexeme (parseLet s) <*> parseExpression s,
+    ( [ ELet <$> lexeme (parseLet s) <*> parseExpression s,
         parseForall s,
         parseExists s,
-        EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
+        EApplication <$> (parseAtom `MP.sepBy1` s)
       ] ::
         [m Expression]
     )
+  where
+    parseAtom = located do
+      MP.choice
+        ( [ EId <$> parseIdentifier,
+            EInt . unLoc
+              <$> parseNumber,
+            parseLambda s,
+            parseDo s,
+            EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
+          ] ::
+            [m Expression]
+        )
 
 parseLambda :: forall m. MonadParser m => m () -> m Expression
 parseLambda s = do
