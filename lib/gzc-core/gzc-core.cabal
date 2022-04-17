@@ -12,6 +12,7 @@ library
   exposed-modules:
       Data.Located
       Language.Zilch.Syntax.Core
+      Language.Zilch.Syntax.Core.AST
       Language.Zilch.Syntax.Core.CST
       Language.Zilch.Syntax.Core.Lexeme
   other-modules:
