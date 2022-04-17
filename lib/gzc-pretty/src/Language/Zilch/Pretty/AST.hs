@@ -84,3 +84,4 @@ instance Pretty (Located Expression) where
       <> indent 2 (hsep $ pretty <$> implicits)
       <> line
       <> indent 2 (hsep $ pretty <$> explicits)
+  pretty (EHole :@ _) = "?"

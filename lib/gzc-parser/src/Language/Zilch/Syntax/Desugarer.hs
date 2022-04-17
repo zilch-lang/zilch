@@ -12,7 +12,7 @@ import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.Foldable (foldlM)
 import Data.List (foldl')
-import Data.Located (Located ((:@)))
+import Data.Located (Located ((:@)), unLoc)
 import Error.Diagnose (Diagnostic, addReport, def)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
@@ -68,4 +68,45 @@ separateParameters ps = bimap reverse reverse . snd <$> foldlM separate (True, (
       pure (False, (implicits, (AST.Parameter False name ty' :@ p) : explicits))
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
-desugarExpression = undefined
+desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p
+desugarExpression (CST.EId i :@ p) = pure $ AST.EIdentifier i :@ p
+desugarExpression (CST.EHole :@ p) = pure $ AST.EHole :@ p
+desugarExpression (CST.EInt i :@ p) = pure $ AST.EInteger (i :@ p) :@ p
+desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
+desugarExpression (CST.EImplicit _ :@ p) = error $ "encountered implicit outside application"
+desugarExpression (CST.ELam params expr :@ p) = do
+  (implicits, explicits) <- separateParameters params
+  expr' <- desugarExpression expr
+
+  case implicits of
+    (AST.Parameter _ name _ :@ p1) : _ -> throwError (ImplicitParameterInLambda name p1)
+    _ -> pure ()
+
+  pure $ AST.ELam explicits expr' :@ p
+desugarExpression (CST.EDo expr :@ p) = do
+  expr' <- desugarExpression expr
+  pure $ AST.EDo expr' :@ p
+desugarExpression (CST.ELet def ret :@ p) = do
+  def' <- desugarDefinition def
+  ret' <- desugarExpression ret
+  pure $ AST.ELet def' ret' :@ p
+desugarExpression (CST.EApplication [e] :@ _) = desugarExpression e
+desugarExpression (CST.EParens e :@ _) = desugarExpression e
+desugarExpression (CST.EApplication (e : es) :@ p) = do
+  e' <- desugarExpression e
+  (implicits, explicits) <- separateApplicationParameters es
+  pure $ AST.EApplication e' implicits explicits :@ p
+desugarExpression _ = error "todo"
+
+separateApplicationParameters :: forall m. MonadDesugar m => [Located CST.Expression] -> m ([Located AST.Expression], [Located AST.Expression])
+separateApplicationParameters es = bimap reverse reverse . snd <$> foldlM separate (True, ([], [])) es
+  where
+    separate (wasImplicit, (implicits, explicits)) (CST.EImplicit e :@ p) = do
+      e' <- desugarExpression e
+      unless wasImplicit do
+        throwError (ImplicitApplicationAfterExplicit p)
+
+      pure (True, ((e' : implicits), explicits))
+    separate (_, (implicits, explicits)) e = do
+      e' <- desugarExpression e
+      pure (False, (implicits, e' : explicits))

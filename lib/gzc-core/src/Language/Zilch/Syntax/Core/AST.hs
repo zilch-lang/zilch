@@ -86,4 +86,5 @@ data Expression
       -- ^ Explicit parameters
   | -- | The @type@ builtin type
     EType
+  | EHole
   deriving (Show)
