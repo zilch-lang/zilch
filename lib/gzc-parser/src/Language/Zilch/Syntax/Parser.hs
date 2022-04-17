@@ -172,7 +172,6 @@ parseLambda s = do
         ] ::
           [m [Located Parameter]]
       )
-  -- TODO: check if explicit parameter
   _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
   expr <- parseExpression s
   pure $ ELam params expr
