@@ -5,8 +5,8 @@ module Main where
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Error.Diagnose (addFile, printDiagnostic)
-import Language.Zilch.Parser.Lexer (lexFile)
-import Language.Zilch.Parser.Parser (parseTokens)
+import Language.Zilch.Syntax.Lexer (lexFile)
+import Language.Zilch.Syntax.Parser (parseTokens)
 import System.IO
 
 main :: IO ()

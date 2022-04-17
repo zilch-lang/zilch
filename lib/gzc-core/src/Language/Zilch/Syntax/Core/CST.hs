@@ -82,4 +82,5 @@ data Expression
       [Located Parameter]
       (Located Expression)
   | EParens (Located Expression)
+  | EHole
   deriving (Show)

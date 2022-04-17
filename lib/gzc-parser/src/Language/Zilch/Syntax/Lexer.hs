@@ -124,6 +124,8 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken "λ" = TkUniLam
     toToken "do" = TkDo
     toToken "_" = TkUnderscore
+    toToken "type" = TkType
+    toToken "?" = TkQuestionMark
     toToken s = TkSymbol (Text.pack s)
 
 number :: forall m. MonadLexer m => m (Located Token)

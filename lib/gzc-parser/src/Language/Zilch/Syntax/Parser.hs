@@ -152,6 +152,9 @@ parseExpression s = located do
               <$> parseNumber,
             parseLambda s,
             parseDo s,
+            EType <$ token TkType,
+            EImplicit <$> (lexeme (token TkLeftBrace) *> lexeme (parseExpression s) <* token TkRightBrace),
+            EHole <$ token TkQuestionMark,
             EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
           ] ::
             [m Expression]

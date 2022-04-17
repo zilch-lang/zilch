@@ -28,6 +28,8 @@ data Token
     TkUniLam
   | -- | @do@: anonymous function without parameter (alias to @lam() ->@)
     TkDo
+  | -- | @type@: the builtin type of types
+    TkType
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition
@@ -70,6 +72,8 @@ data Token
     TkComma
   | -- | @_@: wildcard pattern
     TkUnderscore
+  | -- | @?@: typed holes
+    TkQuestionMark
   | -- | A valid symbol formed from any non-space character
     TkSymbol Text
   | -- | Any number-like form
