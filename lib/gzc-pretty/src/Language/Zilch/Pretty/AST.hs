@@ -19,19 +19,21 @@ instance Pretty (Located TopLevel) where
 
 instance Pretty (Located Definition) where
   pretty (Let isRec name implicits explicits returnTy val :@ _) =
-    indent 2 $
-      (if isRec then "rec" else "let")
-        <> space
-        <> pretty (unLoc name)
-        <> space
-        <> hsep (pretty <$> implicits)
-        <> line
-        <> hsep (pretty <$> explicits)
-        <> space
-        <> maybe emptyDoc ((space <>) . (":" <>) . (space <>) . pretty) returnTy
-        <> "≔"
-        <> line
-        <> pretty val
+    (if isRec then "rec" else "let")
+      <> indent
+        2
+        ( space
+            <> pretty (unLoc name)
+            <> space
+            <> hsep (pretty <$> implicits)
+            <> line
+            <> hsep (pretty <$> explicits)
+            <> space
+            <> maybe emptyDoc ((space <>) . (":" <>) . (space <>) . pretty) returnTy
+            <> "≔"
+            <> line
+            <> pretty val
+        )
 
 instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit name ty :@ _) =
