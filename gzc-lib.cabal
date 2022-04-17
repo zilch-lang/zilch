@@ -61,6 +61,8 @@ executable gzc
     , gzc-core
     , gzc-lib
     , gzc-parser
+    , gzc-pretty
+    , prettyprinter ==1.7.0
     , text ==1.2.4.1
   default-language: Haskell2010
 

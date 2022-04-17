@@ -43,6 +43,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - gzc-lib
+    - gzc-pretty
+    - prettyprinter == 1.7.0
 
 tests:
   gzc-tests:

@@ -2,6 +2,8 @@ cradle:
   stack:
     - path: "./lib/gzc-core/src"
       component: "gzc-core:lib"
+    - path: "./lib/gzc-pretty"
+      component: "gzc-pretty:lib"
     - path: "./lib/gzc-parser/src"
       component: "gzc-parser:lib"
     - path: "./src"
