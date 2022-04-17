@@ -6,7 +6,7 @@ module Language.Zilch.Pretty.AST where
 
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
-import Prettyprinter (Pretty (pretty), emptyDoc, enclose, hsep, indent, line, space, vsep)
+import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hsep, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =
@@ -18,16 +18,14 @@ instance Pretty (Located TopLevel) where
       <> pretty def
 
 instance Pretty (Located Definition) where
-  pretty (Let isRec name implicits explicits returnTy val :@ _) =
+  pretty (Let isRec name params returnTy val :@ _) =
     (if isRec then "rec" else "let")
       <> indent
         2
         ( space
             <> pretty (unLoc name)
-            <> space
-            <> hsep (pretty <$> implicits)
             <> line
-            <> hsep (pretty <$> explicits)
+            <> hsep (pretty <$> params)
             <> space
             <> maybe emptyDoc ((space <>) . (":" <>) . (space <>) . pretty) returnTy
             <> "≔"
@@ -43,21 +41,17 @@ instance Pretty (Located Parameter) where
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
-  pretty (EForall implicits explicits ret :@ _) =
+  pretty (EForall params ret :@ _) =
     "∀"
       <> space
-      <> hsep (pretty <$> implicits)
-      <> space
-      <> hsep (pretty <$> explicits)
+      <> hsep (pretty <$> params)
       <> ","
       <> space
       <> pretty ret
-  pretty (EExists implicits explicits ret :@ _) =
+  pretty (EExists params ret :@ _) =
     "∃"
       <> space
-      <> hsep (pretty <$> implicits)
-      <> space
-      <> hsep (pretty <$> explicits)
+      <> hsep (pretty <$> params)
       <> ","
       <> space
       <> pretty ret
@@ -68,10 +62,10 @@ instance Pretty (Located Expression) where
     "do"
       <> line
       <> indent 2 (pretty expr)
-  pretty (ELam params ret :@ _) =
+  pretty (ELam param ret :@ _) =
     "λ"
       <> space
-      <> hsep (pretty <$> params)
+      <> pretty param
       <> space
       <> "→"
       <> space
@@ -80,10 +74,9 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun implicits explicits :@ _) =
+  pretty (EApplication fun arg :@ _) =
     pretty fun
       <> line
-      <> indent 2 (hsep $ pretty <$> implicits)
-      <> line
-      <> indent 2 (hsep $ pretty <$> explicits)
+      <> indent 2 (parens $ pretty arg)
   pretty (EHole :@ _) = "?"
+  pretty (EImplicit expr :@ _) = braces $ pretty expr

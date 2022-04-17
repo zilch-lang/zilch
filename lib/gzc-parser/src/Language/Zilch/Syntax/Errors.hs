@@ -44,38 +44,11 @@ instance HasHints ParsingError String where
 -------------------------------------------------
 
 data DesugarError
-  = -- | An implicit parameter has been found right after explicit ones
-    ImplicitAfterExplicit
-      (Located Text)
-      Position
-  | -- | An implicit was found as parameter to a lambda expression
-    ImplicitParameterInLambda
-      (Located Text)
-      Position
-  | -- | An implicit argument was found after explicit ones
-    ImplicitApplicationAfterExplicit
-      Position
 
 data DesugarWarning
 
 fromDesugarerError :: DesugarError -> Report String
-fromDesugarerError (ImplicitAfterExplicit (name :@ pos1) pos2) =
-  err
-    "Parse error on input"
-    [ (pos1, This $ "Parameter `" <> Text.unpack name <> "` found at incorrect position"),
-      (pos2, Where "This parameter is implicit and was found after an explicit one")
-    ]
-    ["Implicit arguments can only be found *before* any explicit argument."]
-fromDesugarerError (ImplicitParameterInLambda (name :@ pos1) pos2) =
-  err
-    "Parse error on input"
-    [(pos1, This $ "Parameter `" <> Text.unpack name <> "` is implicit in lambda abstraction")]
-    ["Lambda abstraction are not allowed to contain implicit parameters."]
-fromDesugarerError (ImplicitApplicationAfterExplicit pos) =
-  err
-    "Parse error on input"
-    [(pos, This "Implicit argument cannot be found after explicit ones")]
-    []
+fromDesugarerError _ = err "sorry" [] []
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn "sorry" [] []

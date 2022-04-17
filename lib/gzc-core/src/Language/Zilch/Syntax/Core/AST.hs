@@ -26,9 +26,7 @@ data Definition
       (Located Text)
       -- ^ Binding name
       [Located Parameter]
-      -- ^ Implicit parameters
-      [Located Parameter]
-      -- ^ Explicit parameters
+      -- ^ Implicit and explicit parameters
       (Maybe (Located Expression))
       -- ^ Optional return type
       (Located Expression)
@@ -48,16 +46,12 @@ data Parameter
 data Expression
   = EForall
       [Located Parameter]
-      -- ^ Implicit parameters
-      [Located Parameter]
-      -- ^ Explicit parameters
+      -- ^ Implicit and explicit parameters
       (Located Expression)
       -- ^ Quantified expression (type)
   | EExists
       [Located Parameter]
-      -- ^ Implicit parameters
-      [Located Parameter]
-      -- ^ Explicit parameters
+      -- ^ Implicit and explicit parameters
       (Located Expression)
       -- ^ Quantified expression (type)
   | EInteger
@@ -68,7 +62,7 @@ data Expression
       (Located Text)
   | EDo (Located Expression)
   | ELam
-      [Located Parameter]
+      (Located Parameter)
       -- ^ Explicit parameters
       (Located Expression)
       -- ^ Return expression
@@ -80,10 +74,11 @@ data Expression
   | EApplication
       (Located Expression)
       -- ^ The expression which has arguments applied to it
-      [Located Expression]
-      -- ^ Implicit parameters made explicit
-      [Located Expression]
-      -- ^ Explicit parameters
+      (Located Expression)
+      -- ^ The first parameter
+  | -- | An implicit parameter
+    EImplicit
+      (Located Expression)
   | -- | The @type@ builtin type
     EType
   | EHole

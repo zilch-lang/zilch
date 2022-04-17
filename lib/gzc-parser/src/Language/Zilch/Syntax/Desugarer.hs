@@ -44,28 +44,23 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Located AST.Definition)
 desugarDefinition (CST.Let name params retTy ret :@ p) = do
-  (implicits, explicits) <- separateParameters params
+  params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
   ret' <- desugarExpression ret
-  pure $ AST.Let False name implicits explicits retTy' ret' :@ p
+  pure $ AST.Let False name params' retTy' ret' :@ p
 desugarDefinition (CST.Rec name params retTy ret :@ p) = do
-  (implicits, explicits) <- separateParameters params
+  params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
   ret' <- desugarExpression ret
-  pure $ AST.Let True name implicits explicits retTy' ret' :@ p
+  pure $ AST.Let True name params' retTy' ret' :@ p
 
-separateParameters :: forall m. MonadDesugar m => [Located CST.Parameter] -> m ([Located AST.Parameter], [Located AST.Parameter])
-separateParameters ps = bimap reverse reverse . snd <$> foldlM separate (True, ([], [])) ps
-  where
-    separate (wasImplicit, (implicits, explicits)) (CST.Implicit name ty :@ p) = do
-      unless wasImplicit do
-        throwError (ImplicitAfterExplicit name p)
-
-      ty' <- traverse desugarExpression ty
-      pure (True, ((AST.Parameter True name ty' :@ p) : implicits, explicits))
-    separate (_, (implicits, explicits)) (CST.Explicit name ty :@ p) = do
-      ty' <- traverse desugarExpression ty
-      pure (False, (implicits, (AST.Parameter False name ty' :@ p) : explicits))
+desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
+desugarParameter (CST.Implicit name ty :@ p) = do
+  ty' <- traverse desugarExpression ty
+  pure $ AST.Parameter True name ty' :@ p
+desugarParameter (CST.Explicit name ty :@ p) = do
+  ty' <- traverse desugarExpression ty
+  pure $ AST.Parameter False name ty' :@ p
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p
@@ -73,16 +68,16 @@ desugarExpression (CST.EId i :@ p) = pure $ AST.EIdentifier i :@ p
 desugarExpression (CST.EHole :@ p) = pure $ AST.EHole :@ p
 desugarExpression (CST.EInt i :@ p) = pure $ AST.EInteger (i :@ p) :@ p
 desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
-desugarExpression (CST.EImplicit _ :@ p) = error $ "encountered implicit outside application"
+desugarExpression (CST.EImplicit expr :@ p) = do
+  expr' <- desugarExpression expr
+  pure $ AST.EImplicit expr' :@ p
 desugarExpression (CST.ELam params expr :@ p) = do
-  (implicits, explicits) <- separateParameters params
+  params' <- traverse desugarParameter params
   expr' <- desugarExpression expr
 
-  case implicits of
-    (AST.Parameter _ name _ :@ p1) : _ -> throwError (ImplicitParameterInLambda name p1)
-    _ -> pure ()
-
-  pure $ AST.ELam explicits expr' :@ p
+  pure $ foldr mkLam expr' params'
+  where
+    mkLam param expr = AST.ELam param expr :@ p
 desugarExpression (CST.EDo expr :@ p) = do
   expr' <- desugarExpression expr
   pure $ AST.EDo expr' :@ p
@@ -94,19 +89,8 @@ desugarExpression (CST.EApplication [e] :@ _) = desugarExpression e
 desugarExpression (CST.EParens e :@ _) = desugarExpression e
 desugarExpression (CST.EApplication (e : es) :@ p) = do
   e' <- desugarExpression e
-  (implicits, explicits) <- separateApplicationParameters es
-  pure $ AST.EApplication e' implicits explicits :@ p
-desugarExpression _ = error "todo"
-
-separateApplicationParameters :: forall m. MonadDesugar m => [Located CST.Expression] -> m ([Located AST.Expression], [Located AST.Expression])
-separateApplicationParameters es = bimap reverse reverse . snd <$> foldlM separate (True, ([], [])) es
+  es' <- traverse desugarExpression es
+  pure $ foldl' mkApp e' es'
   where
-    separate (wasImplicit, (implicits, explicits)) (CST.EImplicit e :@ p) = do
-      e' <- desugarExpression e
-      unless wasImplicit do
-        throwError (ImplicitApplicationAfterExplicit p)
-
-      pure (True, ((e' : implicits), explicits))
-    separate (_, (implicits, explicits)) e = do
-      e' <- desugarExpression e
-      pure (False, (implicits, e' : explicits))
+    mkApp e1 e2 = AST.EApplication e1 e2 :@ p
+desugarExpression _ = error "todo"
