@@ -11,9 +11,9 @@ build-type:     Simple
 library
   exposed-modules:
       Data.Located
-      Language.Zilch.Parser.Core
-      Language.Zilch.Parser.Core.CST
-      Language.Zilch.Parser.Core.Lexeme
+      Language.Zilch.Syntax.Core
+      Language.Zilch.Syntax.Core.CST
+      Language.Zilch.Syntax.Core.Lexeme
   other-modules:
       Paths_gzc_core
   hs-source-dirs:

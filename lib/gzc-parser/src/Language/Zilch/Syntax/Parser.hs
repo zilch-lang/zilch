@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Zilch.Parser.Parser where
+module Language.Zilch.Syntax.Parser where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)
@@ -14,9 +14,9 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
-import Language.Zilch.Parser.Core
-import Language.Zilch.Parser.Errors
-import Language.Zilch.Parser.Internal (located)
+import Language.Zilch.Syntax.Core
+import Language.Zilch.Syntax.Errors
+import Language.Zilch.Syntax.Internal (located)
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
@@ -160,11 +160,19 @@ parseExpression s = located do
 parseLambda :: forall m. MonadParser m => m () -> m Expression
 parseLambda s = do
   _ <- lexeme (token TkLam <|> token TkUniLam) <* s
-  param <- lexeme $ parseParameter s <* s
+  params <-
+    MP.choice
+      ( [ MP.try $
+            []
+              <$ (lexeme (token TkLeftParen) *> token TkRightParen),
+          MP.some $ lexeme $ parseParameter s <* s
+        ] ::
+          [m [Located Parameter]]
+      )
   -- TODO: check if explicit parameter
   _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
   expr <- parseExpression s
-  pure $ ELam param expr
+  pure $ ELam params expr
 
 parseDo :: forall m. MonadParser m => m () -> m Expression
 parseDo s = do

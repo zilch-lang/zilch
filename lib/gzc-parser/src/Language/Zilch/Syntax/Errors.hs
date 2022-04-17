@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Zilch.Parser.Errors where
+module Language.Zilch.Syntax.Errors where
 
 import Error.Diagnose (Report, warn)
 import Error.Diagnose.Compat.Megaparsec

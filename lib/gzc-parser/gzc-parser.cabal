@@ -10,10 +10,10 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Language.Zilch.Parser.Errors
-      Language.Zilch.Parser.Internal
-      Language.Zilch.Parser.Lexer
-      Language.Zilch.Parser.Parser
+      Language.Zilch.Syntax.Errors
+      Language.Zilch.Syntax.Internal
+      Language.Zilch.Syntax.Lexer
+      Language.Zilch.Syntax.Parser
   other-modules:
       Paths_gzc_parser
   hs-source-dirs:

@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Zilch.Parser.Lexer where
+module Language.Zilch.Syntax.Lexer where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)
@@ -13,9 +13,9 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec
-import Language.Zilch.Parser.Core (Token (..))
-import Language.Zilch.Parser.Errors (LexicalError, LexicalWarning, fromLexicalWarning)
-import Language.Zilch.Parser.Internal (located)
+import Language.Zilch.Syntax.Core (Token (..))
+import Language.Zilch.Syntax.Errors (LexicalError, LexicalWarning, fromLexicalWarning)
+import Language.Zilch.Syntax.Internal (located)
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL

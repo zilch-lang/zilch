@@ -1,4 +1,4 @@
-module Language.Zilch.Parser.Core.CST where
+module Language.Zilch.Syntax.Core.CST where
 
 import Data.Located (Located)
 import Data.Text (Text)
@@ -67,7 +67,7 @@ data Expression
   | EImplicit
       (Located Expression)
   | ELam
-      (Located Parameter)
+      [Located Parameter]
       (Located Expression)
   | EDo
       (Located Expression)

@@ -1,4 +1,4 @@
-module Language.Zilch.Parser.Core.Lexeme (Token (..)) where
+module Language.Zilch.Syntax.Core.Lexeme (Token (..)) where
 
 import Data.Text (Text)
 
