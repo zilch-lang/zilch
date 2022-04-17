@@ -1,26 +1,34 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TupleSections #-}
 
 module Main where
 
+import Data.Bifunctor (second)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Error.Diagnose (addFile, printDiagnostic)
+import Language.Zilch.Pretty.AST ()
+import Language.Zilch.Syntax.Desugarer (desugarCST)
 import Language.Zilch.Syntax.Lexer (lexFile)
 import Language.Zilch.Syntax.Parser (parseTokens)
+import Prettyprinter (pretty)
+import Prettyprinter.Render.Text (putDoc)
 import System.IO
 
 main :: IO ()
 main = do
   stdin <- Text.getContents
 
-  let cst =
-        lexFile "stdin" stdin
-          >>= \(tks, warns) -> (,warns) <$> parseTokens "stdin" tks
-  case cst of
+  let ast = do
+        (tks, warns) <- lexFile "stdin" stdin
+        (!cst, warns) <- second (warns <>) <$> parseTokens "stdin" tks
+        second (warns <>) <$> desugarCST cst
+
+  case ast of
     Left diag -> printDiagnostic stderr True True (addFile diag "stdin" $ Text.unpack stdin)
-    Right ((cst, diag2), diag1) -> do
-      printDiagnostic stderr True True (addFile diag1 "stdin" $ Text.unpack stdin)
-      printDiagnostic stderr True True (addFile diag2 "stdin" $ Text.unpack stdin)
-      print cst
+    Right (ast, diag) -> do
+      printDiagnostic stderr True True (addFile diag "stdin" $ Text.unpack stdin)
+
+      putDoc (pretty ast)
 
   pure ()

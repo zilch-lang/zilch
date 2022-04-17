@@ -37,3 +37,15 @@ instance MP.ShowErrorComponent ParsingError where
 
 instance HasHints ParsingError String where
   hints _ = []
+
+-------------------------------------------------
+
+data DesugarError
+
+data DesugarWarning
+
+fromDesugarerError :: DesugarError -> Report String
+fromDesugarerError _ = warn "sorry" [] []
+
+fromDesugarerWarning :: DesugarWarning -> Report String
+fromDesugarerWarning _ = warn "sorry" [] []
