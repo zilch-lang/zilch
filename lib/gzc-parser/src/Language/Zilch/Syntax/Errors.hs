@@ -4,7 +4,10 @@
 
 module Language.Zilch.Syntax.Errors where
 
-import Error.Diagnose (Report, warn)
+import Data.Located (Located ((:@)), Position)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Error.Diagnose (Marker (This, Where), Report, err, warn)
 import Error.Diagnose.Compat.Megaparsec
 import qualified Text.Megaparsec as MP
 
@@ -41,11 +44,21 @@ instance HasHints ParsingError String where
 -------------------------------------------------
 
 data DesugarError
+  = -- | An implicit argument has been found right after explicit ones
+    ImplicitAfterExplicit
+      (Located Text)
+      Position
 
 data DesugarWarning
 
 fromDesugarerError :: DesugarError -> Report String
-fromDesugarerError _ = warn "sorry" [] []
+fromDesugarerError (ImplicitAfterExplicit (name :@ pos1) pos2) =
+  err
+    "Parse error on input"
+    [ (pos1, This $ "Parameter `" <> Text.unpack name <> "` found at incorrect position"),
+      (pos2, Where "This parameter is implicit and was found after an explicit one")
+    ]
+    ["Implicit arguments can only be found *before* any explicit argument."]
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn "sorry" [] []
