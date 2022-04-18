@@ -25,10 +25,8 @@ data Definition
       -- ^ Is the binding a recursive one?
       (Located Text)
       -- ^ Binding name
-      [Located Parameter]
-      -- ^ Implicit and explicit parameters
-      (Maybe (Located Expression))
-      -- ^ Optional return type
+      (Located Expression)
+      -- ^ The type of the binding, where unknown types are filled by holes
       (Located Expression)
       -- ^ Value
   deriving (Show)
@@ -63,7 +61,7 @@ data Expression
   | EDo (Located Expression)
   | ELam
       (Located Parameter)
-      -- ^ Explicit parameters
+      -- ^ Explicit or implicit parameters
       (Located Expression)
       -- ^ Return expression
   | ELet
@@ -82,4 +80,8 @@ data Expression
   | -- | The @type@ builtin type
     EType
   | EHole
+  | -- | The dependent function type
+    EPi
+      (Located Parameter)
+      (Located Expression)
   deriving (Show)

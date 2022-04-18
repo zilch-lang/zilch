@@ -6,7 +6,7 @@ module Language.Zilch.Pretty.AST where
 
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
-import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hsep, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =
@@ -14,21 +14,24 @@ instance Pretty (Located Module) where
 
 instance Pretty (Located TopLevel) where
   pretty (TopLevel isPublic def :@ _) =
-    (if isPublic then "public" <> line else emptyDoc)
+    (if isPublic then "public" <> space else emptyDoc)
       <> pretty def
+      <> hardline
 
 instance Pretty (Located Definition) where
-  pretty (Let isRec name params returnTy val :@ _) =
+  pretty (Let isRec name typ val :@ _) =
     (if isRec then "rec" else "let")
+      <> space
+      <> pretty (unLoc name)
+      <> line
       <> indent
         2
-        ( space
-            <> pretty (unLoc name)
-            <> line
-            <> hsep (pretty <$> params)
+        ( ":"
             <> space
-            <> maybe emptyDoc ((space <>) . (":" <>) . (space <>) . pretty) returnTy
+            <> pretty typ
+            <> line
             <> "≔"
+            <> line
             <> line
             <> pretty val
         )
@@ -37,7 +40,8 @@ instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
       pretty (unLoc name)
-        <> maybe emptyDoc ((":" <>) . (space <>) . pretty) ty
+        <> space
+        <> maybe (":" <> space <> "_") ((":" <>) . (space <>) . pretty) ty
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
@@ -78,5 +82,11 @@ instance Pretty (Located Expression) where
     pretty fun
       <> line
       <> indent 2 (parens $ pretty arg)
-  pretty (EHole :@ _) = "?"
+  pretty (EHole :@ _) = "_"
   pretty (EImplicit expr :@ _) = braces $ pretty expr
+  pretty (EPi param val :@ _) =
+    pretty param
+      <> space
+      <> "→"
+      <> space
+      <> pretty val

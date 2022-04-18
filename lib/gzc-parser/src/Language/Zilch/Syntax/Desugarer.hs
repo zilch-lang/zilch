@@ -5,14 +5,13 @@
 
 module Language.Zilch.Syntax.Desugarer where
 
-import Control.Monad (unless)
-import Control.Monad.Except (MonadError, runExcept, throwError)
+import Control.Monad.Except (MonadError, runExcept)
 import Control.Monad.State (MonadState, evalStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
-import Data.Foldable (foldlM)
 import Data.List (foldl')
-import Data.Located (Located ((:@)), unLoc)
+import Data.Located (Located ((:@)))
+import Data.Maybe (fromMaybe)
 import Error.Diagnose (Diagnostic, addReport, def)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
@@ -43,16 +42,26 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   pure $ AST.TopLevel isPublic def' :@ p
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Located AST.Definition)
-desugarDefinition (CST.Let name params retTy ret :@ p) = do
+desugarDefinition (CST.Let name params retTy ret@(_ :@ p1) :@ p) = do
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
-  ret' <- desugarExpression ret
-  pure $ AST.Let False name params' retTy' ret' :@ p
-desugarDefinition (CST.Rec name params retTy ret :@ p) = do
+
+  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p) retTy') params'
+  val <- desugarExpression (CST.ELam params ret :@ p1)
+
+  pure $ AST.Let False name ty val :@ p
+  where
+    mkPi param expr = AST.EPi param expr :@ p
+desugarDefinition (CST.Rec name params retTy ret@(_ :@ p1) :@ p) = do
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
-  ret' <- desugarExpression ret
-  pure $ AST.Let True name params' retTy' ret' :@ p
+
+  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p) retTy') params'
+  val <- desugarExpression (CST.ELam params ret :@ p1)
+
+  pure $ AST.Let True name ty val :@ p
+  where
+    mkPi param expr = AST.EPi param expr :@ p
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit name ty :@ p) = do
