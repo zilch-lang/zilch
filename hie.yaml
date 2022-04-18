@@ -6,6 +6,8 @@ cradle:
       component: "gzc-pretty:lib"
     - path: "./lib/gzc-parser/src"
       component: "gzc-parser:lib"
+    - path: "./lib/gzc-typechecker/src"
+      component: "gzc-typechecker:lib"
     - path: "./src"
       component: "gzc-lib:lib"
     - path: "./app"

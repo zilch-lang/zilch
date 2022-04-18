@@ -1,4 +1,4 @@
-name: gzc-core
+name: gzc-typechecker
 version: !include "../../version.yaml"
 
 library:
@@ -12,5 +12,5 @@ default-extensions: !include "../../default-extensions.yaml"
 dependencies:
 - base >=4.7 && <5
 - text ==1.2.4.1
-- nsc-core
+- gzc-core
 - hashmap ==1.3.*

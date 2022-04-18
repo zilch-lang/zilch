@@ -4,21 +4,15 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           gzc-core
+name:           gzc-typechecker
 version:        1.0.0
 build-type:     Simple
 
 library
   exposed-modules:
-      Data.Located
-      Language.Zilch.Syntax.Core
-      Language.Zilch.Syntax.Core.AST
-      Language.Zilch.Syntax.Core.CST
-      Language.Zilch.Syntax.Core.Lexeme
-      Language.Zilch.Typecheck.Core
-      Language.Zilch.Typecheck.Core.Eval
+      Language.Zilch.Typecheck.Evaluator
   other-modules:
-      Paths_gzc_core
+      Paths_gzc_typechecker
   hs-source-dirs:
       src
   default-extensions:
@@ -29,7 +23,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , gzc-core
     , hashmap ==1.3.*
-    , nsc-core
     , text ==1.2.4.1
   default-language: Haskell2010

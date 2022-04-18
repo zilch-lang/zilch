@@ -33,6 +33,7 @@ packages:
 - lib/gzc-core
 - lib/gzc-parser
 - lib/gzc-pretty
+- lib/gzc-typechecker
   
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
