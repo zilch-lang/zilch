@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Zilch.Syntax.Parser where
+module Language.Zilch.Syntax.Parser (parseTokens) where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)

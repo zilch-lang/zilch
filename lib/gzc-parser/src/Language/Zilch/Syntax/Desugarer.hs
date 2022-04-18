@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Syntax.Desugarer where
+module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
 import Control.Monad.Except (MonadError, runExcept)
 import Control.Monad.State (MonadState, evalStateT)
