@@ -37,8 +37,8 @@ data Parameter
       -- ^ Is it implicit?
       (Located Text)
       -- ^ The name of the parameter
-      (Maybe (Located Expression))
-      -- ^ Optional explicit type
+      (Located Expression)
+      -- ^ Explicit type
   deriving (Show)
 
 data Expression

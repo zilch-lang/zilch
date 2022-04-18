@@ -41,7 +41,9 @@ instance Pretty (Located Parameter) where
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
       pretty (unLoc name)
         <> space
-        <> maybe (":" <> space <> "_") ((":" <>) . (space <>) . pretty) ty
+        <> ":"
+        <> space
+        <> pretty ty
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"

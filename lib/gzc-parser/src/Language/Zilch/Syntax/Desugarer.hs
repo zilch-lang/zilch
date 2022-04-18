@@ -65,10 +65,10 @@ desugarDefinition (CST.Rec name params retTy ret@(_ :@ p1) :@ p) = do
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit name ty :@ p) = do
-  ty' <- traverse desugarExpression ty
+  ty' <- maybe (pure $ AST.EHole :@ p) desugarExpression ty
   pure $ AST.Parameter True name ty' :@ p
 desugarParameter (CST.Explicit name ty :@ p) = do
-  ty' <- traverse desugarExpression ty
+  ty' <- maybe (pure $ AST.EHole :@ p) desugarExpression ty
   pure $ AST.Parameter False name ty' :@ p
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
