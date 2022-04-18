@@ -148,13 +148,14 @@ parseExpression s = located do
     parseAtom = located do
       MP.choice
         ( [ EId <$> parseIdentifier,
-            EInt . unLoc
-              <$> parseNumber,
+            EInt . unLoc <$> parseNumber,
+            ETypedHole <$ token TkQuestionMark,
+            EHole <$ token TkUnderscore,
             parseLambda s,
             parseDo s,
+            MP.try $ parsePi s,
             EType <$ token TkType,
             EImplicit <$> (lexeme (token TkLeftBrace) *> lexeme (parseExpression s) <* token TkRightBrace),
-            EHole <$ token TkQuestionMark,
             EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
           ] ::
             [m Expression]
@@ -197,3 +198,10 @@ parseExists s = do
   _ <- lexeme (token TkComma) <* s
   expr <- parseExpression s
   pure $ EExists params expr
+
+parsePi :: forall m. MonadParser m => m () -> m Expression
+parsePi s = do
+  param <- lexeme (parseParameter s) <* s
+  _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
+  ret <- parseExpression s
+  pure $ EPi param ret

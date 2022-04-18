@@ -83,4 +83,8 @@ data Expression
       (Located Expression)
   | EParens (Located Expression)
   | EHole
+  | ETypedHole
+  | EPi
+      (Located Parameter)
+      (Located Expression)
   deriving (Show)

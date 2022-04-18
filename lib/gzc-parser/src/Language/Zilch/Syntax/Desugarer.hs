@@ -102,4 +102,8 @@ desugarExpression (CST.EApplication (e : es) :@ p) = do
   pure $ foldl' mkApp e' es'
   where
     mkApp e1 e2 = AST.EApplication e1 e2 :@ p
+desugarExpression (CST.EPi param ret :@ p) = do
+  param' <- desugarParameter param
+  ret' <- desugarExpression ret
+  pure $ AST.EPi param' ret' :@ p
 desugarExpression _ = error "todo"
