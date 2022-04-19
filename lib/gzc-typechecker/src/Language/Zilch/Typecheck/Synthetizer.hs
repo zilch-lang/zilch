@@ -17,10 +17,28 @@ import Language.Zilch.Typecheck.Errors
 import Language.Zilch.Typecheck.Evaluator (apply, eval, plugNormalisation, quote)
 import Prelude hiding (lookup)
 
+-- | @Ρ, Γ ⊢ e ⇒ τ@
 synthetize :: forall m. MonadElab m => Environment -> Context -> Located Expression -> m (Located Value)
-synthetize _ _ (EInteger _ :@ p) = pure $ VIdentifier "nat" :@ p
-synthetize _ _ (ECharacter _ :@ p) = pure $ VIdentifier "char" :@ p
+synthetize _ _ (EInteger _ :@ p) =
+  {-
+      n is a literal number
+    ─────────────────────────
+         Ρ, Γ ⊢ n ⇒ ℕ
+  -}
+  pure $ VIdentifier "nat" :@ p
+synthetize _ _ (ECharacter _ :@ p) =
+  {-
+      c is a literal character
+    ────────────────────────────
+          Ρ, Γ ⊢ c ⇒ char
+  -}
+  pure $ VIdentifier "char" :@ p
 synthetize env ctx (EApplication e1 e2 :@ p) = do
+  {-
+      Ρ, Γ ⊢ e₁ ⇒ (x : A) → B          Ρ, Γ ⊢ e₂ ⇐ A
+    ───────────────────────────────────────────────────
+                  Ρ, Γ ⊢ (e₁ e₂) ⇒ B
+  -}
   synthetize env ctx e1 >>= \case
     VPi x argTy bodyTy :@ _ -> do
       check env ctx e2 argTy
@@ -31,14 +49,33 @@ synthetize env ctx (EApplication e1 e2 :@ p) = do
       ty' <- plugNormalisation do quote env ty
       throwError $ PiTypeExpected ty' p
 synthetize _ ctx (EIdentifier (x :@ _) :@ p) =
+  {-
+    ───────────────────────
+      Ρ, Γ, x : A ⊢ x ⇒ A
+  -}
   maybe (throwError $ BindingNotFound x p) pure (lookup ctx x)
-synthetize _ _ (EType :@ p) = pure $ VType :@ p
+synthetize _ _ (EType :@ p) =
+  {-
+    ──────────────────────
+      Ρ, Γ ⊢ type ⇒ type
+  -}
+  pure $ VType :@ p
 synthetize env ctx (EPi (Parameter _ (name :@ p1) ty :@ _) expr :@ p) = do
+  {-
+      Ρ, Γ ⊢ A ⇐ type       Ρ, Γ ⊢ B ⇐ type
+    ────────────────────────────────────────
+         Ρ, Γ ⊢ (x : A) → B ⇒ type
+  -}
   check env ctx ty (VType :@ p)
   ty' <- plugNormalisation $ eval env ty
   check (Env.extend env name (VIdentifier name :@ p1)) (Ctx.extend ctx name ty') expr (VType :@ p)
   pure $ VType :@ p
 synthetize env ctx (ELet (Let _ (name :@ _) ty val :@ _) expr :@ p) = do
+  {-
+      Ρ, Γ ⊢ A ⇐ type        Ρ, Γ ⊢ e₁ ⇐ A        Ρ, Γ, x : A ⊢ e₂ ⇐ B
+    ────────────────────────────────────────────────────────────────────
+                    Ρ, Γ ⊢ let x : A = e₁ ; e₂ ⇒ B
+  -}
   check env ctx ty (VType :@ p)
   ty' <- plugNormalisation $ eval env ty
   check env ctx val ty'
