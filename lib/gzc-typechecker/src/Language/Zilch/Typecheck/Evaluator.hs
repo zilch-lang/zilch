@@ -66,20 +66,22 @@ quote env (VApplication v1 v2 :@ p) = do
   v2' <- quote env v2
   pure $ EApplication v1' v2' :@ p
 quote env (VLam y clos :@ p) = do
-  x' <- apply clos y (VIdentifier y :@ p)
-  x'' <- quote (extend env y (VIdentifier y :@ p)) x'
+  let x = fresh env y
+  x' <- apply clos y (VIdentifier x :@ p)
+  x'' <- quote (extend env x (VIdentifier x :@ p)) x'
   pure $
     ELam
-      (Parameter False (y :@ p) (EHole :@ p) :@ p)
+      (Parameter False (x :@ p) (EHole :@ p) :@ p)
       x''
       :@ p
 quote env (VPi y val clos :@ p) = do
-  x' <- apply clos y (VIdentifier y :@ p)
+  let x = fresh env y
+  x' <- apply clos y (VIdentifier x :@ p)
   val' <- quote env val
-  x'' <- quote (extend env y (VIdentifier y :@ p)) x'
+  x'' <- quote (extend env x (VIdentifier x :@ p)) x'
   pure $
     EPi
-      (Parameter False (y :@ p) val' :@ p)
+      (Parameter False (x :@ p) val' :@ p)
       x''
       :@ p
 quote _ v = error $ "not yet handled " <> show v
