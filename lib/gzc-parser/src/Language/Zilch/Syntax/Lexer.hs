@@ -57,10 +57,8 @@ character :: forall m. MonadLexer m => m (Located Token)
 character =
   lexeme $
     located $
-      TkCharacter . addQuotes <$> do
+      TkCharacter <$> do
         MPC.char '\'' *> escapedChar <* MPC.char '\''
-  where
-    addQuotes = Text.cons '\'' . flip Text.snoc '\''
 
 escapedChar :: forall m. MonadLexer m => m Text
 escapedChar =
