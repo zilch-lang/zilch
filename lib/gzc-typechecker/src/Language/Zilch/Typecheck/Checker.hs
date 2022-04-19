@@ -23,9 +23,9 @@ import {-# SOURCE #-} Language.Zilch.Typecheck.Synthetizer
 check :: forall m. MonadElab m => Environment -> Context -> Located Expression -> Located Value -> m ()
 check env ctx (ELam (Parameter _ (x :@ _) _ :@ _) expr :@ _) (VPi y ty2 ty3 :@ p2) = do
   {-
-        Ρ, Γ, x : A ⊢ e ⇐ B
+      Ρ, Γ, x : A ⊢ e ⇐ B[y\z]
     ─────────────────────────────
-      Ρ, Γ ⊢ λx.e ⇐ (x : A) → B
+      Ρ, Γ ⊢ λx.e ⇐ (y : A) → B
   -}
   let x' = fresh env y
   ty3' <- plugNormalisation $ apply ty3 y (VIdentifier x' :@ p2)
@@ -67,7 +67,7 @@ convertibleTo _ (VType :@ _) (VType :@ _) =
   pure True
 convertibleTo env (VPi x1 a1 b1 :@ p1) (VPi x2 a2 b2 :@ _) = do
   {-
-      A ~ C         B[x\t] ~ D[y\t]
+      A ~ C         B[x\z] ~ D[y\z]
     ─────────────────────────────────
         (x : A) → B ~ (y : C) → D
   -}
@@ -82,7 +82,7 @@ convertibleTo env (VPi x1 a1 b1 :@ p1) (VPi x2 a2 b2 :@ _) = do
     <*> convertibleTo (Env.extend env x1' (VIdentifier x1' :@ p1)) b1' b2'
 convertibleTo env (VLam x1 t1 :@ p1) (VLam x2 t2 :@ _) = do
   {-
-      t₁[x\t] ~ t₂[y\t]
+      t₁[x\z] ~ t₂[y\z]
     ─────────────────────
        λx.t₁ ~ λy.t₂
   -}
@@ -95,7 +95,7 @@ convertibleTo env (VLam x1 t1 :@ p1) (VLam x2 t2 :@ _) = do
 -- next two cases : eta conversion for lambdas
 convertibleTo env (VLam x t :@ p1) u = do
   {-
-      t₁[x\t] ~ (u t)
+      t₁[x\z] ~ (u z)
     ───────────────────
         λx.t₁ ~ u
   -}
@@ -106,7 +106,7 @@ convertibleTo env (VLam x t :@ p1) u = do
   convertibleTo (Env.extend env x' (VIdentifier x' :@ p1)) t' (VApplication u (VIdentifier x' :@ p1) :@ p1)
 convertibleTo env u (VLam x t :@ p1) = do
   {-
-      (u t) ~ t₁[x\t]
+      (u z) ~ t₁[x\z]
     ───────────────────
         u ~ λx.t₁
   -}
