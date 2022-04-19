@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Language.Zilch.Typecheck.Core.Eval where
 
 import qualified Data.HashMap as Hash
@@ -8,6 +11,9 @@ type Name = Text
 type Environment = Hash.Map Name Value
 
 type Closure = Value -> Value
+
+instance Show Closure where
+  show _ = "<<clos>>"
 
 data Value
   = -- | A given identifier
@@ -31,3 +37,4 @@ data Value
   | -- | Basic integers
     VInteger
       Integer
+  deriving (Show)
