@@ -11,6 +11,7 @@ build-type:     Simple
 library
   exposed-modules:
       Language.Zilch.Typecheck.Evaluator
+      Language.Zilch.Typecheck.Fresh
   other-modules:
       Paths_gzc_typechecker
   hs-source-dirs:

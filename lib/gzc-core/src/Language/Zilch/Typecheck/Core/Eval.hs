@@ -25,6 +25,7 @@ data Value
       Value
   | -- | An un-applied lambda abstraction with a given closure
     VLam
+      Name
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
