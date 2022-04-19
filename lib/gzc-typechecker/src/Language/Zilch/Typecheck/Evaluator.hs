@@ -1,32 +1,29 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ViewPatterns #-}
 
-module Language.Zilch.Typecheck.Evaluator (normalize, normalize0) where
+module Language.Zilch.Typecheck.Evaluator (normalize, normalize0, eval, apply, quote, plugNormalisation) where
 
 import Control.Monad ((<=<))
-import Control.Monad.Except (MonadError, runExcept, throwError)
+import Control.Monad.Except (Except, MonadError, runExcept, throwError)
 import Data.Bifunctor (first)
-import qualified Data.HashMap as Hash
 import Data.Located (Located ((:@)), unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Language.Zilch.Syntax.Core.AST (Definition (..), Expression (..), Parameter (..))
 import Language.Zilch.Typecheck.Core.Eval
+import Language.Zilch.Typecheck.Defaults (defaultEnv)
+import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
+import Language.Zilch.Typecheck.Environment (extend, lookup)
 import Language.Zilch.Typecheck.Errors
 import Language.Zilch.Typecheck.Fresh (fresh)
-import Prelude hiding (read)
+import Prelude hiding (lookup, read)
 import qualified Prelude (read)
 
 type MonadEval m = (MonadError EvalError m)
 
 ------------
-
--- | Extend the given environment by one entry.
-extend :: Environment -> Name -> Located Value -> Environment
-extend env name val = Hash.insert name val env
 
 -- | Evaluate the given expression in normal form, where normal form is either:
 --
@@ -36,8 +33,9 @@ extend env name val = Hash.insert name val env
 -- * The pi type
 eval :: forall m. MonadEval m => Environment -> Located Expression -> m (Located Value)
 eval _ (EInteger e :@ p) = pure $ VInteger (read $ unLoc e) :@ p
+eval _ (ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval env (EIdentifier n :@ p) =
-  maybe (throwError $ NoSuchBinding (unLoc n) p) pure $ Hash.lookup (unLoc n) env
+  maybe (throwError $ NoSuchBinding (unLoc n) p) pure $ lookup env (unLoc n)
 eval env (EApplication e1 e2 :@ p) = do
   v1 <- eval env e1
   v2 <- eval env e2
@@ -53,6 +51,7 @@ eval env (EPi (Parameter _ name ty1 :@ _) ty2 :@ p) = do
   ty1' <- eval env ty1
   pure $ VPi (unLoc name) ty1' (Clos env ty2) :@ p
 eval env (ELam (Parameter _ name _ :@ _) ex :@ p) = pure $ VLam (unLoc name) (Clos env ex) :@ p
+eval env (EType :@ p) = pure $ VType :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadEval m => Closure -> Name -> Located Value -> m (Located Value)
@@ -60,6 +59,7 @@ apply (Clos env expr) name val = eval (extend env name val) expr
 
 quote :: forall m. MonadEval m => Environment -> Located Value -> m (Located Expression)
 quote _ (VIdentifier n :@ p) = pure $ EIdentifier (n :@ p) :@ p
+quote _ (VCharacter c :@ p) = pure $ ECharacter (Text.singleton c :@ p) :@ p
 quote _ (VInteger n :@ p) = pure $ EInteger (Text.pack (show n) :@ p) :@ p
 quote env (VApplication v1 v2 :@ p) = do
   v1' <- quote env v1
@@ -84,6 +84,7 @@ quote env (VPi y val clos :@ p) = do
       (Parameter False (x :@ p) val' :@ p)
       x''
       :@ p
+quote _ (VType :@ p) = pure $ EType :@ p
 quote _ v = error $ "not yet handled " <> show v
 
 toNF :: Environment -> Located Expression -> Either (Diagnostic String) (Located Expression)
@@ -93,9 +94,17 @@ toNF env = first toDiagnostic . runExcept . (quote env <=< eval env)
 
 normalize :: Environment -> Located Expression -> Either (Diagnostic String) (Located Expression)
 normalize = toNF
+{-# INLINE normalize #-}
 
 normalize0 :: Located Expression -> Either (Diagnostic String) (Located Expression)
-normalize0 = toNF mempty
+normalize0 = normalize defaultEnv
+{-# INLINE normalize0 #-}
+
+plugNormalisation :: forall m1 a. MonadElab m1 => Except EvalError a {- MonadEval m => m a -} -> m1 a
+plugNormalisation m =
+  case runExcept m of
+    Left err -> throwError $ FromEvalError err
+    Right res -> pure res
 
 ------------
 

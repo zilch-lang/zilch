@@ -37,8 +37,10 @@ data Value
       Closure
   | -- | Universes (of the given level)
     VType
-      (Located Value)
   | -- | Basic integers
     VInteger
       Integer
+  | -- | Basic characters
+    VCharacter
+      Char
   deriving (Show)
