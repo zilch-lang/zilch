@@ -10,6 +10,7 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Language.Zilch.Typecheck.Errors
       Language.Zilch.Typecheck.Evaluator
       Language.Zilch.Typecheck.Fresh
   other-modules:
@@ -24,7 +25,9 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , diagnose
     , gzc-core
     , hashmap ==1.3.*
+    , mtl ==2.2.2
     , text ==1.2.4.1
   default-language: Haskell2010

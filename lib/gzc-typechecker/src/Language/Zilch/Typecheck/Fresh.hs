@@ -1,3 +1,5 @@
+{-# LANGUAGE ExplicitForAll #-}
+
 module Language.Zilch.Typecheck.Fresh (fresh) where
 
 import qualified Data.HashMap as Hash

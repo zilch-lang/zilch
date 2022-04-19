@@ -1,16 +1,19 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Zilch.Typecheck.Core.Eval where
 
 import qualified Data.HashMap as Hash
+import Data.Located (Located)
 import Data.Text (Text)
+import Language.Zilch.Syntax.Core.AST (Expression)
 
 type Name = Text
 
-type Environment = Hash.Map Name Value
+type Environment = Hash.Map Name (Located Value)
 
-type Closure = Value -> Value
+data Closure = Clos Environment (Located Expression)
 
 instance Show Closure where
   show _ = "<<clos>>"
@@ -21,8 +24,8 @@ data Value
       Name
   | -- | The application of a value to another one
     VApplication
-      Value
-      Value
+      (Located Value)
+      (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
       Name
@@ -30,11 +33,11 @@ data Value
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
       Name
-      Value
+      (Located Value)
       Closure
   | -- | Universes (of the given level)
     VType
-      Value
+      (Located Value)
   | -- | Basic integers
     VInteger
       Integer
