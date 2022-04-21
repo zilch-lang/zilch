@@ -43,4 +43,6 @@ data Value
   | -- | Basic characters
     VCharacter
       Char
+  | -- | A hole
+    VHole
   deriving (Show)

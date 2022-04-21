@@ -2,22 +2,35 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module Language.Zilch.Typecheck.Checker (check) where
+module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Control.Monad.Except (throwError)
-import Data.Located (Located ((:@)), Position)
-import Debug.Trace (traceShow)
-import Language.Zilch.Syntax.Core.AST (Definition (..), Expression (..), Parameter (Parameter))
+import Data.Located (Located ((:@)))
+import Language.Zilch.Syntax.Core.AST (Definition (..), Expression (..), Module (Mod), Parameter (Parameter), TopLevel (TopLevel))
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Context as Ctx
 import Language.Zilch.Typecheck.Core.Eval (Environment, Value (..))
-import Language.Zilch.Typecheck.Elaborator (MonadElab)
+import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import qualified Language.Zilch.Typecheck.Environment as Env
 import Language.Zilch.Typecheck.Errors
 import Language.Zilch.Typecheck.Evaluator (apply, eval, plugNormalisation, quote)
 import Language.Zilch.Typecheck.Fresh (fresh)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Synthetizer
+
+checkProgram :: forall m. MonadElab m => Environment -> Context -> Located Module -> m ()
+checkProgram env ctx (Mod imports defs :@ p) = do
+  case defs of
+    [] -> pure ()
+    ((TopLevel _ (Let isRec (name :@ _) ty ex :@ _) :@ _) : ds) -> do
+      when isRec do
+        error "Recursive bindings are not yet handled"
+
+      ty' <- plugNormalisation $ eval env ty
+      check env ctx ex ty'
+      ex' <- plugNormalisation $ eval env ex
+
+      checkProgram (Env.extend env name ex') (Ctx.extend ctx name ty') (Mod imports ds :@ p)
 
 -- | @Ρ, Γ ⊢ e ⇐ τ@
 check :: forall m. MonadElab m => Environment -> Context -> Located Expression -> Located Value -> m ()

@@ -11,6 +11,7 @@ import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Syntax.Desugarer (desugarCST)
 import Language.Zilch.Syntax.Lexer (lexFile)
 import Language.Zilch.Syntax.Parser (parseTokens)
+import Language.Zilch.Typecheck.Elaborator (elabProgram)
 import Prettyprinter (pretty)
 import Prettyprinter.Render.Text (putDoc)
 import System.IO
@@ -22,13 +23,15 @@ main = do
   let ast = do
         (tks, warns) <- lexFile "stdin" stdin
         (!cst, warns) <- second (warns <>) <$> parseTokens "stdin" tks
-        second (warns <>) <$> desugarCST cst
+        (!ast, warns) <- second (warns <>) <$> desugarCST cst
+        (,warns) <$> elabProgram ast
 
   case ast of
     Left diag -> printDiagnostic stderr True True (addFile diag "stdin" $ Text.unpack stdin)
     Right (ast, diag) -> do
       printDiagnostic stderr True True (addFile diag "stdin" $ Text.unpack stdin)
 
+      putStrLn "✅ Following program passed typechecking:"
       putDoc (pretty ast)
 
   pure ()

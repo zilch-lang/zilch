@@ -52,6 +52,7 @@ eval env (EPi (Parameter _ name ty1 :@ _) ty2 :@ p) = do
   pure $ VPi (unLoc name) ty1' (Clos env ty2) :@ p
 eval env (ELam (Parameter _ name _ :@ _) ex :@ p) = pure $ VLam (unLoc name) (Clos env ex) :@ p
 eval env (EType :@ p) = pure $ VType :@ p
+eval env (EHole :@ p) = pure $ VHole :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadEval m => Closure -> Name -> Located Value -> m (Located Value)
@@ -85,6 +86,7 @@ quote env (VPi y val clos :@ p) = do
       x''
       :@ p
 quote _ (VType :@ p) = pure $ EType :@ p
+quote _ (VHole :@ p) = pure $ EHole :@ p
 quote _ v = error $ "not yet handled " <> show v
 
 toNF :: Environment -> Located Expression -> Either (Diagnostic String) (Located Expression)
