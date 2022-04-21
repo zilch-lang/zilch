@@ -42,21 +42,21 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   pure $ AST.TopLevel isPublic def' :@ p
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Located AST.Definition)
-desugarDefinition (CST.Let name params retTy ret@(_ :@ p1) :@ p) = do
+desugarDefinition (CST.Let name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam params ret :@ p1)
 
   pure $ AST.Let False name ty val :@ p
   where
     mkPi param expr = AST.EPi param expr :@ p
-desugarDefinition (CST.Rec name params retTy ret@(_ :@ p1) :@ p) = do
+desugarDefinition (CST.Rec name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam params ret :@ p1)
 
   pure $ AST.Let True name ty val :@ p
@@ -64,11 +64,11 @@ desugarDefinition (CST.Rec name params retTy ret@(_ :@ p1) :@ p) = do
     mkPi param expr = AST.EPi param expr :@ p
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
-desugarParameter (CST.Implicit name ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole :@ p) desugarExpression ty
+desugarParameter (CST.Implicit name@(_ :@ p1) ty :@ p) = do
+  ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
   pure $ AST.Parameter True name ty' :@ p
-desugarParameter (CST.Explicit name ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole :@ p) desugarExpression ty
+desugarParameter (CST.Explicit name@(_ :@ p1) ty :@ p) = do
+  ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
   pure $ AST.Parameter False name ty' :@ p
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
