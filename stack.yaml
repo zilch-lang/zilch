@@ -46,7 +46,7 @@ packages:
 #
 extra-deps:
 - git: https://github.com/mesabloo/diagnose.git
-  commit: 26f5639dc567d21e1cfc9d1c9f6f6b3915e6a88a
+  commit: f61525c32a30f640deae6c477ddd54c55a3135de
 - git: https://github.com/zilch-lang/nstar.git
   commit: 9d56d1e2ac3f2f71c1081f5a47a96bc4ade61ccb
   subdirs:
