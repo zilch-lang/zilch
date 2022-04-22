@@ -31,7 +31,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
-    , diagnose
+    , diagnose ==1.6.*
     , gzc-core
     , gzc-pretty
     , hashmap ==1.3.*

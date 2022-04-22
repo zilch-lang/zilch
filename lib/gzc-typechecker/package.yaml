@@ -15,6 +15,6 @@ dependencies:
 - gzc-core
 - hashmap ==1.3.*
 - mtl ==2.2.2
-- diagnose
+- diagnose ==1.6.*
 - prettyprinter ==1.7.0
 - gzc-pretty

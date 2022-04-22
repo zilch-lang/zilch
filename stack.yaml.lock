@@ -5,17 +5,6 @@
 
 packages:
 - completed:
-    name: diagnose
-    version: 1.6.2
-    git: https://github.com/mesabloo/diagnose.git
-    pantry-tree:
-      size: 1608
-      sha256: 74b3ec5f600958bdb774aadb88082eac6c30ffb55d9b42f0b71cedc2c9d63f8a
-    commit: f61525c32a30f640deae6c477ddd54c55a3135de
-  original:
-    git: https://github.com/mesabloo/diagnose.git
-    commit: f61525c32a30f640deae6c477ddd54c55a3135de
-- completed:
     name: nsc-core
     version: 2.0.0
     git: https://github.com/zilch-lang/nstar.git
@@ -28,6 +17,13 @@ packages:
     git: https://github.com/zilch-lang/nstar.git
     subdir: lib/nsc-core
     commit: 9d56d1e2ac3f2f71c1081f5a47a96bc4ade61ccb
+- completed:
+    hackage: diagnose-1.6.3@sha256:3ce8ff6411b1d144e09e55cb0f60f3c2dcd479d73ab6886beb1efe353f288a9d,5450
+    pantry-tree:
+      size: 1138
+      sha256: 9c7367e9a0cce0b75759e363670baf60429ecc3c3c18b34ca6f672dd192e809e
+  original:
+    hackage: diagnose-1.6.3@sha256:3ce8ff6411b1d144e09e55cb0f60f3c2dcd479d73ab6886beb1efe353f288a9d,5450
 - completed:
     hackage: prettyprinter-1.7.0@sha256:6a9569e21fa61163a7f066d23d701e23e917893e8f39733d6e617ec72787ae5f,6007
     pantry-tree:
