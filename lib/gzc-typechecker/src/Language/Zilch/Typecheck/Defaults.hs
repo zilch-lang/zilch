@@ -1,28 +1,29 @@
-module Language.Zilch.Typecheck.Defaults (defaultEnv, defaultCtx) where
+module Language.Zilch.Typecheck.Defaults (defaultContext) where
 
 import Data.Located (Located ((:@)), Position (Position))
 import Language.Zilch.Typecheck.Context
-import qualified Language.Zilch.Typecheck.Context as Ctx
-import Language.Zilch.Typecheck.Core.Eval (Environment, Value (VIdentifier, VType))
-import qualified Language.Zilch.Typecheck.Environment as Env
+import Language.Zilch.Typecheck.Core.AST (MetaStatus (Defined))
+import Language.Zilch.Typecheck.Core.Eval (Value (VIdentifier, VType))
 
-defaultEnv :: Environment
-defaultEnv =
-  Env.fromList
-    [ -- nat is builtin
-      ("nat", VIdentifier "nat" :@ p),
-      -- char is builtin
-      ("char", VIdentifier "char" :@ p)
-    ]
-
-defaultCtx :: Context
-defaultCtx =
-  Ctx.fromList
-    [ -- nat : type 0
-      ("nat", VType :@ p),
-      -- char : type 0
-      ("char", VType :@ p)
-    ]
+defaultContext :: Context
+defaultContext =
+  Context
+    { env =
+        -- Is it necessary? Or should we add special rules when unifying?
+        [ -- nat is builtin
+          VIdentifier 1 mempty :@ p,
+          -- char is builtin
+          VIdentifier 0 mempty :@ p
+        ],
+      types =
+        [ -- nat : type 0
+          ("nat", VType :@ p),
+          -- char : type 0
+          ("char", VType :@ p)
+        ],
+      lvl = 2,
+      bds = [Defined, Defined]
+    }
 
 ----------------------------
 

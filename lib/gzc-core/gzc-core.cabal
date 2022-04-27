@@ -16,6 +16,7 @@ library
       Language.Zilch.Syntax.Core.CST
       Language.Zilch.Syntax.Core.Lexeme
       Language.Zilch.Typecheck.Core
+      Language.Zilch.Typecheck.Core.AST
       Language.Zilch.Typecheck.Core.Eval
   other-modules:
       Paths_gzc_core
@@ -29,6 +30,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , containers ==0.6.*
     , hashmap ==1.3.*
     , nsc-core
     , text ==1.2.4.1

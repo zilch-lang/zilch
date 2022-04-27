@@ -1,34 +1,44 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Language.Zilch.Typecheck.Core.Eval where
 
-import qualified Data.HashMap as Hash
 import Data.Located (Located)
 import Data.Text (Text)
-import Language.Zilch.Syntax.Core.AST (Expression)
+import Language.Zilch.Typecheck.Core.AST (Expression)
 
 type Name = Text
 
-type Environment = Hash.Map Name (Located Value)
+type Environment = [Located Value]
 
 data Closure = Clos Environment (Located Expression)
+
+type Spine = [Located Value]
+
+data MetaEntry
+  = Solved (Located Value)
+  | Unsolved
+  deriving (Show)
+
+newtype DeBruijnLvl = Lvl Int
+  deriving (Show, Eq, Ord, Num, Integral, Enum, Real) via Int
 
 instance Show Closure where
   show _ = "<<clos>>"
 
 data Value
-  = -- | A given identifier
+  = -- | A bound variable
     VIdentifier
-      Name
+      DeBruijnLvl
+      Spine
   | -- | The application of a value to another one
     VApplication
       (Located Value)
       (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
-      Name
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
@@ -43,6 +53,8 @@ data Value
   | -- | Basic characters
     VCharacter
       Char
-  | -- | A hole
-    VHole
+  | -- | A flexible neutral value (metavariable)
+    VFlexible
+      (Located Int)
+      Spine
   deriving (Show)

@@ -1,146 +1,91 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (unless, when)
-import Control.Monad.Except (throwError)
+import Control.Monad (forM_, when)
+import qualified Data.IntMap as IntMap
 import Data.Located (Located ((:@)))
-import Language.Zilch.Syntax.Core.AST (Definition (..), Expression (..), Module (Mod), Parameter (Parameter), TopLevel (TopLevel))
+import Data.Tuple (swap)
+import Debug.Trace (trace)
+import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
-import qualified Language.Zilch.Typecheck.Context as Ctx
-import Language.Zilch.Typecheck.Core.Eval (Environment, Value (..))
+import qualified Language.Zilch.Typecheck.Core.AST as TAST
+import Language.Zilch.Typecheck.Core.Eval (MetaEntry (Solved, Unsolved), Value (..))
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
-import qualified Language.Zilch.Typecheck.Environment as Env
-import Language.Zilch.Typecheck.Errors
-import Language.Zilch.Typecheck.Evaluator (apply, eval, plugNormalisation, quote)
-import Language.Zilch.Typecheck.Fresh (fresh)
+import Language.Zilch.Typecheck.Evaluator (apply, eval, force, plugNormalisation, quote)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Synthetizer
+import {-# SOURCE #-} Language.Zilch.Typecheck.Unification (unify)
+import Prettyprinter (pretty)
 
-checkProgram :: forall m. MonadElab m => Environment -> Context -> Located Module -> m ()
-checkProgram env ctx (Mod imports defs :@ p) = do
+checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
+checkProgram ctx (AST.Mod imports defs :@ p) = do
   case defs of
-    [] -> pure ()
-    ((TopLevel _ (Let isRec (name :@ _) ty ex :@ _) :@ _) : ds) -> do
+    [] -> do
+      showMetas ctx
+      pure (TAST.Mod [] :@ p)
+    ((AST.TopLevel isPublic (AST.Let isRec name ty ex :@ p3) :@ p4) : ds) -> do
       when isRec do
         error "Recursive bindings are not yet handled"
 
-      ty' <- plugNormalisation $ eval env ty
-      check env ctx ex ty'
-      ex' <- plugNormalisation $ eval env ex
+      ty <- check ctx ty (VType :@ p3)
+      ty' <- plugNormalisation $ eval ctx ty
 
-      checkProgram (Env.extend env name ex') (Ctx.extend ctx name ty') (Mod imports ds :@ p)
+      ex <- check ctx ex ty'
+      ex' <- plugNormalisation $ eval ctx ex
+
+      TAST.Mod defs :@ p <- checkProgram (define name ex' ty' ctx) (AST.Mod imports ds :@ p)
+
+      pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec name ty ex :@ p3) :@ p4) : defs) :@ p)
+  where
+    showMetas ctx =
+      forM_ (metas ()) \(m, ty) -> do
+        let str = "let ?" <> show m <> " := "
+        str <-
+          mappend str <$> case ty of
+            Solved v -> show . pretty <$> plugNormalisation do quote ctx (lvl ctx) v
+            Unsolved -> pure "?"
+        trace str $ pure ()
 
 -- | @Ρ, Γ ⊢ e ⇐ τ@
-check :: forall m. MonadElab m => Environment -> Context -> Located Expression -> Located Value -> m ()
-check env ctx (ELam (Parameter _ (x :@ _) _ :@ _) expr :@ _) (VPi y ty2 ty3 :@ p2) = do
-  {-
-      Ρ, Γ, x : A ⊢ e ⇐ B[y\z]
-    ─────────────────────────────
-      Ρ, Γ ⊢ λx.e ⇐ (y : A) → B
-  -}
-  let x' = fresh env y
-  ty3' <- plugNormalisation $ apply ty3 y (VIdentifier x' :@ p2)
-  check (Env.extend env x (VIdentifier x' :@ p2)) (Ctx.extend ctx x ty2) expr ty3'
-check env ctx (ELet (Let False (x :@ _) ty ex :@ p1) expr :@ _) ty2 = do
-  {-
-      Ρ, Γ ⊢ A ⇐ type      Ρ, Γ ⊢ e₁ ⇐ A         Ρ, Γ, x : A ⊢ e₂ ⇐ B
-    ───────────────────────────────────────────────────────────────────
-                    Ρ, Γ ⊢ let x : A = e₁ ; e₂ ⇐ B
-  -}
-  check env ctx ty (VType :@ p1)
-  ty' <- plugNormalisation $ eval env ty
-  check env ctx ex ty'
-  ex' <- plugNormalisation $ eval env ex
-  check (Env.extend env x ex') (Ctx.extend ctx x ty') expr ty2
-check env ctx e@(_ :@ p) v = do
-  {-
-      Ρ, Γ ⊢ e ⇒ τ₁          τ₁ ~ τ₂
-    ──────────────────────────────────
-              Ρ, Γ ⊢ e ⇐ τ₂
-  -}
-  ty <- synthetize env ctx e
-  convertibleTo env ty v >>= \true -> unless true do
-    (ty', v') <- plugNormalisation do
-      (,)
-        <$> quote env ty
-        <*> quote env v
-    throwError $ TypesAreNotEqual ty' v' p
-
-------------------------------------
-
--- | beta-eta conversion checking @τ₁ ~ τ₂@
-convertibleTo :: forall m. MonadElab m => Environment -> Located Value -> Located Value -> m Bool
-convertibleTo _ (VType :@ _) (VType :@ _) =
-  {-
-    ───────────────
-      type ~ type
-  -}
-  pure True
-convertibleTo env (VPi x1 a1 b1 :@ p1) (VPi x2 a2 b2 :@ _) = do
-  {-
-      A ~ C         B[x\z] ~ D[y\z]
-    ─────────────────────────────────
-        (x : A) → B ~ (y : C) → D
-  -}
-
-  let x1' = fresh env x1
-
-  b1' <- plugNormalisation $ apply b1 x1 (VIdentifier x1' :@ p1)
-  b2' <- plugNormalisation $ apply b2 x2 (VIdentifier x1' :@ p1)
-
-  (&&)
-    <$> convertibleTo env a1 a2
-    <*> convertibleTo (Env.extend env x1' (VIdentifier x1' :@ p1)) b1' b2'
-convertibleTo env (VLam x1 t1 :@ p1) (VLam x2 t2 :@ _) = do
-  {-
-      t₁[x\z] ~ t₂[y\z]
-    ─────────────────────
-       λx.t₁ ~ λy.t₂
-  -}
-  let x1' = fresh env x1
-
-  t1' <- plugNormalisation $ apply t1 x1 (VIdentifier x1' :@ p1)
-  t2' <- plugNormalisation $ apply t2 x2 (VIdentifier x1' :@ p1)
-
-  convertibleTo (Env.extend env x1' (VIdentifier x1' :@ p1)) t1' t2'
--- next two cases : eta conversion for lambdas
-convertibleTo env (VLam x t :@ p1) u = do
-  {-
-      t₁[x\z] ~ (u z)
-    ───────────────────
-        λx.t₁ ~ u
-  -}
-  let x' = fresh env x
-
-  t' <- plugNormalisation $ apply t x (VIdentifier x' :@ p1)
-
-  convertibleTo (Env.extend env x' (VIdentifier x' :@ p1)) t' (VApplication u (VIdentifier x' :@ p1) :@ p1)
-convertibleTo env u (VLam x t :@ p1) = do
-  {-
-      (u z) ~ t₁[x\z]
-    ───────────────────
-        u ~ λx.t₁
-  -}
-  let x' = fresh env x
-
-  t' <- plugNormalisation $ apply t x (VIdentifier x' :@ p1)
-
-  convertibleTo (Env.extend env x' (VIdentifier x' :@ p1)) (VApplication u (VIdentifier x' :@ p1) :@ p1) t'
-convertibleTo _ (VIdentifier x1 :@ _) (VIdentifier x2 :@ _) =
-  {-
-    ─────────
-      x ~ x
-  -}
-  pure $ x1 == x2
-convertibleTo env (VApplication v1 v2 :@ _) (VApplication v3 v4 :@ _) =
-  {-
-      e₁ ~ e₃        e₂ ~ e₄
-    ──────────────────────────
-        (e₁ e₂) ~ (e₃ e₄)
-  -}
-  (&&)
-    <$> convertibleTo env v1 v3
-    <*> convertibleTo env v2 v4
-convertibleTo _ _ _ = pure False
+check :: forall m. MonadElab m => Context -> Located AST.Expression -> Located Value -> m (Located TAST.Expression)
+check ctx expr ty =
+  plugNormalisation ((expr,) <$> force ctx ty) >>= \case
+    (AST.ELam (AST.Parameter isImplicit x ty :@ p1) expr :@ p3, VPi _ ty2 ty3 :@ p2) -> do
+      {-
+          Ρ, Γ, x : A ⊢ e ⇐ B[y\z]
+        ─────────────────────────────
+          Ρ, Γ ⊢ λx.e ⇐ (y : A) → B
+      -}
+      ty <- check ctx ty (VType :@ p1)
+      ty3' <- plugNormalisation $ apply ctx ty3 (VIdentifier (lvl ctx) [] :@ p2)
+      u <- check (bind x ty2 ctx) expr ty3'
+      -- TODO: unify `ty` with `ty2`
+      pure (TAST.ELam u :@ p3)
+    (AST.ELet (AST.Let False x ty ex :@ p1) expr :@ p2, ty2) -> do
+      {-
+          Ρ, Γ ⊢ A ⇐ type      Ρ, Γ ⊢ e₁ ⇐ A         Ρ, Γ, x : A ⊢ e₂ ⇐ B
+        ───────────────────────────────────────────────────────────────────
+                        Ρ, Γ ⊢ let x : A = e₁ ; e₂ ⇐ B
+      -}
+      ty <- check ctx ty (VType :@ p1)
+      ty' <- plugNormalisation $ eval ctx ty
+      ex <- check ctx ex ty'
+      ex' <- plugNormalisation $ eval ctx ex
+      u <- check (define x ex' ty' ctx) expr ty2
+      pure (TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
+    (AST.EHole :@ p, _) -> do
+      let m = freshMeta ctx p
+      trace ("Ρ, Γ ⊢ _ ⇐ ?" <> show m) $ pure ()
+      pure m
+    (e, v) -> do
+      {-
+          Ρ, Γ ⊢ e ⇒ τ₁          τ₁ ~ τ₂
+        ──────────────────────────────────
+                  Ρ, Γ ⊢ e ⇐ τ₂
+      -}
+      (e, ty) <- synthetize ctx e
+      unify ctx v ty
+      pure e

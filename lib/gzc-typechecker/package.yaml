@@ -18,3 +18,4 @@ dependencies:
 - diagnose ==1.6.*
 - prettyprinter ==1.7.0
 - gzc-pretty
+- containers ==0.6.*

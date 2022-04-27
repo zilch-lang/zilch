@@ -4,8 +4,8 @@ import Data.Located (Located ((:@)), Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Report, err)
-import Language.Zilch.Pretty.AST ()
-import Language.Zilch.Syntax.Core.AST (Expression)
+import Language.Zilch.Pretty.TAST ()
+import Language.Zilch.Typecheck.Core.AST (Expression)
 import Prettyprinter (group, pretty)
 
 data EvalError
@@ -48,6 +48,10 @@ data ElabError
   | -- | An error happened while evaluating
     FromEvalError
       EvalError
+  | -- | An error occured in the unification process.
+    --
+    --   /Note:/ This is only a placeholder replaced when actually calling the unification
+    UnificationError
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -74,3 +78,4 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
         ]
         []
 fromElabError (FromEvalError e) = fromEvalError e
+fromElabError UnificationError = undefined

@@ -12,6 +12,7 @@ library
   exposed-modules:
       Language.Zilch.Pretty.AST
       Language.Zilch.Pretty.CST
+      Language.Zilch.Pretty.TAST
   other-modules:
       Paths_gzc_pretty
   hs-source-dirs:

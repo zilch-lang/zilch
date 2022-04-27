@@ -17,8 +17,8 @@ library
       Language.Zilch.Typecheck.Environment
       Language.Zilch.Typecheck.Errors
       Language.Zilch.Typecheck.Evaluator
-      Language.Zilch.Typecheck.Fresh
       Language.Zilch.Typecheck.Synthetizer
+      Language.Zilch.Typecheck.Unification
   other-modules:
       Paths_gzc_typechecker
   hs-source-dirs:
@@ -31,6 +31,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , containers ==0.6.*
     , diagnose ==1.6.*
     , gzc-core
     , gzc-pretty

@@ -7,7 +7,7 @@ import Data.Bifunctor (second)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Error.Diagnose (addFile, printDiagnostic)
-import Language.Zilch.Pretty.AST ()
+import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Syntax.Desugarer (desugarCST)
 import Language.Zilch.Syntax.Lexer (lexFile)
 import Language.Zilch.Syntax.Parser (parseTokens)
