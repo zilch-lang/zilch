@@ -55,16 +55,16 @@ instance Pretty (Located Expression) where
       <> pretty name
       <> space
       <> "→"
-      <> space
-      <> pretty ret
+      <> line
+      <> indent 2 (pretty ret)
   pretty (ELet def ret :@ _) =
     pretty def
       <> line
       <> pretty ret
   pretty (EApplication fun arg :@ _) =
     pretty fun
-      <> line
-      <> indent 2 (parens $ pretty arg)
+      <> space
+      <> parens (pretty arg)
   pretty (EPi param val :@ _) =
     pretty param
       <> space

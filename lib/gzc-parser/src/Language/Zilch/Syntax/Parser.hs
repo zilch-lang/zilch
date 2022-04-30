@@ -125,8 +125,7 @@ parseParameter s =
   located $
     MP.choice
       ( [ lexeme (token TkLeftParen) *> s *> lexeme explicit <* s <* token TkRightParen,
-          lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace,
-          Explicit <$> parseIdentifier <*> pure Nothing
+          lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace
         ] ::
           [m Parameter]
       )
@@ -137,29 +136,28 @@ parseParameter s =
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
   MP.choice
-    ( [ ELet <$> lexeme (parseLet s) <*> parseExpression s,
-        parseForall s,
-        parseExists s,
-        EApplication <$> (parseAtom `MP.sepBy1` s)
+    ( [ EApplication <$> (parseAtom s `MP.sepBy1` s)
       ] ::
         [m Expression]
     )
-  where
-    parseAtom = located do
-      MP.choice
-        ( [ EId <$> parseIdentifier,
-            EInt . unLoc <$> parseNumber,
-            ETypedHole <$ token TkQuestionMark,
-            EHole <$ token TkUnderscore,
-            parseLambda s,
-            parseDo s,
-            MP.try $ parsePi s,
-            EType <$ token TkType,
-            EImplicit <$> (lexeme (token TkLeftBrace) *> lexeme (parseExpression s) <* token TkRightBrace),
-            EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
-          ] ::
-            [m Expression]
-        )
+
+parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
+parseAtom s = located do
+  MP.choice
+    ( [ ELet <$> lexeme (parseLet s) <*> parseExpression s,
+        EInt . unLoc <$> parseNumber,
+        ETypedHole <$ token TkQuestionMark,
+        EHole <$ token TkUnderscore,
+        parseLambda s,
+        parseDo s,
+        EType <$ token TkType,
+        MP.try $ parsePi s,
+        EId <$> parseIdentifier,
+        EImplicit <$> (lexeme (token TkLeftBrace) *> lexeme (parseExpression s) <* token TkRightBrace),
+        EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
+      ] ::
+        [m Expression]
+    )
 
 parseLambda :: forall m. MonadParser m => m () -> m Expression
 parseLambda s = do
