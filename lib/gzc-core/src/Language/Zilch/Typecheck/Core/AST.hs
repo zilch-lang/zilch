@@ -65,14 +65,4 @@ data Expression
       (Located Text)
   | ECharacter
       (Located Text)
-  | EMeta
-      (Located Int)
-  | EInsertedMeta
-      (Located Int)
-      [MetaStatus]
-  deriving (Show)
-
-data MetaStatus
-  = Bound
-  | Defined
   deriving (Show)

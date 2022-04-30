@@ -15,13 +15,6 @@ type Environment = [Located Value]
 
 data Closure = Clos Environment (Located Expression)
 
-type Spine = [Located Value]
-
-data MetaEntry
-  = Solved (Located Value)
-  | Unsolved
-  deriving (Show)
-
 newtype DeBruijnLvl = Lvl Int
   deriving (Show, Eq, Ord, Num, Integral, Enum, Real) via Int
 
@@ -32,7 +25,6 @@ data Value
   = -- | A bound variable
     VIdentifier
       DeBruijnLvl
-      Spine
   | -- | The application of a value to another one
     VApplication
       (Located Value)
@@ -53,8 +45,4 @@ data Value
   | -- | Basic characters
     VCharacter
       Char
-  | -- | A flexible neutral value (metavariable)
-    VFlexible
-      (Located Int)
-      Spine
   deriving (Show)

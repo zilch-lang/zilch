@@ -69,9 +69,3 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
-  pretty (EMeta i :@ _) = "?" <> pretty (unLoc i)
-  pretty (EInsertedMeta i bds :@ _) = "?" <> pretty (unLoc i) <> goBds bds
-    where
-      goBds [] = emptyDoc
-      goBds (Bound : bds) = space <> "_" <> goBds bds
-      goBds (Defined : bds) = goBds bds

@@ -15,8 +15,7 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Value (..))
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors
-import Language.Zilch.Typecheck.Evaluator (apply, eval, force, plugNormalisation, quote)
-import {-# SOURCE #-} Language.Zilch.Typecheck.Unification (unify)
+import Language.Zilch.Typecheck.Evaluator (apply, eval, plugNormalisation, quote)
 import Prelude hiding (lookup)
 
 -- | @Ρ, Γ ⊢ e ⇒ τ@
@@ -27,15 +26,15 @@ synthetize ctx (AST.EInteger i :@ p) =
     ─────────────────────────
          Ρ, Γ ⊢ n ⇒ ℕ
   -}
-  pure (TAST.EInteger i :@ p, VIdentifier 0 [] :@ p)
+  pure (TAST.EInteger i :@ p, VIdentifier 0 :@ p)
 synthetize ctx (AST.ECharacter c :@ p) =
   {-
       c is a literal character
     ────────────────────────────
           Ρ, Γ ⊢ c ⇒ char
   -}
-  pure (TAST.ECharacter c :@ p, VIdentifier 1 [] :@ p)
-synthetize ctx (AST.EApplication e1 e2 :@ p) = do
+  pure (TAST.ECharacter c :@ p, VIdentifier 1 :@ p)
+synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
   {-
       Ρ, Γ ⊢ e₁ ⇒ (x : A) → B          Ρ, Γ ⊢ e₂ ⇐ A
     ───────────────────────────────────────────────────
@@ -43,22 +42,16 @@ synthetize ctx (AST.EApplication e1 e2 :@ p) = do
   -}
   (e1, t1) <- synthetize ctx e1
 
-  (a, b) <-
-    plugNormalisation (force ctx t1) >>= \case
-      VPi _ a b :@ _ -> pure (a, b)
-      t1@(_ :@ p1) -> do
-        let tmpVarName = "ɑ"
-        let !m1 = freshMeta ctx p1
-        a <- plugNormalisation $ eval ctx m1
-        let !m2 = freshMeta (bind (tmpVarName :@ p1) a ctx) p1
-        unify ctx t1 (VPi tmpVarName a (Clos (env ctx) m2) :@ p1)
-        pure (a, Clos (env ctx) m2)
-
-  e2 <- check ctx e2 a
-  t3 <- plugNormalisation do
-    c <- eval ctx e2
-    apply ctx b c
-  pure (TAST.EApplication e1 e2 :@ p, t3)
+  case t1 of
+    VPi _ a b :@ _ -> do
+      e2 <- check ctx e2 a
+      t2 <- plugNormalisation do
+        e2 <- eval ctx e2
+        apply ctx b e2
+      pure (TAST.EApplication e1 e2 :@ p, t2)
+    t1 -> do
+      t1 <- plugNormalisation $ quote ctx (lvl ctx) t1
+      throwError $ PiTypeExpected t1 p1
 synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
   {-
     ───────────────────────
@@ -99,13 +92,6 @@ synthetize ctx (AST.ELet (AST.Let False (name :@ p1) ty val :@ p2) expr :@ p) = 
   val' <- plugNormalisation $ eval ctx val
   (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
   pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
-synthetize ctx (AST.EHole :@ p) = do
-  let !m = freshMeta ctx p
-  trace (">>> Ρ, Γ ⊢ _ ⇒ ?" <> show m) $ pure ()
-  a <- plugNormalisation $ eval ctx m
-  let !t = freshMeta ctx p
-  trace ("<<< Ρ, Γ ⊢ " <> show t <> " ⇒ " <> show a) $ pure ()
-  pure (t, a)
 synthetize ctx (AST.ELam (AST.Parameter isImplicit name ty :@ p2) ex :@ p) = do
   ty <- check ctx ty (VType :@ p)
   ty' <- plugNormalisation $ eval ctx ty

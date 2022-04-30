@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Typecheck.Evaluator (normalize, normalize0, eval, apply, quote, plugNormalisation, force, applyVal, debruijnLevelToIndex) where
+module Language.Zilch.Typecheck.Evaluator (normalize, normalize0, eval, apply, quote, plugNormalisation, applyVal, debruijnLevelToIndex) where
 
 import Control.Monad ((<=<))
 import Control.Monad.Except (Except, MonadError, runExcept, throwError)
@@ -13,7 +13,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Debug.Trace (trace)
 import Error.Diagnose (Diagnostic, addReport, def)
-import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext, lookupMeta)
+import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
 import Language.Zilch.Typecheck.Defaults (defaultContext)
@@ -53,17 +53,7 @@ eval ctx (TAST.EPi (TAST.Parameter _ name ty1 :@ _) ty2 :@ p) = do
   pure $ VPi (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
 eval ctx (TAST.ELam ex :@ p) = pure $ VLam (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
-eval ctx (TAST.EMeta m :@ _) = pure $ evalMeta m
-eval ctx (TAST.EInsertedMeta m status :@ p) = do
-  let meta = evalMeta m
-  trace ("Creating inserted meta " <> show m <> " " <> show status <> " " <> show (env ctx)) $ pure ()
-  applyInsertedMeta ctx meta status
 eval _ e = error $ "unhandled case " <> show e
-
-evalMeta :: Located Int -> Located Value
-evalMeta (m :@ p) = case lookupMeta m of
-  Solved v -> v
-  Unsolved -> VFlexible (m :@ p) [] :@ p
 
 apply :: forall m. MonadEval m => Context -> Closure -> Located Value -> m (Located Value)
 apply ctx (Clos env expr) val =
@@ -72,66 +62,32 @@ apply ctx (Clos env expr) val =
 
 applyVal :: forall m. MonadEval m => Context -> Located Value -> Located Value -> m (Located Value)
 applyVal ctx (VLam t :@ _) u = apply ctx t u
-applyVal _ (VFlexible m sp :@ p) u = pure $ VFlexible m (u : sp) :@ p
-applyVal _ (VIdentifier x sp :@ p) u = pure $ VIdentifier x (u : sp) :@ p
-applyVal _ v u = error $ "applyVal (" <> show v <> ") (" <> show u <> ")"
-
-applySpine :: forall m. MonadEval m => Context -> Located Value -> Spine -> m (Located Value)
-applySpine _ v [] = pure v
-applySpine ctx v (s : sp) = do
-  t <- applySpine ctx v sp
-  applyVal ctx t s
-
-applyInsertedMeta :: forall m. MonadEval m => Context -> Located Value -> [TAST.MetaStatus] -> m (Located Value)
-applyInsertedMeta ctx v status =
-  case (Env.toList $ env ctx, status) of
-    ([], []) -> pure v
-    (k : ks, TAST.Bound : ss) -> do
-      val' <- applyInsertedMeta (ctx {env = ks}) v ss
-      applyVal ctx val' k
-    (_ : ks, TAST.Defined : ss) -> do
-      applyInsertedMeta (ctx {env = ks}) v ss
-    (ks, ss) -> error $ "applyInsertedMeta (" <> show ks <> ") (" <> show ss <> ")"
-
-force :: forall m. MonadEval m => Context -> Located Value -> m (Located Value)
-force ctx u@(VFlexible (m :@ _) sp :@ _) = case lookupMeta m of
-  Solved t -> trace ("Found solved meta " <> show m <> " " <> show sp <> " = " <> show t) $ applySpine ctx t sp >>= force ctx
-  _ -> pure u
-force _ u = pure u
-
-quoteSpine :: forall m. MonadEval m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> m (Located TAST.Expression)
-quoteSpine _ _ term [] = pure term
-quoteSpine ctx level term@(_ :@ p) (u : sp) = do
-  e1 <- quoteSpine ctx level term sp
-  e2 <- quote ctx level u
-  pure $ TAST.EApplication e1 e2 :@ p
+applyVal ctx t@(_ :@ p) u = pure $ VApplication t u :@ p
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx
 debruijnLevelToIndex (Lvl l) (Lvl x) = TAST.Idx $! l - x - 1
 
 quote :: forall m. MonadEval m => Context -> DeBruijnLvl -> Located Value -> m (Located TAST.Expression)
 quote ctx level val =
-  force ctx val >>= \case
-    (VIdentifier n sp :@ p) ->
-      quoteSpine ctx level (TAST.EIdentifier (debruijnLevelToIndex (lvl ctx) n :@ p) :@ p) sp
-    (VFlexible m sp :@ p) -> quoteSpine ctx level (TAST.EMeta m :@ p) sp
+  case val of
+    (VIdentifier n :@ p) -> pure $ TAST.EIdentifier (debruijnLevelToIndex (lvl ctx) n :@ p) :@ p
     (VCharacter c :@ p) -> pure $ TAST.ECharacter (Text.singleton c :@ p) :@ p
     (VInteger n :@ p) -> pure $ TAST.EInteger (Text.pack (show n) :@ p) :@ p
     (VLam clos :@ p) -> do
-      x' <- apply ctx clos (VIdentifier level [] :@ p)
-      x'' <- quote ctx (level + 1) x'
+      x' <- apply ctx clos (VIdentifier level :@ p)
+      x' <- quote ctx (level + 1) x'
       pure $
         TAST.ELam
-          x''
+          x'
           :@ p
     (VPi y val clos :@ p) -> do
-      x' <- apply ctx clos (VIdentifier level [] :@ p)
+      x' <- apply ctx clos (VIdentifier level :@ p)
       val' <- quote ctx level val
-      x'' <- quote ctx (level + 1) x'
+      x' <- quote ctx (level + 1) x'
       pure $
         TAST.EPi
           (TAST.Parameter False (y :@ p) val' :@ p)
-          x''
+          x'
           :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p
     v -> error $ "not yet handled " <> show v
