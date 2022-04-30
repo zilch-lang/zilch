@@ -46,10 +46,10 @@ check ctx expr ty =
           Ρ, Γ ⊢ λx.e ⇐ (y : A) → B
       -}
       ty <- check ctx ty (VType :@ p1)
-      ty3' <- plugNormalisation $ apply ctx ty3 (VIdentifier (lvl ctx) :@ p2)
+      ty3' <- plugNormalisation $ apply ctx ty3 (VIdentifier x (lvl ctx) :@ p2)
       u <- check (bind x ty2 ctx) expr ty3'
       -- TODO: unify `ty` with `ty2`
-      pure (TAST.ELam u :@ p3)
+      pure (TAST.ELam (TAST.Parameter isImplicit x ty :@ p1) u :@ p3)
     (AST.ELet (AST.Let False x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
           Ρ, Γ ⊢ A ⇐ type      Ρ, Γ ⊢ e₁ ⇐ A         Ρ, Γ, x : A ⊢ e₂ ⇐ B
@@ -77,30 +77,30 @@ check ctx expr ty =
 
 convertibleTo :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m Bool
 convertibleTo _ (VType :@ _) (VType :@ _) = pure True
-convertibleTo ctx (VPi _ a b :@ p1) (VPi _ a' b' :@ p2) = do
+convertibleTo ctx (VPi x a b :@ p1) (VPi x' a' b' :@ p2) = do
   (b, b') <-
     plugNormalisation do
       (,)
-        <$> apply ctx b (VIdentifier (lvl ctx) :@ p1)
-        <*> apply ctx b' (VIdentifier (lvl ctx) :@ p2)
+        <$> apply ctx b (VIdentifier (x :@ p1) (lvl ctx) :@ p1)
+        <*> apply ctx b' (VIdentifier (x :@ p2) (lvl ctx) :@ p2)
 
   (&&)
     <$> convertibleTo ctx a a'
     <*> convertibleTo (ctx {lvl = lvl ctx + 1}) b b'
-convertibleTo ctx (VLam a :@ p1) (VLam a' :@ p2) = do
+convertibleTo ctx (VLam x a :@ p1) (VLam x' a' :@ p2) = do
   (a, a') <- plugNormalisation do
     (,)
-      <$> apply ctx a (VIdentifier (lvl ctx) :@ p1)
-      <*> apply ctx a' (VIdentifier (lvl ctx) :@ p2)
+      <$> apply ctx a (VIdentifier (x :@ p1) (lvl ctx) :@ p1)
+      <*> apply ctx a' (VIdentifier (x' :@ p2) (lvl ctx) :@ p2)
 
   convertibleTo (ctx {lvl = lvl ctx + 1}) a a'
-convertibleTo ctx (VLam a :@ p1) u@(_ :@ p2) = do
-  a <- plugNormalisation $ apply ctx a (VIdentifier (lvl ctx) :@ p1)
-  convertibleTo (ctx {lvl = lvl ctx + 1}) a (VApplication u (VIdentifier (lvl ctx) :@ p2) :@ p2)
-convertibleTo ctx u@(_ :@ p1) (VLam a :@ p2) = do
-  a <- plugNormalisation $ apply ctx a (VIdentifier (lvl ctx) :@ p2)
-  convertibleTo (ctx {lvl = lvl ctx + 1}) (VApplication u (VIdentifier (lvl ctx) :@ p1) :@ p1) a
-convertibleTo _ (VIdentifier l1 :@ _) (VIdentifier l2 :@ _) = pure $ l1 == l2
+convertibleTo ctx (VLam x a :@ p1) u@(_ :@ p2) = do
+  a <- plugNormalisation $ apply ctx a (VIdentifier (x :@ p1) (lvl ctx) :@ p1)
+  convertibleTo (ctx {lvl = lvl ctx + 1}) a (VApplication u (VIdentifier (x :@ p1) (lvl ctx) :@ p2) :@ p2)
+convertibleTo ctx u@(_ :@ p1) (VLam x a :@ p2) = do
+  a <- plugNormalisation $ apply ctx a (VIdentifier (x :@ p2) (lvl ctx) :@ p2)
+  convertibleTo (ctx {lvl = lvl ctx + 1}) (VApplication u (VIdentifier (x :@ p2) (lvl ctx) :@ p1) :@ p1) a
+convertibleTo _ (VIdentifier _ l1 :@ _) (VIdentifier _ l2 :@ _) = pure $ l1 == l2
 convertibleTo ctx (VApplication v1 v2 :@ _) (VApplication v3 v4 :@ _) =
   (&&)
     <$> convertibleTo ctx v1 v3

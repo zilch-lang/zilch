@@ -10,9 +10,9 @@ defaultContext =
     { env =
         -- Is it necessary? Or should we add special rules when unifying?
         [ -- nat is builtin
-          VIdentifier 1 :@ p,
+          VIdentifier ("nat" :@ p) 1 :@ p,
           -- char is builtin
-          VIdentifier 0 :@ p
+          VIdentifier ("char" :@ p) 0 :@ p
         ],
       types =
         [ -- nat : type 0

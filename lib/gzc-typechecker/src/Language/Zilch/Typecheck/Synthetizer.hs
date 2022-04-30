@@ -26,14 +26,14 @@ synthetize ctx (AST.EInteger i :@ p) =
     ─────────────────────────
          Ρ, Γ ⊢ n ⇒ ℕ
   -}
-  pure (TAST.EInteger i :@ p, VIdentifier 0 :@ p)
+  pure (TAST.EInteger i :@ p, VIdentifier ("nat" :@ p) 1 :@ p)
 synthetize ctx (AST.ECharacter c :@ p) =
   {-
       c is a literal character
     ────────────────────────────
           Ρ, Γ ⊢ c ⇒ char
   -}
-  pure (TAST.ECharacter c :@ p, VIdentifier 1 :@ p)
+  pure (TAST.ECharacter c :@ p, VIdentifier ("char" :@ p) 0 :@ p)
 synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
   {-
       Ρ, Γ ⊢ e₁ ⇒ (x : A) → B          Ρ, Γ ⊢ e₂ ⇐ A
@@ -57,12 +57,12 @@ synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
     ───────────────────────
       Ρ, Γ, x : A ⊢ x ⇒ A
   -}
-  (ix, ty) <- go 0 (types ctx)
-  pure (TAST.EIdentifier (ix :@ p) :@ p, ty)
+  (ex, ty) <- go 0 (types ctx)
+  pure (ex, ty)
   where
     go _ [] = throwError $ BindingNotFound x p
     go ix ((x', a) : types)
-      | x == x' = pure (ix, a)
+      | x == x' = pure (TAST.EIdentifier (x' :@ p) ix :@ p, a)
       | otherwise = go (ix + 1) types
 synthetize ctx (AST.EType :@ p) =
   {-
@@ -97,7 +97,7 @@ synthetize ctx (AST.ELam (AST.Parameter isImplicit name ty :@ p2) ex :@ p) = do
   ty' <- plugNormalisation $ eval ctx ty
   (ex, b) <- synthetize (bind name ty' ctx) ex
   clos <- closeVal ctx b
-  pure (TAST.ELam ex :@ p, VPi (unLoc name) ty' clos :@ p)
+  pure (TAST.ELam (TAST.Parameter isImplicit name ty :@ p2) ex :@ p, VPi (unLoc name) ty' clos :@ p)
 synthetize _ expr = error $ "not yet handled: " <> show expr
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

@@ -24,7 +24,7 @@ bind :: Located Name -> Located Value -> Context -> Context
 bind (x :@ p) ty ctx =
   let level = lvl ctx
    in ctx
-        { env = Env.extend (env ctx) (VIdentifier level :@ p),
+        { env = Env.extend (env ctx) (VIdentifier (x :@ p) level :@ p),
           types = (x, ty) : types ctx,
           lvl = level + 1
         }

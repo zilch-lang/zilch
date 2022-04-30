@@ -48,6 +48,7 @@ data Expression
     EType
   | -- | An unapplied lambda abstraction
     ELam
+      (Located Parameter)
       (Located Expression)
   | -- | The function type @(x : A) → B@ or @{x : A} → B@
     EPi
@@ -60,7 +61,8 @@ data Expression
       (Located Expression)
       (Located Expression)
   | EIdentifier
-      (Located DeBruijnIdx)
+      (Located Text)
+      DeBruijnIdx
   | EInteger
       (Located Text)
   | ECharacter

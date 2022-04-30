@@ -37,7 +37,7 @@ type MonadEval m = (MonadError EvalError m)
 eval :: forall m. MonadEval m => Context -> Located TAST.Expression -> m (Located Value)
 eval _ (TAST.EInteger e :@ p) = pure $ VInteger (read $ unLoc e) :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
-eval ctx (TAST.EIdentifier (TAST.Idx i :@ _) :@ _) = pure $ lookup (env ctx) i
+eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = pure $ lookup (env ctx) i
 eval ctx (TAST.EApplication e1 e2 :@ _) = do
   v1 <- eval ctx e1
   v2 <- eval ctx e2
@@ -51,7 +51,7 @@ eval ctx (TAST.ELet (TAST.Let False _ _ val :@ _) u :@ _) = do
 eval ctx (TAST.EPi (TAST.Parameter _ name ty1 :@ _) ty2 :@ p) = do
   ty1' <- eval ctx ty1
   pure $ VPi (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
-eval ctx (TAST.ELam ex :@ p) = pure $ VLam (Clos (env ctx) ex) :@ p
+eval ctx (TAST.ELam (TAST.Parameter _ (x :@ _) _ :@ _) ex :@ p) = pure $ VLam x (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ e = error $ "unhandled case " <> show e
 
@@ -61,7 +61,7 @@ apply ctx (Clos env expr) val =
    in eval (emptyContext {env = env'}) expr
 
 applyVal :: forall m. MonadEval m => Context -> Located Value -> Located Value -> m (Located Value)
-applyVal ctx (VLam t :@ _) u = apply ctx t u
+applyVal ctx (VLam _ t :@ _) u = apply ctx t u
 applyVal ctx t@(_ :@ p) u = pure $ VApplication t u :@ p
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx
@@ -70,18 +70,19 @@ debruijnLevelToIndex (Lvl l) (Lvl x) = TAST.Idx $! l - x - 1
 quote :: forall m. MonadEval m => Context -> DeBruijnLvl -> Located Value -> m (Located TAST.Expression)
 quote ctx level val =
   case val of
-    (VIdentifier n :@ p) -> pure $ TAST.EIdentifier (debruijnLevelToIndex (lvl ctx) n :@ p) :@ p
+    (VIdentifier name n :@ p) -> pure $ TAST.EIdentifier name (debruijnLevelToIndex level n) :@ p
     (VCharacter c :@ p) -> pure $ TAST.ECharacter (Text.singleton c :@ p) :@ p
     (VInteger n :@ p) -> pure $ TAST.EInteger (Text.pack (show n) :@ p) :@ p
-    (VLam clos :@ p) -> do
-      x' <- apply ctx clos (VIdentifier level :@ p)
+    (VLam name clos :@ p) -> do
+      x' <- apply ctx clos (VIdentifier (name :@ p) level :@ p)
       x' <- quote ctx (level + 1) x'
       pure $
         TAST.ELam
+          (TAST.Parameter False (name :@ p) (TAST.EIdentifier ("?" :@ p) (debruijnLevelToIndex level 0) :@ p) :@ p)
           x'
           :@ p
     (VPi y val clos :@ p) -> do
-      x' <- apply ctx clos (VIdentifier level :@ p)
+      x' <- apply ctx clos (VIdentifier (y :@ p) level :@ p)
       val' <- quote ctx level val
       x' <- quote ctx (level + 1) x'
       pure $

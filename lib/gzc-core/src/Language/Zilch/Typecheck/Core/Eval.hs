@@ -24,6 +24,7 @@ instance Show Closure where
 data Value
   = -- | A bound variable
     VIdentifier
+      (Located Text)
       DeBruijnLvl
   | -- | The application of a value to another one
     VApplication
@@ -31,6 +32,7 @@ data Value
       (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
+      Name
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
