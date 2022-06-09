@@ -6,7 +6,7 @@ pkgs.haskell.lib.buildStackProject {
   inherit ghc;
 
   buildInputs = with pkgs; [
-    
+    git
   ];
 
   name = "zilch-gzc";

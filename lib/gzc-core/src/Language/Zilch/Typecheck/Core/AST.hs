@@ -28,6 +28,9 @@ data Definition
       -- ^ The return type
       (Located Expression)
       -- ^ The value bound
+  | LetMeta
+      Int
+      (Maybe (Located Expression))
   deriving (Show)
 
 data Parameter
@@ -67,4 +70,12 @@ data Expression
       (Located Text)
   | ECharacter
       (Located Text)
+  | EMeta
+      Int
+  | EInsertedMeta
+      Int
+      [Binding]
+  deriving (Show)
+
+data Binding = Bound Text | Defined Text
   deriving (Show)

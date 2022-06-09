@@ -17,7 +17,9 @@ library
       Language.Zilch.Typecheck.Environment
       Language.Zilch.Typecheck.Errors
       Language.Zilch.Typecheck.Evaluator
+      Language.Zilch.Typecheck.Metavariables
       Language.Zilch.Typecheck.Synthetizer
+      Language.Zilch.Typecheck.Unification
   other-modules:
       Paths_gzc_typechecker
   hs-source-dirs:

@@ -52,6 +52,10 @@ data ElabError
     --
     --   /Note:/ This is only a placeholder replaced when actually calling the unification
     UnificationError
+  | -- | Cannot unify two terms together
+    CannotUnify
+      (Located Expression)
+      (Located Expression)
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -79,3 +83,10 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
         []
 fromElabError (FromEvalError e) = fromEvalError e
 fromElabError UnificationError = undefined
+fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
+  err
+    "Type-checking error"
+    [ (p1, This $ "Cannot unify term `" <> show (pretty $ t1 :@ p1) <> "`..."),
+      (p2, This $ "...with term `" <> show (pretty $ t2 :@ p2) <> "`")
+    ]
+    []

@@ -3,6 +3,8 @@
 
 module Language.Zilch.Pretty.TAST where
 
+import Data.Foldable (fold)
+import Data.List (intersperse)
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Typecheck.Core.AST
 import Prettyprinter (Pretty (pretty), emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
@@ -34,6 +36,14 @@ instance Pretty (Located Definition) where
             <> line
             <> pretty val
         )
+  pretty (LetMeta idx val :@ _) =
+    "let?"
+      <> space
+      <> pretty idx
+      <> space
+      <> "≔"
+      <> space
+      <> maybe "?" pretty val
 
 instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit name ty :@ _) =
@@ -71,3 +81,12 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
+  pretty (EInsertedMeta m bds :@ _) =
+    "?"
+      <> pretty m
+      <> fold (prettyBinding <$> reverse bds)
+    where
+      prettyBinding (Bound name) = space <> pretty name
+      prettyBinding (Defined _) = ""
+  pretty (EMeta m :@ _) =
+    "?" <> pretty m
