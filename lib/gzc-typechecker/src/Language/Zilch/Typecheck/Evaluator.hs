@@ -67,13 +67,14 @@ applyVal :: forall m. MonadEval m => Context -> Located Value -> Located Value -
 applyVal ctx (VLam _ t :@ _) u = apply ctx t u
 applyVal ctx (VFlexible x sp :@ p) u = pure $ VFlexible x (u : sp) :@ p
 applyVal ctx (VRigid x name sp :@ p) u = pure $ VRigid x name (u : sp) :@ p
-applyVal ctx t@(_ :@ p) u = pure $ VApplication t u :@ p -- TODO: remove
+
+--applyVal ctx t@(_ :@ p) u = pure $ VApplication t u :@ p -- TODO: remove
 
 applySpine :: forall m. MonadEval m => Context -> Located Value -> Spine -> m (Located Value)
 applySpine ctx t [] = pure t
 applySpine ctx t (u : sp) = do
   v1 <- applySpine ctx t sp
-  applyVal ctx v1 t
+  applyVal ctx v1 u
 
 applyBDs :: forall m. MonadEval m => Context -> Environment -> Located Value -> [TAST.Binding] -> m (Located Value)
 applyBDs _ [] v [] = pure v
