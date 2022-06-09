@@ -120,6 +120,13 @@ unify' ctx lvl t u = do
           <$> applyVal ctx (t2 :@ p2) (VVariable ("x?" :@ p2) lvl :@ p2)
           <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
       unify' ctx (lvl + 1) v1 v2
+    (VPi _ a1 t1 :@ p1, VPi _ a2 t2 :@ p2) -> do
+      unify' ctx lvl a1 a2
+      (v1, v2) <- plugNormalisation do
+        (,)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+      unify' ctx (lvl + 1) v1 v2
     (VRigid _ l1 sp1 :@ p1, VRigid _ l2 sp2 :@ p2) | l1 == l2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m1 sp1 :@ p1, VFlexible m2 sp2 :@ p2) | m1 == m2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m sp :@ p1, t) -> solve lvl m sp t
