@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Synthetizer where
@@ -95,6 +96,22 @@ synthetize ctx (AST.ELet (AST.Let False (name :@ p1) ty val :@ p2) expr :@ p) = 
   ty' <- plugNormalisation $ eval ctx ty
   val <- check ctx val ty'
   val' <- plugNormalisation $ eval ctx val
+  (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
+  pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
+synthetize ctx (AST.ELet (AST.Let True (name :@ p1) ty val :@ p2) expr :@ p) = do
+  {-
+      Ρ, Γ ⊢ A ⇐ type        Ρ, Γ, x : A ⊢ e₁ ⇐ A        Ρ, Γ, x : A ⊢ e₂ ⇐ B
+    ───────────────────────────────────────────────────────────────────────────
+                         Ρ, Γ ⊢ rec x : A = e₁ ; e₂ ⇒ B
+  -}
+  ty <- check ctx ty (VType :@ p)
+  ty' <- plugNormalisation $ eval ctx ty
+
+  (val, val') <- mdo
+    let ctx' = define (name :@ p1) ty' (VThunk val' :@ p2) ctx
+    val' <- check ctx' val ty'
+    val'' <- plugNormalisation $ eval ctx' val'
+    pure (val', val'')
   (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
   pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
 synthetize ctx (AST.ELam (AST.Parameter isImplicit name ty :@ p2) ex :@ p) = do

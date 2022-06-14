@@ -1,12 +1,14 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Evaluator (normalize, normalize0, eval, apply, quote, plugNormalisation, applyVal, debruijnLevelToIndex, force) where
 
 import Control.Monad ((<=<))
 import Control.Monad.Except (Except, MonadError, runExcept, throwError)
+import Control.Monad.Fix (MonadFix)
 import Data.Bifunctor (first)
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
@@ -25,7 +27,7 @@ import Language.Zilch.Typecheck.Metavariables (lookupMeta)
 import Prelude hiding (lookup, read)
 import qualified Prelude (read)
 
-type MonadEval m = (MonadError EvalError m)
+type MonadEval m = (MonadError EvalError m, MonadFix m)
 
 ------------
 
@@ -40,16 +42,19 @@ eval _ (TAST.EInteger e :@ p) = pure $ VInteger (read $ unLoc e) :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = case lookup (env ctx) i of
   VThunk expr :@ _ -> eval ctx expr
-    -- val <- eval ctx expr
-    -- setValue (env ctx) i val
-    -- pure val
+  -- val <- eval ctx expr
+  -- setValue (env ctx) i val
+  -- pure val
   val -> pure val
 eval ctx (TAST.EApplication e1 e2 :@ _) = do
   v1 <- eval ctx e1
   v2 <- eval ctx e2
 
   applyVal ctx v1 v2
-eval _ (TAST.ELet (TAST.Let True _ _ _ :@ _) _ :@ p) = throwError $ RecursiveBindingNormalisation p
+eval ctx (TAST.ELet (TAST.Let True _ _ val :@ _) u :@ _) = mdo
+  let ctx' = ctx {env = Env.extend (env ctx) val'}
+  val' <- eval ctx' val
+  eval ctx' u
 eval ctx (TAST.ELet (TAST.Let False _ _ val :@ _) u :@ _) = do
   val' <- eval ctx val
   let env' = Env.extend (env ctx) val'

@@ -85,6 +85,22 @@ check ctx expr ty = do
       ex' <- plugNormalisation $ eval ctx ex
       u <- check (define x ex' ty' ctx) expr ty2
       pure (TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
+    (AST.ELet (AST.Let True x ty ex :@ p1) expr :@ p2, ty2) -> do
+      {-
+          Ρ, Γ ⊢ A ⇐ type      Ρ, Γ, x : A ⊢ e₁ ⇐ A         Ρ, Γ, x : A ⊢ e₂ ⇐ B
+        ──────────────────────────────────────────────────────────────────────────
+                            Ρ, Γ ⊢ rec x : A = e₁ ; e₂ ⇐ B
+      -}
+      ty <- check ctx ty (VType :@ p1)
+      ty' <- plugNormalisation $ eval ctx ty
+
+      (ex, ex') <- mdo
+        let ctx' = define x (VThunk ex' :@ p1) ty' ctx
+        ex' <- check ctx' ex ty'
+        ex'' <- plugNormalisation $ eval ctx' ex'
+        pure (ex', ex'')
+      u <- check (define x ex' ty' ctx) expr ty2
+      pure (TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
     (AST.EHole :@ p1, ty) -> do
       pure $ freshMeta ctx :@ p1
     (e@(_ :@ p), v) -> do
