@@ -1,5 +1,6 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
@@ -41,15 +42,15 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
   case defs of
     [] -> do
       pure (TAST.Mod [] :@ p)
-    ((AST.TopLevel isPublic (AST.Let isRec name ty ex :@ p3) :@ p4) : ds) -> do
-      when isRec do
-        error "Recursive bindings are not yet handled"
-
+    ((AST.TopLevel isPublic (AST.Let isRec name@(_ :@ p5) ty ex :@ p3) :@ p4) : ds) -> do
       ty <- check ctx ty (VType :@ p3)
       ty' <- plugNormalisation $ eval ctx ty
 
-      ex <- check ctx ex ty'
-      ex' <- plugNormalisation $ eval ctx ex
+      (ex, ex') <- mdo
+        let ctx' = if isRec then define name (VThunk ex' :@ p3) ty' ctx else ctx
+        ex' <- check ctx' ex ty'
+        ex'' <- plugNormalisation $ eval ctx' ex'
+        pure (ex', ex'')
 
       TAST.Mod defs :@ p <- checkProgram' (define name ex' ty' ctx) (AST.Mod imports ds :@ p)
 

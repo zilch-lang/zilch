@@ -38,7 +38,12 @@ type MonadEval m = (MonadError EvalError m)
 eval :: forall m. MonadEval m => Context -> Located TAST.Expression -> m (Located Value)
 eval _ (TAST.EInteger e :@ p) = pure $ VInteger (read $ unLoc e) :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
-eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = pure $ lookup (env ctx) i
+eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = case lookup (env ctx) i of
+  VThunk expr :@ _ -> eval ctx expr
+    -- val <- eval ctx expr
+    -- setValue (env ctx) i val
+    -- pure val
+  val -> pure val
 eval ctx (TAST.EApplication e1 e2 :@ _) = do
   v1 <- eval ctx e1
   v2 <- eval ctx e2

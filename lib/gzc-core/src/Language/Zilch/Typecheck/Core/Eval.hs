@@ -54,6 +54,9 @@ data Value
   | -- | Basic characters
     VCharacter
       Char
+  | -- | An unevaluated piece of code
+    VThunk
+      (Located Expression)
   deriving (Show)
 
 data MetaEntry

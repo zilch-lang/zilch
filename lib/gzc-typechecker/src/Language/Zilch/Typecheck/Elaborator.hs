@@ -5,6 +5,7 @@
 module Language.Zilch.Typecheck.Elaborator (elabProgram, MonadElab) where
 
 import Control.Monad.Except (MonadError, runExcept)
+import Control.Monad.Fix (MonadFix)
 import Data.Bifunctor (first)
 import Data.IntMap (IntMap)
 import Data.Located (Located)
@@ -16,7 +17,7 @@ import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Defaults
 import Language.Zilch.Typecheck.Errors
 
-type MonadElab m = (MonadError ElabError m)
+type MonadElab m = (MonadError ElabError m, MonadFix m)
 
 -------------
 

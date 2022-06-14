@@ -4,6 +4,7 @@
 module Language.Zilch.Typecheck.Elaborator where
 
 import Control.Monad.Except (MonadError)
+import Control.Monad.Fix (MonadFix)
 import Control.Monad.Reader (MonadReader)
 import Data.IntMap (IntMap)
 import Data.Located (Located)
@@ -13,6 +14,6 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import qualified Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Errors (ElabError)
 
-type MonadElab m = (MonadError ElabError m)
+type MonadElab m = (MonadError ElabError m, MonadFix m)
 
 elabProgram :: Located AST.Module -> Either (Diagnostic String) (Located TAST.Module)
