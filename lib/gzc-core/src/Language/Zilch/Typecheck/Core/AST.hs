@@ -37,6 +37,8 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
+      (Maybe (Located Integer))
+      -- ^ Optional resource usage (either @0@ or @1@) where absence means @ω@
       (Located Text)
       -- ^ The name of the parameter
       (Located Expression)
@@ -75,6 +77,7 @@ data Expression
   | EInsertedMeta
       Int
       [Binding]
+  | EUnknown
   deriving (Show)
 
 data Binding = Bound Text | Defined Text

@@ -59,13 +59,14 @@ rename ctx m ren v = go ren v
         VRigid name (Lvl x) sp :@ p -> case IntMap.lookup x env of
           Nothing -> throwError UnificationError
           Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') :@ p) sp
-        VLam x t :@ p -> do
-          t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
-          pure $ TAST.ELam (TAST.Parameter True (x :@ p) undefined :@ p) t' :@ p
-        VPi x a t :@ p -> do
+        VLam usage x a t :@ p -> do
           a' <- go ren a
           t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
-          pure $ TAST.EPi (TAST.Parameter True (x :@ p) a' :@ p) t' :@ p
+          pure $ TAST.ELam (TAST.Parameter True ((:@ p) <$> usage) (x :@ p) a' :@ p) t' :@ p
+        VPi usage x a t :@ p -> do
+          a' <- go ren a
+          t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
+          pure $ TAST.EPi (TAST.Parameter True ((:@ p) <$> usage) (x :@ p) a' :@ p) t' :@ p
         VType :@ p -> pure $ TAST.EType :@ p
         t :@ p -> error "TODO: rename base terms"
 
@@ -87,7 +88,11 @@ solve gamma m sp val = do
     lams = go 0
 
     go x lvl t _ | x == lvl = t
-    go x lvl t p = TAST.ELam (TAST.Parameter True (("$" <> Text.pack (show (x + 1))) :@ p) undefined :@ p) (go (x + 1) lvl t p) :@ p
+    go x lvl t p =
+      TAST.ELam
+        (TAST.Parameter True Nothing (("$" <> Text.pack (show (x + 1))) :@ p) (TAST.EUnknown :@ p) :@ p)
+        (go (x + 1) lvl t p)
+        :@ p
 
 unifySpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Spine -> Spine -> m ()
 unifySpine _ _ [] [] = pure ()
@@ -101,34 +106,40 @@ unify' ctx lvl t u = do
   t <- plugNormalisation $ force ctx t
   u <- plugNormalisation $ force ctx u
   case (t, u) of
-    (VLam _ t1 :@ p1, VLam _ t2 :@ p2) -> do
-      -- TODO: unify parameter types
-      (v1, v2) <- plugNormalisation do
-        (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
-      unify' ctx (lvl + 1) v1 v2
-    (t1 :@ p1, VLam _ t2 :@ p2) -> do
+    (VLam u1 _ a1 t1 :@ p1, VLam u2 _ a2 t2 :@ p2)
+      | u1 == u2 -> do
+        unify' ctx lvl a1 a2
+        (v1, v2) <- plugNormalisation do
+          (,)
+            <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+            <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+        unify' ctx (lvl + 1) v1 v2
+      | otherwise -> throwError UnificationError
+    (t1 :@ p1, VLam _ _ _ t2 :@ p2) -> do
       (v1, v2) <- plugNormalisation do
         (,)
           <$> applyVal ctx (t1 :@ p1) (VVariable ("x?" :@ p1) lvl :@ p1)
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (VLam _ t1 :@ p1, t2 :@ p2) -> do
+    (VLam _ _ _ t1 :@ p1, t2 :@ p2) -> do
       (v2, v1) <- plugNormalisation do
         (,)
           <$> applyVal ctx (t2 :@ p2) (VVariable ("x?" :@ p2) lvl :@ p2)
           <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
       unify' ctx (lvl + 1) v1 v2
-    (VPi _ a1 t1 :@ p1, VPi _ a2 t2 :@ p2) -> do
-      unify' ctx lvl a1 a2
-      (v1, v2) <- plugNormalisation do
-        (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
-      unify' ctx (lvl + 1) v1 v2
-    (VRigid _ l1 sp1 :@ p1, VRigid _ l2 sp2 :@ p2) | l1 == l2 -> unifySpine ctx lvl sp1 sp2
-    (VFlexible m1 sp1 :@ p1, VFlexible m2 sp2 :@ p2) | m1 == m2 -> unifySpine ctx lvl sp1 sp2
+    (VPi u1 _ a1 t1 :@ p1, VPi u2 _ a2 t2 :@ p2)
+      | u1 == u2 -> do
+        unify' ctx lvl a1 a2
+        (v1, v2) <- plugNormalisation do
+          (,)
+            <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+            <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+        unify' ctx (lvl + 1) v1 v2
+      | otherwise -> throwError UnificationError
+    (VRigid _ l1 sp1 :@ p1, VRigid _ l2 sp2 :@ p2)
+      | l1 == l2 -> unifySpine ctx lvl sp1 sp2
+    (VFlexible m1 sp1 :@ p1, VFlexible m2 sp2 :@ p2)
+      | m1 == m2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m sp :@ p1, t) -> solve lvl m sp t
     (t, VFlexible m sp :@ p2) -> solve lvl m sp t
     (VType :@ _, VType :@ _) -> pure ()

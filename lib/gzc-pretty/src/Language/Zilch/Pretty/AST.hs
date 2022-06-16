@@ -37,9 +37,11 @@ instance Pretty (Located Definition) where
         )
 
 instance Pretty (Located Parameter) where
-  pretty (Parameter isImplicit name ty :@ _) =
+  pretty (Parameter isImplicit usage name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
-      pretty (unLoc name)
+      maybe "ω" (pretty . unLoc) usage
+        <> space
+        <> pretty (unLoc name)
         <> space
         <> ":"
         <> space
@@ -47,20 +49,6 @@ instance Pretty (Located Parameter) where
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
-  pretty (EForall params ret :@ _) =
-    "∀"
-      <> space
-      <> hsep (pretty <$> params)
-      <> ","
-      <> space
-      <> pretty ret
-  pretty (EExists params ret :@ _) =
-    "∃"
-      <> space
-      <> hsep (pretty <$> params)
-      <> ","
-      <> space
-      <> pretty ret
   pretty (EInteger val :@ _) = pretty $ unLoc val
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
   pretty (EIdentifier id :@ _) = pretty $ unLoc id

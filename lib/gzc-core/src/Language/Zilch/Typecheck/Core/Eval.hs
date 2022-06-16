@@ -39,10 +39,13 @@ data Value
       (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
+      (Maybe Integer)
       Name
+      (Located Value)
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
+      (Maybe Integer)
       Name
       (Located Value)
       Closure
@@ -57,6 +60,7 @@ data Value
   | -- | An unevaluated piece of code
     VThunk
       (Located Expression)
+  | VUnknown
   deriving (Show)
 
 data MetaEntry

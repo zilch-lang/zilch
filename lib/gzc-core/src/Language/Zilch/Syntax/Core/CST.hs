@@ -47,9 +47,13 @@ data Definition
 
 data Parameter
   = Implicit
+      (Maybe (Located Integer))
+      -- ^ Optional usage
       (Located Text)
       (Maybe (Located Expression))
   | Explicit
+      (Maybe (Located Integer))
+      -- ^ Optional usage
       (Located Text)
       (Maybe (Located Expression))
   deriving (Show)
@@ -74,12 +78,6 @@ data Expression
   | ELet
       (Located Definition)
       -- ^ Local definition
-      (Located Expression)
-  | EForall
-      [Located Parameter]
-      (Located Expression)
-  | EExists
-      [Located Parameter]
       (Located Expression)
   | EParens (Located Expression)
   | EHole

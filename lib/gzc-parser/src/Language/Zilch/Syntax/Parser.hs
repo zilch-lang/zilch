@@ -12,6 +12,7 @@ import Data.List (foldl')
 import Data.Located (Located ((:@)), unLoc)
 import Data.Maybe (isJust)
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
 import Language.Zilch.Syntax.Core
@@ -130,8 +131,19 @@ parseParameter s =
           [m Parameter]
       )
   where
-    explicit = Explicit <$> (lexeme parseIdentifier <* s) <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
-    implicit = Implicit <$> (lexeme parseIdentifier <* s) <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+    explicit =
+      Explicit
+        <$> (MP.optional (lexeme parseResourceUsage) <* s)
+        <*> (lexeme parseIdentifier <* s)
+        <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+    implicit =
+      Implicit
+        <$> (MP.optional (lexeme parseResourceUsage) <* s)
+        <*> (lexeme parseIdentifier <* s)
+        <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+
+parseResourceUsage :: forall m. MonadParser m => m (Located Integer)
+parseResourceUsage = fmap (read . Text.unpack) <$> parseNumber
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
@@ -144,7 +156,7 @@ parseExpression s = located do
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
-    ( [ ELet <$> lexeme (parseLet s) <*> parseExpression s,
+    ( [ ELet <$> lineFold (\s' -> lexeme (parseLet s')) <*> parseExpression s,
         EInt . unLoc <$> parseNumber,
         ETypedHole <$ token TkQuestionMark,
         EHole <$ token TkUnderscore,
@@ -180,22 +192,6 @@ parseDo s = do
   _ <- lexeme (token TkDo) <* s
   expr <- parseExpression s
   pure $ EDo expr
-
-parseForall :: forall m. MonadParser m => m () -> m Expression
-parseForall s = do
-  _ <- lexeme (token TkForall <|> token TkUniForall) <* s
-  params <- lexeme $ MP.many (parseParameter s) <* s
-  _ <- lexeme (token TkComma) <* s
-  expr <- parseExpression s
-  pure $ EForall params expr
-
-parseExists :: forall m. MonadParser m => m () -> m Expression
-parseExists s = do
-  _ <- lexeme (token TkExists <|> token TkUniExists) <* s
-  params <- lexeme $ MP.many (parseParameter s) <* s
-  _ <- lexeme (token TkComma) <* s
-  expr <- parseExpression s
-  pure $ EExists params expr
 
 parsePi :: forall m. MonadParser m => m () -> m Expression
 parsePi s = do

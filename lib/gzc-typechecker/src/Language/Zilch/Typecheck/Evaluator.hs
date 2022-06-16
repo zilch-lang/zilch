@@ -59,13 +59,16 @@ eval ctx (TAST.ELet (TAST.Let False _ _ val :@ _) u :@ _) = do
   val' <- eval ctx val
   let env' = Env.extend (env ctx) val'
   eval (ctx {env = env'}) u
-eval ctx (TAST.EPi (TAST.Parameter _ name ty1 :@ _) ty2 :@ p) = do
+eval ctx (TAST.EPi (TAST.Parameter _ usage name ty1 :@ _) ty2 :@ p) = do
   ty1' <- eval ctx ty1
-  pure $ VPi (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
-eval ctx (TAST.ELam (TAST.Parameter _ (x :@ _) _ :@ _) ex :@ p) = pure $ VLam x (Clos (env ctx) ex) :@ p
+  pure $ VPi (unLoc <$> usage) (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
+eval ctx (TAST.ELam (TAST.Parameter _ usage (x :@ _) ty1 :@ _) ex :@ p) = do
+  ty1' <- eval ctx ty1
+  pure $ VLam (unLoc <$> usage) x ty1' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
 eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
+eval ctx (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadEval m => Context -> Closure -> Located Value -> m (Located Value)
@@ -74,7 +77,7 @@ apply ctx (Clos env expr) val =
    in eval (emptyContext {env = env'}) expr
 
 applyVal :: forall m. MonadEval m => Context -> Located Value -> Located Value -> m (Located Value)
-applyVal ctx (VLam _ t :@ _) u = apply ctx t u
+applyVal ctx (VLam _ _ _ t :@ _) u = apply ctx t u
 applyVal ctx (VFlexible x sp :@ p) u = pure $ VFlexible x (u : sp) :@ p
 applyVal ctx (VRigid x name sp :@ p) u = pure $ VRigid x name (u : sp) :@ p
 
@@ -117,24 +120,26 @@ quote ctx level val = do
     VRigid name m sp :@ p -> quoteSpine ctx level (TAST.EIdentifier name (debruijnLevelToIndex level m) :@ p) sp p
     (VCharacter c :@ p) -> pure $ TAST.ECharacter (Text.singleton c :@ p) :@ p
     (VInteger n :@ p) -> pure $ TAST.EInteger (Text.pack (show n) :@ p) :@ p
-    (VLam name clos :@ p) -> do
+    (VLam usage name ty1 clos :@ p) -> do
       x' <- apply ctx clos (VVariable (name :@ p) level :@ p)
       x' <- quote ctx (level + 1) x'
+      ty1 <- quote ctx level ty1
       pure $
         TAST.ELam
-          (TAST.Parameter False (name :@ p) (TAST.EIdentifier ("?" :@ p) (debruijnLevelToIndex level 0) :@ p) :@ p)
+          (TAST.Parameter False ((:@ p) <$> usage) (name :@ p) ty1 :@ p)
           x'
           :@ p
-    (VPi y val clos :@ p) -> do
+    (VPi usage y val clos :@ p) -> do
       x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
       val' <- quote ctx level val
       x' <- quote ctx (level + 1) x'
       pure $
         TAST.EPi
-          (TAST.Parameter False (y :@ p) val' :@ p)
+          (TAST.Parameter False ((:@ p) <$> usage) (y :@ p) val' :@ p)
           x'
           :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p
+    (VUnknown :@ p) -> pure $ TAST.EUnknown :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadEval m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

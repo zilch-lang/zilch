@@ -35,6 +35,8 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
+      (Maybe (Located Integer))
+      -- ^ Optional resource usage
       (Located Text)
       -- ^ The name of the parameter
       (Located Expression)
@@ -42,17 +44,7 @@ data Parameter
   deriving (Show)
 
 data Expression
-  = EForall
-      [Located Parameter]
-      -- ^ Implicit and explicit parameters
-      (Located Expression)
-      -- ^ Quantified expression (type)
-  | EExists
-      [Located Parameter]
-      -- ^ Implicit and explicit parameters
-      (Located Expression)
-      -- ^ Quantified expression (type)
-  | EInteger
+  = EInteger
       (Located Text)
   | ECharacter
       (Located Text)

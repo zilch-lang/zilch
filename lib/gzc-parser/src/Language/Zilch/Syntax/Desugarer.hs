@@ -64,12 +64,12 @@ desugarDefinition (CST.Rec name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
     mkPi param expr = AST.EPi param expr :@ p
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
-desugarParameter (CST.Implicit name@(_ :@ p1) ty :@ p) = do
+desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  pure $ AST.Parameter True name ty' :@ p
-desugarParameter (CST.Explicit name@(_ :@ p1) ty :@ p) = do
+  pure $ AST.Parameter True usage name ty' :@ p
+desugarParameter (CST.Explicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  pure $ AST.Parameter False name ty' :@ p
+  pure $ AST.Parameter False usage name ty' :@ p
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p

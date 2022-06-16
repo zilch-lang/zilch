@@ -46,11 +46,11 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
 
   t1 <- plugNormalisation $ force ctx t1
   (a, b) <- case t1 of
-    VPi _ a b :@ _ -> pure (a, b)
+    VPi _ _ a b :@ _ -> pure (a, b)
     t1 -> do
       a <- plugNormalisation $ eval ctx (freshMeta ctx :@ p)
       let b = Clos (env ctx) $ freshMeta (bind ("x?" :@ p) a ctx) :@ p
-      unify ctx t1 (VPi "x?" a b :@ p)
+      unify ctx t1 (VPi Nothing "x?" a b :@ p)
       pure (a, b)
 
   e2 <- check ctx e2 a
@@ -76,7 +76,7 @@ synthetize ctx (AST.EType :@ p) =
       Ρ, Γ ⊢ type ⇒ type
   -}
   pure (TAST.EType :@ p, VType :@ p)
-synthetize ctx (AST.EPi (AST.Parameter isImplicit name ty :@ p2) expr :@ p) = do
+synthetize ctx (AST.EPi (AST.Parameter isImplicit usage name ty :@ p2) expr :@ p) = do
   {-
       Ρ, Γ ⊢ A ⇐ type       Ρ, Γ, x : A ⊢ B ⇐ type
     ────────────────────────────────────────────────
@@ -85,7 +85,7 @@ synthetize ctx (AST.EPi (AST.Parameter isImplicit name ty :@ p2) expr :@ p) = do
   ty <- check ctx ty (VType :@ p)
   ty' <- plugNormalisation $ eval ctx ty
   b <- check (bind name ty' ctx) expr (VType :@ p)
-  pure (TAST.EPi (TAST.Parameter isImplicit name ty :@ p2) b :@ p, VType :@ p)
+  pure (TAST.EPi (TAST.Parameter isImplicit usage name ty :@ p2) b :@ p, VType :@ p)
 synthetize ctx (AST.ELet (AST.Let False (name :@ p1) ty val :@ p2) expr :@ p) = do
   {-
       Ρ, Γ ⊢ A ⇐ type        Ρ, Γ ⊢ e₁ ⇐ A        Ρ, Γ, x : A ⊢ e₂ ⇐ B
@@ -114,12 +114,12 @@ synthetize ctx (AST.ELet (AST.Let True (name :@ p1) ty val :@ p2) expr :@ p) = d
     pure (val', val'')
   (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
   pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
-synthetize ctx (AST.ELam (AST.Parameter isImplicit name ty :@ p2) ex :@ p) = do
+synthetize ctx (AST.ELam (AST.Parameter isImplicit usage name ty :@ p2) ex :@ p) = do
   ty <- check ctx ty (VType :@ p)
   ty' <- plugNormalisation $ eval ctx ty
   (ex, b) <- synthetize (bind name ty' ctx) ex
   clos <- closeVal ctx b
-  pure (TAST.ELam (TAST.Parameter isImplicit name ty :@ p2) ex :@ p, VPi (unLoc name) ty' clos :@ p)
+  pure (TAST.ELam (TAST.Parameter isImplicit usage name ty :@ p2) ex :@ p, VPi (unLoc <$> usage) (unLoc name) ty' clos :@ p)
 synthetize ctx (AST.EHole :@ p1) = do
   a <- plugNormalisation do eval ctx (freshMeta ctx :@ p1)
   let t = freshMeta ctx :@ p1

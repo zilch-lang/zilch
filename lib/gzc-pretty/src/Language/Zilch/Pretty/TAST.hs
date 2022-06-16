@@ -43,12 +43,16 @@ instance Pretty (Located Definition) where
       <> space
       <> "≔"
       <> space
-      <> maybe "?" pretty val
+      <> maybe "?" prettyValue val
+    where
+      prettyValue val = hardline <> indent 2 (pretty val)
 
 instance Pretty (Located Parameter) where
-  pretty (Parameter isImplicit name ty :@ _) =
+  pretty (Parameter isImplicit usage name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
-      pretty (unLoc name)
+      maybe "ω" (pretty . unLoc) usage
+        <> space
+        <> pretty (unLoc name)
         <> space
         <> ":"
         <> space
@@ -90,3 +94,5 @@ instance Pretty (Located Expression) where
       prettyBinding (Defined _) = ""
   pretty (EMeta m :@ _) =
     "?" <> pretty m
+  pretty (EUnknown :@ _) =
+    "???"

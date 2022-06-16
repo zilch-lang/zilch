@@ -5,7 +5,7 @@
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (forM, unless, when)
+import Control.Monad (forM, guard, unless, when)
 import Control.Monad.Except (throwError)
 import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
@@ -61,18 +61,21 @@ check :: forall m. MonadElab m => Context -> Located AST.Expression -> Located V
 check ctx expr ty = do
   ty <- plugNormalisation $ force ctx ty
   case (expr, ty) of
-    (AST.ELam (AST.Parameter isImplicit x ty :@ p1) expr :@ p3, VPi _ ty2 ty3 :@ p2) -> do
+    (AST.ELam (AST.Parameter isImplicit u1 x ty :@ p1) expr :@ p3, VPi u2 _ ty2 ty3 :@ p2) -> do
       {-
           Ρ, Γ, x : A ⊢ e ⇐ B[y\z]
         ─────────────────────────────
           Ρ, Γ ⊢ λx.e ⇐ (y : A) → B
       -}
+      -- guard ((unLoc <$> u1) == u2)
+      --   <|> throwError
+
       ty <- check ctx ty (VType :@ p1)
       ty3' <- plugNormalisation $ apply ctx ty3 (VVariable x (lvl ctx) :@ p2)
       u <- check (bind x ty2 ctx) expr ty3'
       ty' <- plugNormalisation $ eval ctx ty
       unify ctx ty' ty2
-      pure (TAST.ELam (TAST.Parameter isImplicit x ty :@ p1) u :@ p3)
+      pure (TAST.ELam (TAST.Parameter isImplicit u1 x ty :@ p1) u :@ p3)
     (AST.ELet (AST.Let False x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
           Ρ, Γ ⊢ A ⇐ type      Ρ, Γ ⊢ e₁ ⇐ A         Ρ, Γ, x : A ⊢ e₂ ⇐ B
