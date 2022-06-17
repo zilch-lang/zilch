@@ -23,6 +23,21 @@ data Context = Context
 emptyContext :: Context
 emptyContext = Context mempty mempty (Lvl 0) []
 
+indexContext :: Context -> Located Name -> Usage
+indexContext ctx (x :@ _) = go (types ctx)
+  where
+    go [] = error "impossible"
+    go ((usage, y, _) : _) | y == x = usage
+    go (_ : ts) = go ts
+
+setContext :: Context -> Name -> Usage -> Context
+setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
+  where
+    go [] = []
+    go ((u, y, ty) : tys)
+      | x == y = (usage, y, ty) : go tys
+      | otherwise = (u, y, ty) : go tys
+
 -- | Extend the context with a bound variable (that is, a variable found next to a @lam@).
 bind :: Usage -> Located Name -> Located Value -> Context -> Context
 bind usage (x :@ p) ty ctx =

@@ -61,6 +61,10 @@ data ElabError
     UsageMismatch
       (Located Usage)
       (Located Usage)
+  | -- | A linear variable has not been used
+    UnusedLinearVariable
+      (Located Text)
+      Position
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -110,3 +114,10 @@ fromElabError (UsageMismatch u1 u2) =
         [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
           (p2, This $ "...but got value with usage " <> show (pretty u2))
         ]
+fromElabError (UnusedLinearVariable (x :@ p) p2) =
+  err
+    "Type-checking error"
+    [ (p, This $ "Variable named `" <> Text.unpack x <> "` was marked linear but has not been used"),
+      (p2, Where $ "It should have been used in this expression")
+    ]
+    ["If the variable is intended not to be used, it must have an unrestricted usage."]

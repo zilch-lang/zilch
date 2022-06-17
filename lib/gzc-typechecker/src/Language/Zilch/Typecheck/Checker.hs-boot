@@ -11,4 +11,4 @@ import Language.Zilch.Typecheck.Core.Eval (Environment, Value)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 
 checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
-check :: forall m. MonadElab m => Context -> Located TAST.Usage -> Located AST.Expression -> Located Value -> m (Located TAST.Expression)
+check :: forall m. MonadElab m => Context -> Located TAST.Usage -> Located AST.Expression -> Located Value -> m (Context, Located TAST.Expression)

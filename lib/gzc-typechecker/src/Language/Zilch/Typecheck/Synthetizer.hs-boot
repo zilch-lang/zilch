@@ -10,4 +10,4 @@ import Language.Zilch.Typecheck.Context (Context)
 import Language.Zilch.Typecheck.Core.Eval (Value)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 
-synthetize :: forall m. MonadElab m => Context -> Located AST.Expression -> m (Located TAST.Expression, Located Value, Located TAST.Usage)
+synthetize :: forall m. MonadElab m => Context -> Located AST.Expression -> m (Context, Located TAST.Expression, Located Value, Located TAST.Usage)
