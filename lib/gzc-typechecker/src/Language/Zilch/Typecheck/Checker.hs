@@ -53,6 +53,9 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
         ex'' <- plugNormalisation $ eval ctx' ex'
         pure (ex', ex'')
 
+      -- TODO: check if context contains linear variables
+      -- if yes, throw error (unused variable)
+
       TAST.Mod defs :@ p <- checkProgram' (define TAST.Unrestricted name ex' ty' ctx) (AST.Mod imports ds :@ p)
 
       pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec name ty ex :@ p3) :@ p4) : defs) :@ p)

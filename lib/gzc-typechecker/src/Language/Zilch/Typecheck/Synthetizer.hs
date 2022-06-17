@@ -67,6 +67,7 @@ synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
       Γ, x :^σ A ⊢ x ⇒^σ A
   -}
   (ex, ty, usage) <- go 0 (types ctx)
+  -- TODO: if usage is Linear, then set it to Erased in the context
   pure (ex, ty, usage :@ p)
   where
     go _ [] = throwError $ BindingNotFound x p
@@ -78,7 +79,7 @@ synthetize ctx (AST.EType :@ p) =
     ──────────────────────
       Γ ⊢ type ⇒^0 type
   -}
-  pure (TAST.EType :@ p, VType :@ p, TAST.Linear :@ p)
+  pure (TAST.EType :@ p, VType :@ p, TAST.Erased :@ p)
 synthetize ctx (AST.EPi (AST.Parameter isImplicit usage name ty :@ p2) expr :@ p) = do
   {-
       0Γ ⊢ A ⇐^0 type       0Γ, x :^0 A ⊢ B ⇐^0 type
