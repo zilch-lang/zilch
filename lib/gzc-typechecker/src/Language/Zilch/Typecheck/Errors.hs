@@ -106,7 +106,7 @@ fromElabError (UsageMismatch u1 u2) =
     []
   where
     messages = case (u1, u2) of
-      (Unrestricted :@ p2, u@(_ :@ p1)) ->
+      (u@(_ :@ p1), Unrestricted :@ p2) ->
         [ (p2, This $ "Expected unrestricted value..."),
           (p1, This $ "...but got value with usage " <> show (pretty u))
         ]

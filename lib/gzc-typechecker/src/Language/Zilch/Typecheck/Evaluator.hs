@@ -147,7 +147,7 @@ quoteSpine ctx lvl term [] _ = pure term
 quoteSpine ctx lvl term (u : sp) pos = do
   t1 <- quote ctx lvl u
   t2 <- quoteSpine ctx lvl term sp pos
-  pure $ TAST.EApplication t1 t2 :@ pos
+  pure $ TAST.EApplication t2 t1 :@ pos
 
 toNF :: Context -> Located TAST.Expression -> Either (Diagnostic String) (Located TAST.Expression)
 toNF ctx =

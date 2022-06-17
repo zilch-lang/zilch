@@ -7,7 +7,7 @@
 module Language.Zilch.Typecheck.Synthetizer where
 
 import Control.Monad.Except (throwError)
-import Data.Located (Located ((:@)), unLoc)
+import Data.Located (Located ((:@)), getPos, unLoc)
 import Debug.Trace (trace)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Checker (check)
@@ -50,17 +50,22 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
     VPi u _ a b :@ p2 -> pure (u :@ p2, a, b)
     t1@(_ :@ p2) -> do
       -- try η-expanding
-      let usage = TAST.Erased
+      let usage = TAST.Unrestricted
       a <- plugNormalisation $ eval ctx (freshMeta ctx :@ p)
       let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) :@ p
       unify ctx t1 (VPi usage "x?" a b :@ p)
       pure (usage :@ p2, a, b)
 
-  (_, e2) <- check ctx u2 e2 a
+  let u1 =
+        if unLoc u2 == TAST.Erased || unLoc usage == TAST.Erased
+          then TAST.Erased
+          else TAST.Linear
+
+  (ctx'', e2) <- check ctx' (u1 :@ getPos e2) e2 a
   t2 <- plugNormalisation do
     e2 <- eval ctx e2
     apply ctx b e2
-  pure (ctx', TAST.EApplication e1 e2 :@ p, t2, usage)
+  pure (ctx'', TAST.EApplication e1 e2 :@ p, t2, usage)
 synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
   {-
     ────────────────────────
@@ -134,7 +139,7 @@ synthetize ctx (AST.ELam (AST.Parameter isImplicit usage name ty :@ p2) ex :@ p)
   ty' <- plugNormalisation $ eval ctx ty
   (ctx', ex, b, u2) <- synthetize (bind (unLoc usage) name ty' ctx) ex
   clos <- closeVal ctx b
-  pure (ctx', TAST.ELam (TAST.Parameter isImplicit usage name ty :@ p2) ex :@ p, VPi (unLoc usage) (unLoc name) ty' clos :@ p, u2)
+  pure (unbind ctx', TAST.ELam (TAST.Parameter isImplicit usage name ty :@ p2) ex :@ p, VPi (unLoc usage) (unLoc name) ty' clos :@ p, u2)
 synthetize ctx (AST.EHole :@ p1) = do
   a <- plugNormalisation do eval ctx (freshMeta ctx :@ p1)
   let t = freshMeta ctx :@ p1

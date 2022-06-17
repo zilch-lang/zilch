@@ -155,6 +155,7 @@ unify ctx v1 v2 =
 
 unifyUsage :: forall m. MonadElab m => Located TAST.Usage -> Located TAST.Usage -> m ()
 -- unifyUsage expected actual
+unifyUsage _ (TAST.Unrestricted :@ _) = pure ()
 unifyUsage (TAST.Unrestricted :@ _) _ = pure ()
 unifyUsage (TAST.Linear :@ _) (TAST.Linear :@ _) = pure ()
 unifyUsage (TAST.Erased :@ _) (TAST.Erased :@ _) = pure ()

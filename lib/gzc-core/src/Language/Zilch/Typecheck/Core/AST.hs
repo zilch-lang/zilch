@@ -97,8 +97,8 @@ instance Num Usage where
 
   Erased * _ = Erased
   _ * Erased = Erased
-  Linear * u = u
-  u * Linear = Linear
+  Linear * _ = Linear
+  _ * Linear = Linear
   Unrestricted * Unrestricted = Unrestricted
 
   fromInteger 0 = Erased

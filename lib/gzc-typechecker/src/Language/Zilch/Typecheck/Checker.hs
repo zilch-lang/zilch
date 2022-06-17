@@ -83,7 +83,7 @@ check ctx usage expr ty = do
 
       ty' <- plugNormalisation $ eval ctx ty
       unify ctx ty' ty2
-      pure (ctx, TAST.ELam (TAST.Parameter isImplicit u1 x ty :@ p1) u :@ p3)
+      pure (unbind ctx', TAST.ELam (TAST.Parameter isImplicit u1 x ty :@ p1) u :@ p3)
     (AST.ELet (AST.Let False x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
            0Γ ⊢ A ⇐^0 type ℓ₁                 Γ ⊢ e₁ ⇐^σ A
@@ -97,7 +97,7 @@ check ctx usage expr ty = do
       ex' <- plugNormalisation $ eval ctx ex
       (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
       -- TODO: add usage in AST for `x` and check if used when linear
-      pure (ctx, TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
+      pure (unbind ctx', TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
     (AST.ELet (AST.Let True x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
            0Γ ⊢ A ⇐^0 type ℓ₁             Γ, x :^σ' A ⊢ e₁ ⇐^σ A
@@ -117,9 +117,9 @@ check ctx usage expr ty = do
 
         ex'' <- plugNormalisation $ eval ctx' ex'
         pure (ex', ex'')
-      (_, u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
+      (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
       -- TODO: check that local binding has been used if linear
-      pure (ctx, TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
+      pure (unbind ctx', TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
     (AST.EPi (AST.Parameter isImplicit u1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
       {-
           0Γ ⊢ S ⇐^0 type ℓ₁          0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
@@ -145,6 +145,6 @@ check ctx usage expr ty = do
       -- traceShow (show e <> " ⇐^" <> show u1 <> " " <> show ty) $ pure ()
       -- traceShow ("Expected :^" <> show usage <> " " <> show v) $ pure ()
 
-      unify ctx' v ty
       unifyUsage usage u1
+      unify ctx' v ty
       pure (ctx', e)

@@ -38,6 +38,9 @@ setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
       | x == y = (usage, y, ty) : go tys
       | otherwise = (u, y, ty) : go tys
 
+unbind :: Context -> Context
+unbind (Context (_ : env) (_ : tys) lvl (_ : bds)) = Context env tys (lvl - 1) bds
+
 -- | Extend the context with a bound variable (that is, a variable found next to a @lam@).
 bind :: Usage -> Located Name -> Located Value -> Context -> Context
 bind usage (x :@ p) ty ctx =
