@@ -61,10 +61,10 @@ eval ctx (TAST.ELet (TAST.Let False _ _ val :@ _) u :@ _) = do
   eval (ctx {env = env'}) u
 eval ctx (TAST.EPi (TAST.Parameter _ usage name ty1 :@ _) ty2 :@ p) = do
   ty1' <- eval ctx ty1
-  pure $ VPi (unLoc <$> usage) (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
+  pure $ VPi (unLoc usage) (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
 eval ctx (TAST.ELam (TAST.Parameter _ usage (x :@ _) ty1 :@ _) ex :@ p) = do
   ty1' <- eval ctx ty1
-  pure $ VLam (unLoc <$> usage) x ty1' (Clos (env ctx) ex) :@ p
+  pure $ VLam (unLoc usage) x ty1' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
 eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
@@ -126,7 +126,7 @@ quote ctx level val = do
       ty1 <- quote ctx level ty1
       pure $
         TAST.ELam
-          (TAST.Parameter False ((:@ p) <$> usage) (name :@ p) ty1 :@ p)
+          (TAST.Parameter False (usage :@ p) (name :@ p) ty1 :@ p)
           x'
           :@ p
     (VPi usage y val clos :@ p) -> do
@@ -135,7 +135,7 @@ quote ctx level val = do
       x' <- quote ctx (level + 1) x'
       pure $
         TAST.EPi
-          (TAST.Parameter False ((:@ p) <$> usage) (y :@ p) val' :@ p)
+          (TAST.Parameter False (usage :@ p) (y :@ p) val' :@ p)
           x'
           :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p

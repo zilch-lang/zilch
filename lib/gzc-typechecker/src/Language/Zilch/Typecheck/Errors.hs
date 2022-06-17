@@ -4,8 +4,9 @@ import Data.Located (Located ((:@)), Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Report, err)
+import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
-import Language.Zilch.Typecheck.Core.AST (Expression)
+import Language.Zilch.Typecheck.Core.AST (Expression, Usage (..))
 import Prettyprinter (group, pretty)
 
 data EvalError
@@ -56,6 +57,10 @@ data ElabError
     CannotUnify
       (Located Expression)
       (Located Expression)
+  | -- | Actual usage cannot be used in place of expected usage
+    UsageMismatch
+      (Located Usage)
+      (Located Usage)
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -90,3 +95,18 @@ fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
       (p2, This $ "...with term `" <> show (pretty $ t2 :@ p2) <> "`")
     ]
     []
+fromElabError (UsageMismatch u1 u2) =
+  err
+    "Type-checking error"
+    messages
+    []
+  where
+    messages = case (u1, u2) of
+      (Unrestricted :@ p2, u@(_ :@ p1)) ->
+        [ (p2, This $ "Expected unrestricted value..."),
+          (p1, This $ "...but got value with usage " <> show (pretty u))
+        ]
+      (u1@(_ :@ p1), u2@(_ :@ p2)) ->
+        [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
+          (p2, This $ "...but got value with usage " <> show (pretty u2))
+        ]

@@ -10,12 +10,13 @@ import Control.Monad.State (MonadState, evalStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
-import Data.Located (Located ((:@)))
+import Data.Located (Located ((:@)), Position)
 import Data.Maybe (fromMaybe)
 import Error.Diagnose (Diagnostic, addReport, def)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
+import Language.Zilch.Typecheck.Core.AST (Usage (..))
 
 type MonadDesugar m = (MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState () m)
 
@@ -66,10 +67,16 @@ desugarDefinition (CST.Rec name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  pure $ AST.Parameter True usage name ty' :@ p
+  usage' <- desugarUsage usage p1
+  pure $ AST.Parameter True usage' name ty' :@ p
 desugarParameter (CST.Explicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  pure $ AST.Parameter False usage name ty' :@ p
+  usage' <- desugarUsage usage p1
+  pure $ AST.Parameter False usage' name ty' :@ p
+
+desugarUsage :: forall m. MonadDesugar m => Maybe (Located Integer) -> Position -> m (Located Usage)
+desugarUsage Nothing p = pure (Unrestricted :@ p)
+desugarUsage (Just (u :@ p)) _ = pure (fromInteger u :@ p)
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p

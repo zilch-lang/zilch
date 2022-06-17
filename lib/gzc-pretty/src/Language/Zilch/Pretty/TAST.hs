@@ -6,6 +6,7 @@ module Language.Zilch.Pretty.TAST where
 import Data.Foldable (fold)
 import Data.List (intersperse)
 import Data.Located (Located ((:@)), unLoc)
+import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
 import Prettyprinter (Pretty (pretty), emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
@@ -50,7 +51,7 @@ instance Pretty (Located Definition) where
 instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit usage name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
-      maybe "ω" (pretty . unLoc) usage
+      pretty usage
         <> space
         <> pretty (unLoc name)
         <> space

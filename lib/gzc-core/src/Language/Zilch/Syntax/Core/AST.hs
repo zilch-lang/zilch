@@ -2,6 +2,7 @@ module Language.Zilch.Syntax.Core.AST where
 
 import Data.Located (Located)
 import Data.Text (Text)
+import Language.Zilch.Typecheck.Core.AST (Usage)
 
 -------
 
@@ -35,8 +36,8 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
-      (Maybe (Located Integer))
-      -- ^ Optional resource usage
+      (Located Usage)
+      -- ^ Resource usage
       (Located Text)
       -- ^ The name of the parameter
       (Located Expression)
