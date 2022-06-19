@@ -6,7 +6,8 @@ import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Report, err)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
-import Language.Zilch.Typecheck.Core.AST (Expression, Usage (..))
+import Language.Zilch.Typecheck.Core.AST (Expression)
+import Language.Zilch.Typecheck.Core.Usage (Usage (..))
 import Prettyprinter (group, pretty)
 
 data EvalError

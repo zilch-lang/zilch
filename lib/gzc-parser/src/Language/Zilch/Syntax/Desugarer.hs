@@ -5,18 +5,20 @@
 
 module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
-import Control.Monad.Except (MonadError, runExcept)
+import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position)
 import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
+import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
-import Language.Zilch.Typecheck.Core.AST (Usage (..))
+import Language.Zilch.Typecheck.Core.Usage (Usage (..))
 
 type MonadDesugar m = (MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState () m)
 
@@ -82,7 +84,9 @@ desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Lo
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p
 desugarExpression (CST.EId i :@ p) = pure $ AST.EIdentifier i :@ p
 desugarExpression (CST.EHole :@ p) = pure $ AST.EHole :@ p
-desugarExpression (CST.EInt i :@ p) = pure $ AST.EInteger (i :@ p) :@ p
+desugarExpression (CST.EInt i suffix :@ p) = do
+  suffix' <- maybe (pure SuffixU64) (desugarIntegerSuffix p) suffix
+  pure $ AST.EInteger (i :@ p) suffix' :@ p
 desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
 desugarExpression (CST.EImplicit expr :@ p) = do
   expr' <- desugarExpression expr
@@ -114,3 +118,14 @@ desugarExpression (CST.EPi param ret :@ p) = do
   ret' <- desugarExpression ret
   pure $ AST.EPi param' ret' :@ p
 desugarExpression _ = error "todo"
+
+desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix
+desugarIntegerSuffix _ "u8" = pure SuffixU8
+desugarIntegerSuffix _ "u16" = pure SuffixU16
+desugarIntegerSuffix _ "u32" = pure SuffixU32
+desugarIntegerSuffix _ "u64" = pure SuffixU64
+desugarIntegerSuffix _ "s8" = pure SuffixS8
+desugarIntegerSuffix _ "s16" = pure SuffixS16
+desugarIntegerSuffix _ "s32" = pure SuffixS32
+desugarIntegerSuffix _ "s64" = pure SuffixS64
+desugarIntegerSuffix p suffix = throwError $ InvalidIntegerSuffix suffix p

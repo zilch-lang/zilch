@@ -77,7 +77,7 @@ data Token
   | -- | A valid symbol formed from any non-space character
     TkSymbol Text
   | -- | Any number-like form
-    TkNumber Text
+    TkNumber Text (Maybe Text)
   | -- | Any character-like enclosed in @'@
     TkCharacter Text
   | -- | A sequence of characters enclosed in @"@

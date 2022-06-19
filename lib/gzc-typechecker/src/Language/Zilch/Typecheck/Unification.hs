@@ -13,7 +13,8 @@ import Data.Located (Located ((:@)))
 import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context, bds, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (VFlexible, VLam, VPi, VRigid, VType, VVariable))
+import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..))
+import qualified Language.Zilch.Typecheck.Core.Usage as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError, UsageMismatch))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, plugNormalisation, quote)
@@ -68,6 +69,14 @@ rename ctx m ren v = go ren v
           t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
           pure $ TAST.EPi (TAST.Parameter True (usage :@ p) (x :@ p) a' :@ p) t' :@ p
         VType :@ p -> pure $ TAST.EType :@ p
+        VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p
+        VBuiltinU32 :@ p -> pure $ TAST.EBuiltin TAST.TyU32 :@ p
+        VBuiltinU16 :@ p -> pure $ TAST.EBuiltin TAST.TyU16 :@ p
+        VBuiltinU8 :@ p -> pure $ TAST.EBuiltin TAST.TyU8 :@ p
+        VBuiltinS64 :@ p -> pure $ TAST.EBuiltin TAST.TyS64 :@ p
+        VBuiltinS32 :@ p -> pure $ TAST.EBuiltin TAST.TyS32 :@ p
+        VBuiltinS16 :@ p -> pure $ TAST.EBuiltin TAST.TyS16 :@ p
+        VBuiltinS8 :@ p -> pure $ TAST.EBuiltin TAST.TyS8 :@ p
         t :@ p -> error "TODO: rename base terms"
 
     goSpine ren t [] = pure t

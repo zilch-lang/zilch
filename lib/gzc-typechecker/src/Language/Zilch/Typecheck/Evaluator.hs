@@ -69,6 +69,14 @@ eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
 eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
 eval ctx (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
+eval ctx (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
+eval ctx (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
+eval ctx (TAST.EBuiltin TAST.TyU16 :@ p) = pure $ VBuiltinU16 :@ p
+eval ctx (TAST.EBuiltin TAST.TyU8 :@ p) = pure $ VBuiltinU8 :@ p
+eval ctx (TAST.EBuiltin TAST.TyS64 :@ p) = pure $ VBuiltinS64 :@ p
+eval ctx (TAST.EBuiltin TAST.TyS32 :@ p) = pure $ VBuiltinS32 :@ p
+eval ctx (TAST.EBuiltin TAST.TyS16 :@ p) = pure $ VBuiltinS16 :@ p
+eval ctx (TAST.EBuiltin TAST.TyS8 :@ p) = pure $ VBuiltinS8 :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadEval m => Context -> Closure -> Located Value -> m (Located Value)
@@ -140,6 +148,14 @@ quote ctx level val = do
           :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p
     (VUnknown :@ p) -> pure $ TAST.EUnknown :@ p
+    VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p
+    VBuiltinU32 :@ p -> pure $ TAST.EBuiltin TAST.TyU32 :@ p
+    VBuiltinU16 :@ p -> pure $ TAST.EBuiltin TAST.TyU16 :@ p
+    VBuiltinU8 :@ p -> pure $ TAST.EBuiltin TAST.TyU8 :@ p
+    VBuiltinS64 :@ p -> pure $ TAST.EBuiltin TAST.TyS64 :@ p
+    VBuiltinS32 :@ p -> pure $ TAST.EBuiltin TAST.TyS32 :@ p
+    VBuiltinS16 :@ p -> pure $ TAST.EBuiltin TAST.TyS16 :@ p
+    VBuiltinS8 :@ p -> pure $ TAST.EBuiltin TAST.TyS8 :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadEval m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

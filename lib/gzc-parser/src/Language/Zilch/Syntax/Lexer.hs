@@ -20,7 +20,7 @@ import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
-type MonadLexer m = (MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m)
+type MonadLexer m = (MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m, MonadFail m)
 
 space :: MonadLexer m => m ()
 space = MPL.space MPC.space1 MP.empty MP.empty
@@ -127,7 +127,11 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken s = TkSymbol (Text.pack s)
 
 number :: forall m. MonadLexer m => m (Located Token)
-number = located $ TkNumber <$> (hexadecimal <|> octal <|> binary <|> floating <|> decimal)
+number =
+  located $
+    TkNumber
+      <$> (hexadecimal <|> octal <|> binary <|> floating <|> decimal)
+      <*> MP.optional (MP.try suffix)
   where
     hexadecimal = (<>) <$> MPC.string' "0x" <*> (Text.pack <$> MP.some hexDigit)
     octal = (<>) <$> MPC.string' "0o" <*> (Text.pack <$> MP.some octalDigit)
@@ -139,3 +143,8 @@ number = located $ TkNumber <$> (hexadecimal <|> octal <|> binary <|> floating <
     octalDigit = MP.oneOf ("01234567" :: String)
     binDigit = MP.oneOf ("01" :: String)
     digit = MP.oneOf ("0123456789" :: String)
+
+    suffix =
+      anySymbol >>= \case
+        TkSymbol suf -> pure suf
+        _ -> fail "keyword cannot be integer suffix"

@@ -5,8 +5,9 @@ module Language.Zilch.Typecheck.Context where
 import Data.Functor ((<&>))
 import Data.Located (Located ((:@)))
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined), Usage)
+import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined))
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable))
+import Language.Zilch.Typecheck.Core.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Environment as Env
 
 data Context = Context

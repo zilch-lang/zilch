@@ -15,6 +15,7 @@ import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl, MetaEntry (Solved, Unsolved), Value (..))
+import qualified Language.Zilch.Typecheck.Core.Usage as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (TypesAreNotEqual, UnusedLinearVariable))
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, plugNormalisation, quote)

@@ -44,10 +44,18 @@ instance HasHints ParsingError String where
 -------------------------------------------------
 
 data DesugarError
+  = InvalidIntegerSuffix
+      Text
+      Position
 
 data DesugarWarning
 
 fromDesugarerError :: DesugarError -> Report String
+fromDesugarerError (InvalidIntegerSuffix suffix pos) =
+  err
+    "Parse error"
+    [(pos, This $ "Integral constant contains the suffix '" <> Text.unpack suffix <> "', which is invalid")]
+    ["Numeric prefixes are only available for builtin integer and floating point types"]
 fromDesugarerError _ = err "sorry" [] []
 
 fromDesugarerWarning :: DesugarWarning -> Report String

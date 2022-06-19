@@ -6,7 +6,7 @@ module Language.Zilch.Pretty.AST where
 
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
-import Language.Zilch.Typecheck.Core.AST (Usage (..))
+import Language.Zilch.Typecheck.Core.Usage (Usage (..))
 import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
@@ -55,7 +55,9 @@ instance Pretty (Located Usage) where
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
-  pretty (EInteger val :@ _) = pretty $ unLoc val
+  pretty (EInteger val suffix :@ _) =
+    pretty (unLoc val)
+      <> pretty suffix
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
   pretty (EIdentifier id :@ _) = pretty $ unLoc id
   pretty (EDo expr :@ _) =
@@ -86,3 +88,13 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
+
+instance Pretty IntegerSuffix where
+  pretty SuffixS8 = "s8"
+  pretty SuffixS16 = "s16"
+  pretty SuffixS32 = "s32"
+  pretty SuffixS64 = "s64"
+  pretty SuffixU8 = "u8"
+  pretty SuffixU16 = "u16"
+  pretty SuffixU32 = "u32"
+  pretty SuffixU64 = "u64"

@@ -35,14 +35,14 @@ parseIdentifier = do
 
   pure $ ident :@ p
 
-parseNumber :: forall m. MonadParser m => m (Located Text)
+parseNumber :: forall m. MonadParser m => m (Located (Text, Maybe Text))
 parseNumber = do
-  let isNumber (TkNumber _) = True
+  let isNumber (TkNumber _ _) = True
       isNumber _ = False
 
-  TkNumber nb :@ p <- MP.satisfy (isNumber . unLoc)
+  TkNumber nb suf :@ p <- MP.satisfy (isNumber . unLoc)
 
-  pure $ nb :@ p
+  pure $ (nb, suf) :@ p
 
 lexeme :: forall m a. MonadParser m => m a -> m a
 lexeme = MPL.lexeme whitespace
@@ -143,7 +143,15 @@ parseParameter s =
         <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
 
 parseResourceUsage :: forall m. MonadParser m => m (Located Integer)
-parseResourceUsage = fmap (read . Text.unpack) <$> parseNumber
+parseResourceUsage = do
+  TkNumber usage _ :@ p <- MP.satisfy isUsageNumber
+  case usage of
+    "0" -> pure (0 :@ p)
+    "1" -> pure (1 :@ p)
+  where
+    isUsageNumber (TkNumber "0" Nothing :@ _) = True
+    isUsageNumber (TkNumber "1" Nothing :@ _) = True
+    isUsageNumber _ = False
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
@@ -157,7 +165,9 @@ parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
     ( [ ELet <$> lineFold (\s' -> lexeme (parseLet s')) <*> parseExpression s,
-        EInt . unLoc <$> parseNumber,
+        do
+          (nb, suf) :@ p <- parseNumber
+          pure $ EInt nb suf,
         ETypedHole <$ token TkQuestionMark,
         EHole <$ token TkUnderscore,
         parseLambda s,

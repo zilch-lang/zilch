@@ -61,7 +61,11 @@ data Parameter
 data Expression
   = EId (Located Text)
   | EType
-  | EInt Text
+  | EInt
+      Text
+      -- ^ Integer content
+      (Maybe Text)
+      -- ^ Optional integer suffix (e.g. @u64@)
   | EChar Text
   | -- | A specific case of 'EStringConcat' with only one string
     EString Text

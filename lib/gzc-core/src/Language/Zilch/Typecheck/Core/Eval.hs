@@ -8,7 +8,8 @@ module Language.Zilch.Typecheck.Core.Eval (Value (.., VVariable, VMeta), Name, E
 
 import Data.Located (Located ((:@)))
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Core.AST (Expression, Usage)
+import Language.Zilch.Typecheck.Core.AST (Expression)
+import Language.Zilch.Typecheck.Core.Usage (Usage)
 
 type Name = Text
 
@@ -60,6 +61,15 @@ data Value
   | -- | An unevaluated piece of code
     VThunk
       (Located Expression)
+  | -- builtin types
+    VBuiltinU64
+  | VBuiltinU32
+  | VBuiltinU16
+  | VBuiltinU8
+  | VBuiltinS64
+  | VBuiltinS32
+  | VBuiltinS16
+  | VBuiltinS8
   | VUnknown
   deriving (Show)
 

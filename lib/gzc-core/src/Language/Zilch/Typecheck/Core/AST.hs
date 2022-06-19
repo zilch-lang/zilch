@@ -4,6 +4,7 @@ module Language.Zilch.Typecheck.Core.AST where
 
 import Data.Located (Located)
 import Data.Text (Text)
+import Language.Zilch.Typecheck.Core.Usage (Usage)
 
 data Module
   = Mod [Located TopLevel]
@@ -77,30 +78,21 @@ data Expression
   | EInsertedMeta
       Int
       [Binding]
+  | -- builtin types
+    EBuiltin BuiltinType
   | EUnknown
   deriving (Show)
 
 data Binding = Bound Text | Defined Text
   deriving (Show, Eq)
 
-data Usage
-  = Erased
-  | Linear
-  | Unrestricted
-  deriving (Show, Eq)
-
-instance Num Usage where
-  Erased + u = u
-  _ + Unrestricted = Unrestricted
-  Linear + _ = Linear
-  Unrestricted + u = u
-
-  Erased * _ = Erased
-  _ * Erased = Erased
-  Linear * _ = Linear
-  _ * Linear = Linear
-  Unrestricted * Unrestricted = Unrestricted
-
-  fromInteger 0 = Erased
-  fromInteger 1 = Linear
-  fromInteger i = error $ "Unknown usage kind " <> show i
+data BuiltinType
+  = TyU64
+  | TyU32
+  | TyU16
+  | TyU8
+  | TyS64
+  | TyS32
+  | TyS16
+  | TyS8
+  deriving (Show)

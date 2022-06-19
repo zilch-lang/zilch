@@ -2,7 +2,7 @@ module Language.Zilch.Syntax.Core.AST where
 
 import Data.Located (Located)
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Core.AST (Usage)
+import Language.Zilch.Typecheck.Core.Usage (Usage)
 
 -------
 
@@ -47,6 +47,7 @@ data Parameter
 data Expression
   = EInteger
       (Located Text)
+      IntegerSuffix
   | ECharacter
       (Located Text)
   | EIdentifier
@@ -78,3 +79,14 @@ data Expression
       (Located Parameter)
       (Located Expression)
   deriving (Show)
+
+data IntegerSuffix
+  = SuffixU8
+  | SuffixU16
+  | SuffixU32
+  | SuffixU64
+  | SuffixS8
+  | SuffixS16
+  | SuffixS32
+  | SuffixS64
+  deriving (Show, Eq)

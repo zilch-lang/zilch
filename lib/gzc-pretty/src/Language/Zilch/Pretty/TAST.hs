@@ -95,5 +95,17 @@ instance Pretty (Located Expression) where
       prettyBinding (Defined _) = ""
   pretty (EMeta m :@ _) =
     "?" <> pretty m
+  pretty (EBuiltin ty :@ _) =
+    pretty ty
   pretty (EUnknown :@ _) =
     "???"
+
+instance Pretty BuiltinType where
+  pretty TyU64 = "u64"
+  pretty TyU32 = "u32"
+  pretty TyU16 = "u16"
+  pretty TyU8 = "u8"
+  pretty TyS64 = "s64"
+  pretty TyS32 = "s32"
+  pretty TyS16 = "s16"
+  pretty TyS8 = "s8"

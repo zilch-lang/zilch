@@ -9,11 +9,13 @@ module Language.Zilch.Typecheck.Synthetizer where
 import Control.Monad.Except (throwError)
 import Data.Located (Located ((:@)), getPos, unLoc)
 import Debug.Trace (trace)
+import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Checker (check)
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Value (..))
+import qualified Language.Zilch.Typecheck.Core.Usage as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, plugNormalisation, quote)
@@ -22,13 +24,22 @@ import Prelude hiding (lookup)
 
 -- | @Ρ, Γ ⊢ e ⇒ τ@
 synthetize :: forall m. MonadElab m => Context -> Located AST.Expression -> m (Context, Located TAST.Expression, Located Value, Located TAST.Usage)
-synthetize ctx (AST.EInteger i :@ p) =
+synthetize ctx (AST.EInteger i suffix :@ p) =
   {-
       n is a literal number
     ─────────────────────────
           Γ ⊢ n ⇒^ω nat
   -}
-  pure (ctx, TAST.EInteger i :@ p, VVariable ("nat" :@ p) 1 :@ p, TAST.Unrestricted :@ p)
+  pure (ctx, TAST.EInteger i :@ p, typeForSuffix suffix :@ p, TAST.Unrestricted :@ p)
+  where
+    typeForSuffix SuffixU64 = VBuiltinU64
+    typeForSuffix SuffixU32 = VBuiltinU32
+    typeForSuffix SuffixU16 = VBuiltinU16
+    typeForSuffix SuffixU8 = VBuiltinU8
+    typeForSuffix SuffixS64 = VBuiltinS64
+    typeForSuffix SuffixS32 = VBuiltinS32
+    typeForSuffix SuffixS16 = VBuiltinS16
+    typeForSuffix SuffixS8 = VBuiltinS8
 synthetize ctx (AST.ECharacter c :@ p) =
   {-
       c is a literal character

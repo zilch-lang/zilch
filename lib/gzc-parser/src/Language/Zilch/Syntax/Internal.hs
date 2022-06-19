@@ -8,9 +8,11 @@ module Language.Zilch.Syntax.Internal (located, showToken) where
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Located (Located ((:@)), Position (Position), unLoc)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Language.Zilch.Syntax.Core (Token)
 import qualified Language.Zilch.Syntax.Core as Core
+import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Text.Megaparsec as MP
 
 -- | Wraps the result of a parser with its starting and ending positions.
@@ -110,7 +112,7 @@ showToken Core.TkUniExists = "'∃'"
 showToken Core.TkComma = "','"
 showToken Core.TkUnderscore = "'_'"
 showToken (Core.TkSymbol txt) = "'" <> Text.unpack txt <> "'"
-showToken (Core.TkNumber txt) = "'" <> Text.unpack txt <> "'"
+showToken (Core.TkNumber txt suffix) = "'" <> Text.unpack txt <> Text.unpack (fromMaybe "" suffix) <> "'"
 showToken (Core.TkCharacter txt) = "''" <> Text.unpack txt <> "''"
 showToken (Core.TkString txt) = "'\"" <> Text.unpack txt <> "\"'"
 showToken Core.TkEOF = "<eof>"
