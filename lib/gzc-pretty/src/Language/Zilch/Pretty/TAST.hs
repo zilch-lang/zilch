@@ -25,14 +25,14 @@ instance Pretty (Located Definition) where
     (if isRec then "rec" else "let")
       <> space
       <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> pretty typ
       <> line
       <> indent
         2
-        ( ":"
-            <> space
-            <> pretty typ
-            <> line
-            <> "≔"
+        ( "≔"
             <> line
             <> line
             <> pretty val
