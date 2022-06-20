@@ -7,6 +7,7 @@ import Error.Diagnose (Marker (This, Where), Report, err)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Typecheck.Core.AST (Expression)
+import Language.Zilch.Typecheck.Core.Eval (Implicitness, explicit, implicit)
 import Language.Zilch.Typecheck.Core.Usage (Usage (..))
 import Prettyprinter (group, pretty)
 
@@ -66,6 +67,11 @@ data ElabError
     UnusedLinearVariable
       (Located Text)
       Position
+  | -- | Implicit function applied to explicit argument (or the other way around)
+    ImplicitMismatch
+      Implicitness
+      Implicitness
+      Position
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -122,3 +128,13 @@ fromElabError (UnusedLinearVariable (x :@ p) p2) =
       (p2, Where $ "It should have been used in this expression")
     ]
     ["If the variable is intended not to be used, it must have an unrestricted usage."]
+fromElabError (ImplicitMismatch expected got pos) =
+  err
+    "Type-checking error"
+    [(pos, This $ "Function application was expected on an " <> showImp expected <> " argument, but an " <> showImp got <> " argument was found")]
+    []
+  where
+    showImp b
+      | b == implicit = "implicit"
+      | b == explicit = "explicit"
+      | otherwise = undefined

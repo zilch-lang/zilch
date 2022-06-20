@@ -10,11 +10,14 @@ import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name,
 import Language.Zilch.Typecheck.Core.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Environment as Env
 
+data Origin = Source | Inserted
+  deriving (Show, Eq)
+
 data Context = Context
   { -- | The evaluation environment
     env :: Environment,
     -- | Known types for name lookup
-    types :: [(Usage, Text, Located Value)],
+    types :: [(Usage, Text, Origin, Located Value)],
     -- | Current DeBruijn level for unification
     lvl :: DeBruijnLvl,
     -- | Bindings
@@ -28,16 +31,16 @@ indexContext :: Context -> Located Name -> Usage
 indexContext ctx (x :@ _) = go (types ctx)
   where
     go [] = error "impossible"
-    go ((usage, y, _) : _) | y == x = usage
+    go ((usage, y, _, _) : _) | y == x = usage
     go (_ : ts) = go ts
 
 setContext :: Context -> Name -> Usage -> Context
 setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
   where
     go [] = []
-    go ((u, y, ty) : tys)
-      | x == y = (usage, y, ty) : go tys
-      | otherwise = (u, y, ty) : go tys
+    go ((u, y, origin, ty) : tys)
+      | x == y = (usage, y, origin, ty) : go tys
+      | otherwise = (u, y, origin, ty) : go tys
 
 unbind :: Context -> Context
 unbind (Context (_ : env) (_ : tys) lvl (_ : bds)) = Context env tys (lvl - 1) bds
@@ -48,7 +51,17 @@ bind usage (x :@ p) ty ctx =
   let level = lvl ctx
    in ctx
         { env = Env.extend (env ctx) (VVariable (x :@ p) level :@ p),
-          types = (usage, x, ty) : types ctx,
+          types = (usage, x, Source, ty) : types ctx,
+          lvl = level + 1,
+          bds = Bound x : bds ctx
+        }
+
+insertBinder :: Usage -> Located Name -> Located Value -> Context -> Context
+insertBinder usage (x :@ p) typ ctx =
+  let level = lvl ctx
+   in ctx
+        { env = Env.extend (env ctx) (VVariable (x :@ p) level :@ p),
+          types = (usage, x, Inserted, typ) : types ctx,
           lvl = level + 1,
           bds = Bound x : bds ctx
         }
@@ -58,7 +71,7 @@ define :: Usage -> Located Name -> Located Value -> Located Value -> Context -> 
 define usage (f :@ _) val ty ctx =
   ctx
     { env = Env.extend (env ctx) val,
-      types = (usage, f, ty) : types ctx,
+      types = (usage, f, Source, ty) : types ctx,
       lvl = lvl ctx + 1,
       bds = Defined f : bds ctx
     }
@@ -66,7 +79,7 @@ define usage (f :@ _) val ty ctx =
 scale :: Context -> Usage -> Context
 scale (Context env types lvl bds) pi = Context env types' lvl bds
   where
-    types' = types <&> \(usage, name, ty) -> (pi * usage, name, ty)
+    types' = types <&> \(usage, name, origin, ty) -> (pi * usage, name, origin, ty)
 
 union :: Context -> Context -> Context
 union (Context env1 tys1 lvl1 bds1) (Context env2 tys2 lvl2 bds2)
@@ -74,11 +87,11 @@ union (Context env1 tys1 lvl1 bds1) (Context env2 tys2 lvl2 bds2)
     let tys = go tys1 tys2
      in Context env1 tys lvl1 bds1
   where
-    go :: [(Usage, Text, Located Value)] -> [(Usage, Text, Located Value)] -> [(Usage, Text, Located Value)]
+    go :: [(Usage, Text, Origin, Located Value)] -> [(Usage, Text, Origin, Located Value)] -> [(Usage, Text, Origin, Located Value)]
     go [] [] = []
-    go ((u1, name1, ty1) : env1) ((u2, name2, ty2) : env2)
+    go ((u1, name1, origin1, ty1) : env1) ((u2, name2, origin2, ty2) : env2)
       | name1 == name2 =
         let tys = go env1 env2
-         in (u1 + u2, name1, ty1) : tys
+         in (u1 + u2, name1, origin1, ty1) : tys
     go _ _ = error "inconsistent contexts"
 union _ _ = error "inconsistent contexts"

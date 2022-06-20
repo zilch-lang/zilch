@@ -4,7 +4,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Zilch.Typecheck.Core.Eval (Value (.., VVariable, VMeta), Name, Environment, Closure (..), DeBruijnLvl (..), Spine, MetaEntry (..)) where
+module Language.Zilch.Typecheck.Core.Eval (Value (.., VVariable, VMeta), Name, Environment, Closure (..), DeBruijnLvl (..), Spine, MetaEntry (..), Implicitness, implicit, explicit) where
 
 import Data.Located (Located ((:@)))
 import Data.Text (Text)
@@ -23,7 +23,13 @@ newtype DeBruijnLvl = Lvl Int
 instance Show Closure where
   show _ = "<<clos>>"
 
-type Spine = [Located Value]
+type Implicitness = Bool
+
+explicit, implicit :: Implicitness
+explicit = True
+implicit = False
+
+type Spine = [(Located Value, Implicitness)]
 
 data Value
   = -- | A bound variable
@@ -42,12 +48,14 @@ data Value
     VLam
       Usage
       Name
+      Implicitness
       (Located Value)
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
       Usage
       Name
+      Implicitness
       (Located Value)
       Closure
   | -- | Universes (of the given level)

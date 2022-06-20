@@ -65,6 +65,8 @@ data Expression
       (Located Expression)
   | EApplication
       (Located Expression)
+      Bool
+      -- ^ Is it implicit
       (Located Expression)
   | EIdentifier
       (Located Text)

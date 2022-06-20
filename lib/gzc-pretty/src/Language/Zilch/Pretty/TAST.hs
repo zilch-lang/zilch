@@ -8,7 +8,7 @@ import Data.List (intersperse)
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
-import Prettyprinter (Pretty (pretty), emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -76,10 +76,9 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun arg :@ _) =
+  pretty (EApplication fun isImplicit arg :@ _) =
     pretty fun
-      <> space
-      <> parens (pretty arg)
+      <> (if isImplicit then braces else parens) (pretty arg)
   pretty (EPi param val :@ _) =
     pretty param
       <> space
