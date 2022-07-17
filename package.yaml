@@ -19,7 +19,7 @@ description:         Please see the README on GitHub at <https://github.com/zilc
 
 dependencies:
 - base >= 4.7 && < 5
-- diagnose ==1.6.*
+- diagnose >= 2
 - gzc-core
 - gzc-parser
 - gzc-typechecker

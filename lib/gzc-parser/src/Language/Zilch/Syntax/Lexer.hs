@@ -36,7 +36,7 @@ symbol = MPL.symbol space
 lexFile :: FilePath -> Text -> Either (Diagnostic String) ([Located Token], Diagnostic String)
 lexFile fileName content =
   bimap
-    (errorDiagnosticFromBundle "Lexical error on input" Nothing)
+    (errorDiagnosticFromBundle Nothing "Lexical error on input" Nothing)
     (second toDiagnostic)
     $ MP.runParser (runWriterT lexProgram) fileName content
   where

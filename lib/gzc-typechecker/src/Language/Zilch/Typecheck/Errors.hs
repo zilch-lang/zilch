@@ -54,12 +54,14 @@ data ElabError
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
   err
+    Nothing
     "Type-checking error"
     [(pos, This $ "Binding named `" <> Text.unpack name <> "` not found in current environment")]
     []
 fromElabError (PiTypeExpected (ty :@ p1) pos) =
   let ty' = show (group $ pretty $ ty :@ p1)
    in err
+        Nothing
         "Type-checking error"
         [ (pos, This $ "Types do not match: expected a function type, but got type `" <> ty' <> "`"),
           (p1, Where $ "Type `" <> ty' <> "` infered from here")
@@ -69,6 +71,7 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
   let ty1' = show (group $ pretty $ ty1 :@ p1)
       ty2' = show (group $ pretty $ ty2 :@ p2)
    in err
+        Nothing
         "Type-checking error"
         [ (pos, This $ "While checking this expression,\ntypes do not match: expected type `" <> ty1' <> "` but got type `" <> ty2' <> "`"),
           (p1, Where $ "Type `" <> ty1' <> "` infered from here"),
@@ -78,6 +81,7 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
 fromElabError UnificationError = undefined
 fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
   err
+    Nothing
     "Type-checking error"
     [ (p1, This $ "Cannot unify term `" <> show (pretty $ t1 :@ p1) <> "`..."),
       (p2, This $ "...with term `" <> show (pretty $ t2 :@ p2) <> "`")
@@ -85,6 +89,7 @@ fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
     []
 fromElabError (UsageMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
   err
+    Nothing
     "Type-checking error"
     [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
       (p2, This $ "...but got value with usage " <> show (pretty u2))
@@ -92,6 +97,7 @@ fromElabError (UsageMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
     []
 fromElabError (UnusedLinearVariable (x :@ p) p2) =
   err
+    Nothing
     "Type-checking error"
     [ (p, This $ "Variable named `" <> Text.unpack x <> "` was marked linear but has not been used"),
       (p2, Where $ "It should have been used in this expression")
@@ -99,6 +105,7 @@ fromElabError (UnusedLinearVariable (x :@ p) p2) =
     ["If the variable is intended not to be used, it must have an unrestricted usage."]
 fromElabError (ImplicitMismatch expected got pos) =
   err
+    Nothing
     "Type-checking error"
     [(pos, This $ "Function application was expected on an " <> showImp expected <> " argument, but an " <> showImp got <> " argument was found")]
     []
@@ -109,6 +116,7 @@ fromElabError (ImplicitMismatch expected got pos) =
       | otherwise = undefined
 fromElabError (NonLinearUseOfVariable x pos) =
   err
+    Nothing
     "Type-checking error"
     [(pos, This $ "Variable " <> Text.unpack x <> " has been used non linearly")]
     []

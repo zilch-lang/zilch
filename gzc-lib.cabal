@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.6.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 
@@ -37,7 +37,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
-    , diagnose ==1.6.*
+    , diagnose >=2
     , gzc-core
     , gzc-parser
     , gzc-typechecker
@@ -58,7 +58,7 @@ executable gzc
   ghc-options: -Wall -Wextra -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , diagnose ==1.6.*
+    , diagnose >=2
     , gzc-core
     , gzc-lib
     , gzc-parser
@@ -83,7 +83,7 @@ test-suite gzc-tests
   ghc-options: -Wall -Wextra -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , diagnose ==1.6.*
+    , diagnose >=2
     , gzc-core
     , gzc-lib
     , gzc-parser

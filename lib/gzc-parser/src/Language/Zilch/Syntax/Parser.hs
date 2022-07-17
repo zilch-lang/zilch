@@ -86,7 +86,7 @@ indentGuard = MPL.indentGuard whitespace
 parseTokens :: FilePath -> [Located Token] -> Either (Diagnostic String) (Located Module, Diagnostic String)
 parseTokens filename content =
   bimap
-    (errorDiagnosticFromBundle "Parse error on input" Nothing)
+    (errorDiagnosticFromBundle Nothing "Parse error on input" Nothing)
     (second toDiagnostic)
     $ MP.runParser (runWriterT parseModule) filename content
   where
@@ -158,7 +158,7 @@ parseResourceUsage = do
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located do
   MP.choice
-    ( [ EApplication <$> (parseAtom s `MP.sepBy1` s)
+    ( [ EApplication <$> (parseAtom s `MP.sepBy1` MP.try s)
       ] ::
         [m Expression]
     )

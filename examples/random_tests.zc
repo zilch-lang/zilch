@@ -1,0 +1,29 @@
+/--
+  Dependent function composition.
+-/
+let _._
+  {A}{B : (a : A) → type}{C : {a} → (b : B a) → type}
+  (f : {a} → (b : B a) → C b)(g : (a : A) → B a)(x : A)
+  : C (g x)
+  :=
+
+  f (g x)
+
+
+/--
+  Leibniz equality.
+-/
+let 0 _=_ {0 A}(0 x : A)(0 y : A) : type 
+  := (0 P : (0 a : A) → type) → (1 px : P x) → P y
+
+/--
+  Eliminator for the Leibniz equality.
+-/
+let refl {0 A}{0 x : A} : _=_ x x 
+  := lam(0 P)(1 px) → px
+
+/--
+  Symmetry of equality: when x = y holds then y = x also holds.
+-/
+let 0 sym {0 A}{0 x : A}{0 y : A}(0 p : _=_(x)(y)) : _=_(y)(x)
+  := p(lam(0 y) → _=_ y x)(refl)

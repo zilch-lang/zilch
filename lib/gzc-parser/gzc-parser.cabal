@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.6.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 
@@ -27,7 +27,7 @@ library
   ghc-options: -Wall -Wextra -Wno-name-shadowing -Wall -Wextra
   build-depends:
       base >=4.7 && <5
-    , diagnose ==1.6.*
+    , diagnose >=2
     , gzc-core
     , megaparsec >=9.0 && <10
     , mtl ==2.2.2
