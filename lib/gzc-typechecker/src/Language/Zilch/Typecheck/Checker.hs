@@ -261,11 +261,14 @@ synthetize ctx (AST.ECharacter c :@ p) =
   pure (ctx, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.Unrestricted :@ p)
 synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
   {-
-      Γ ⊢ e₁ ⇒^σ (x :^π A) → B        Γ ⊢ e₂ ⇐^σ' A
-               σ' = 0 ⇔ (π = 0 ∨ σ = 0)
-    ─────────────────────────────────────────────────
-                Γ + πΓ ⊢ (e₁ e₂) ⇒^σ B
-  -}
+     Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
+    ──────────────────────────────────────────────────────────── [⇐ λ-E₀]
+                        Γ ⊢ f x ⇐ᵖ B[y\x]
+
+     Γ₁ ⊢ f ⇒ⁱ (y :ᵖ A) → B          Γ₂ ⊢ x ⇐¹ A
+    ───────────────────────────────────────────── [⇐ λ-E₁]
+              Γ₁ + ipΓ₂ ⊢ f x ⇒ⁱ B[y\x]
+    -}
   (icit, e1, ctx', t1, usage) <- case e2 of
     AST.EImplicit _ :@ _ -> do
       (ctx', e1, t1, usage) <- synthetize ctx e1
@@ -274,9 +277,7 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
       (ctx', e1, t1, usage) <- insert' =<< synthetize ctx e1
       pure (explicit, e1, ctx', t1, usage)
 
-  -- (ctx', e1, t1, usage) <- synthetize ctx e1
-
-  t1 <- force ctx t1
+  t1 <- force ctx' t1
   (u2, a, b) <- case t1 of
     VPi u _ i a b :@ p2
       | i == icit -> pure (u :@ p2, a, b)
@@ -284,21 +285,26 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
     t1@(_ :@ p2) -> do
       -- try η-expanding
       let usage = TAST.Unrestricted
-      a <- eval ctx (freshMeta ctx :@ p)
-      let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) :@ p
-      unify ctx t1 (VPi usage "x?" explicit a b :@ p)
+      a <- eval ctx' (freshMeta ctx' :@ p)
+      let b = Clos (env ctx') $ freshMeta (bind usage ("x?" :@ p) a ctx') :@ p
+      unify ctx' t1 (VPi usage "x?" explicit a b :@ p)
       pure (usage :@ p2, a, b)
 
-  let u1 =
-        if unLoc u2 == TAST.Erased || unLoc usage == TAST.Erased
-          then TAST.Erased
-          else TAST.Linear
+  case unLoc usage * unLoc u2 of
+    TAST.O -> do
+      (ctx', e2) <- check ctx' (TAST.O :@ getPos u2) e2 a
 
-  (ctx'', e2) <- check ctx' (u1 :@ getPos e2) e2 a
-  t2 <- do
-    e2 <- eval ctx e2
-    apply ctx b e2
-  pure (ctx'', TAST.EApplication e1 (not icit) e2 :@ p, t2, usage)
+      e2' <- eval ctx' e2
+      b <- apply ctx' b e2'
+      pure (ctx', TAST.EApplication e1 (not icit) e2 :@ p, b, usage)
+    xUsage -> do
+      (ctx2, e2) <- check ctx (TAST.I :@ getPos e2) e2 a
+      ctx <- combineContexts ctx ctx' (scale ctx2 xUsage) p
+
+      e2' <- eval ctx e2
+      b <- apply ctx b e2'
+
+      pure (ctx', TAST.EApplication e1 (not icit) e2 :@ p, b, usage)
 synthetize ctx (AST.EImplicit e2 :@ _) = synthetize ctx e2
 synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
   {-
