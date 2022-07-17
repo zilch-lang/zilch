@@ -166,7 +166,7 @@ parseExpression s = located do
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
-    ( [ ELet <$> lineFold (\s' -> lexeme (parseLet s')) <*> parseExpression s,
+    ( [ ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
         do
           (nb, suf) :@ p <- parseNumber
           pure $ EInt nb suf,

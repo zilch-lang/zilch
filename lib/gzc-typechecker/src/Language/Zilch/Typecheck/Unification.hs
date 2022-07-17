@@ -17,7 +17,7 @@ import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved,
 import qualified Language.Zilch.Typecheck.Core.Usage as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError, UsageMismatch))
-import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, plugNormalisation, quote)
+import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
@@ -43,7 +43,7 @@ invert ctx gamma sp = do
     go [] = pure (0, mempty)
     go ((t, _) : sp) = do
       (dom, ren) <- go sp
-      t' <- plugNormalisation $ force ctx t
+      t' <- force ctx t
       case t' of
         VVariable _ (Lvl x) :@ _ | IntMap.notMember x ren -> pure (dom + 1, IntMap.insert x dom ren)
         _ -> throwError UnificationError
@@ -53,7 +53,7 @@ rename ctx m ren v = go ren v
   where
     go :: PartialRenaming -> Located Value -> m (Located TAST.Expression)
     go ren@(Renaming dom cod env) t =
-      plugNormalisation (force ctx t) >>= \case
+      force ctx t >>= \case
         VFlexible m' sp :@ p
           | m == m' -> throwError UnificationError
           | otherwise -> goSpine ren (TAST.EMeta m' :@ p) sp
@@ -62,11 +62,11 @@ rename ctx m ren v = go ren v
           Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') :@ p) sp
         VLam usage x isExplicit a t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
+          t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
           pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
         VPi usage x isExplicit a t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< plugNormalisation (apply ctx t (VVariable ("?" :@ p) cod :@ p))
+          t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
           pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
         VType :@ p -> pure $ TAST.EType :@ p
         VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p
@@ -90,7 +90,7 @@ solve gamma m sp val = do
   let ctx = emptyContext
   ren@(Renaming dom _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
-  solution :@ _ <- plugNormalisation do eval ctx $ lams (reverse $ snd <$> sp) val' p
+  solution :@ _ <- eval ctx $ lams (reverse $ snd <$> sp) val' p
   let !_ = unsafeDupablePerformIO $ modifyIORef' mcxt $ IntMap.insert m (Solved solution)
   pure ()
   where
@@ -112,33 +112,33 @@ unifySpine _ _ _ _ = throwError UnificationError
 
 unify' :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located Value -> Located Value -> m ()
 unify' ctx lvl t u = do
-  t <- plugNormalisation $ force ctx t
-  u <- plugNormalisation $ force ctx u
+  t <- force ctx t
+  u <- force ctx u
   case (t, u) of
     (VLam u1 _ _ a1 t1 :@ p1, VLam u2 _ _ a2 t2 :@ p2) -> do
-      unifyUsage (u1 :@ p1) (u2 :@ p2)
+      -- unifyUsage (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
-      (v1, v2) <- plugNormalisation do
+      (v1, v2) <-
         (,)
           <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
       unify' ctx (lvl + 1) v1 v2
     (t1 :@ p1, VLam _ _ i _ t2 :@ p2) -> do
-      (v1, v2) <- plugNormalisation do
+      (v1, v2) <-
         (,)
           <$> applyVal ctx (t1 :@ p1) (VVariable ("x?" :@ p1) lvl :@ p1) i
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
       unify' ctx (lvl + 1) v1 v2
     (VLam _ _ i _ t1 :@ p1, t2 :@ p2) -> do
-      (v2, v1) <- plugNormalisation do
+      (v2, v1) <-
         (,)
           <$> applyVal ctx (t2 :@ p2) (VVariable ("x?" :@ p2) lvl :@ p2) i
           <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
       unify' ctx (lvl + 1) v1 v2
     (VPi u1 _ i1 a1 t1 :@ p1, VPi u2 _ i2 a2 t2 :@ p2) | i1 == i2 -> do
-      unifyUsage (u1 :@ p1) (u2 :@ p2)
+      -- unifyUsage (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
-      (v1, v2) <- plugNormalisation do
+      (v1, v2) <-
         (,)
           <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
@@ -156,16 +156,8 @@ unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m
 unify ctx v1 v2 =
   unify' ctx (lvl ctx) v1 v2
     `catchError` \UnificationError -> do
-      (v1, v2) <- plugNormalisation do
+      (v1, v2) <-
         (,)
           <$> quote ctx (lvl ctx) v1
           <*> quote ctx (lvl ctx) v2
       throwError $ CannotUnify v1 v2
-
-unifyUsage :: forall m. MonadElab m => Located TAST.Usage -> Located TAST.Usage -> m ()
--- unifyUsage expected actual
-unifyUsage _ (TAST.Unrestricted :@ _) = pure ()
-unifyUsage (TAST.Unrestricted :@ _) _ = pure ()
-unifyUsage (TAST.Linear :@ _) (TAST.Linear :@ _) = pure ()
-unifyUsage (TAST.Erased :@ _) (TAST.Erased :@ _) = pure ()
-unifyUsage u1 u2 = throwError $ UsageMismatch u1 u2

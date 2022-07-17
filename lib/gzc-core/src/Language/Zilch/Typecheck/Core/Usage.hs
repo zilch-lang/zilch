@@ -36,6 +36,7 @@ instance Num Usage where
   fromInteger i = error $ "Unknown usage kind " <> show i
 
 instance Ord Usage where
+  W <= W = True
   O <= W = True
   I <= W = True
   I <= I = True

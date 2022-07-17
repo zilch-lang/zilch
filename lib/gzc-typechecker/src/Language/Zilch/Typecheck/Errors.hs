@@ -11,29 +11,6 @@ import Language.Zilch.Typecheck.Core.Eval (Implicitness, explicit, implicit)
 import Language.Zilch.Typecheck.Core.Usage (Usage (..))
 import Prettyprinter (group, pretty)
 
-data EvalError
-  = -- | A @rec@ binding is being normalized
-    RecursiveBindingNormalisation
-      Position
-  | -- | Identifier not found in current context
-    NoSuchBinding
-      Text
-      Position
-
-fromEvalError :: EvalError -> Report String
-fromEvalError (RecursiveBindingNormalisation pos) =
-  err
-    "Normalisation error"
-    [(pos, This "Trying to normalise a recursive binding may lead to non-termination")]
-    []
-fromEvalError (NoSuchBinding name pos) =
-  err
-    "Normalisation error"
-    [(pos, This $ "Binding named `" <> Text.unpack name <> "` not found in current environment")]
-    []
-
--------------------
-
 data ElabError
   = -- | Binding not found in environment
     BindingNotFound
@@ -48,9 +25,6 @@ data ElabError
       (Located Expression)
       (Located Expression)
       Position
-  | -- | An error happened while evaluating
-    FromEvalError
-      EvalError
   | -- | An error occured in the unification process.
     --
     --   /Note:/ This is only a placeholder replaced when actually calling the unification
@@ -71,6 +45,10 @@ data ElabError
     ImplicitMismatch
       Implicitness
       Implicitness
+      Position
+  | -- | A variable has been used non-linearly
+    NonLinearUseOfVariable
+      Text
       Position
 
 fromElabError :: ElabError -> Report String
@@ -97,7 +75,6 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
           (p2, Where $ "Type `" <> ty2' <> "` infered from here")
         ]
         []
-fromElabError (FromEvalError e) = fromEvalError e
 fromElabError UnificationError = undefined
 fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
   err
@@ -106,21 +83,13 @@ fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
       (p2, This $ "...with term `" <> show (pretty $ t2 :@ p2) <> "`")
     ]
     []
-fromElabError (UsageMismatch u1 u2) =
+fromElabError (UsageMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
   err
     "Type-checking error"
-    messages
+    [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
+      (p2, This $ "...but got value with usage " <> show (pretty u2))
+    ]
     []
-  where
-    messages = case (u1, u2) of
-      (u@(_ :@ p1), Unrestricted :@ p2) ->
-        [ (p2, This $ "Expected unrestricted value..."),
-          (p1, This $ "...but got value with usage " <> show (pretty u))
-        ]
-      (u1@(_ :@ p1), u2@(_ :@ p2)) ->
-        [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
-          (p2, This $ "...but got value with usage " <> show (pretty u2))
-        ]
 fromElabError (UnusedLinearVariable (x :@ p) p2) =
   err
     "Type-checking error"
@@ -138,3 +107,8 @@ fromElabError (ImplicitMismatch expected got pos) =
       | b == implicit = "implicit"
       | b == explicit = "explicit"
       | otherwise = undefined
+fromElabError (NonLinearUseOfVariable x pos) =
+  err
+    "Type-checking error"
+    [(pos, This $ "Variable " <> Text.unpack x <> " has been used non linearly")]
+    []

@@ -9,7 +9,9 @@ import Control.Monad (forM, guard, unless, when)
 import Control.Monad.Except (throwError)
 import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
-import Data.Located (Located ((:@)), getPos, unLoc)
+import qualified Data.List as List
+import Data.Located (Located ((:@)), Position, getPos, unLoc)
+import Data.Maybe (mapMaybe)
 import Debug.Trace (traceShow)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -19,9 +21,9 @@ import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), DeBruijnLvl, MetaEntr
 import qualified Language.Zilch.Typecheck.Core.Usage as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..))
-import Language.Zilch.Typecheck.Evaluator (apply, eval, force, plugNormalisation, quote)
+import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
-import Language.Zilch.Typecheck.Unification (freshMeta, unify, unifyUsage)
+import Language.Zilch.Typecheck.Unification (freshMeta, unify)
 import System.IO.Unsafe (unsafePerformIO)
 
 checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
@@ -33,7 +35,7 @@ checkProgram ctx mod = do
     case e of
       Unsolved -> pure (TAST.LetMeta m Nothing :@ p)
       Solved val -> do
-        val@(_ :@ p1) <- plugNormalisation do quote ctx (lvl ctx) (val :@ p)
+        val@(_ :@ p1) <- quote ctx (lvl ctx) (val :@ p)
         pure (TAST.LetMeta m (Just val) :@ p1)
   let addBinds' = (:@ p) . TAST.TopLevel [] False <$> addBinds
 
@@ -45,27 +47,39 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
     [] -> do
       pure (TAST.Mod [] :@ p)
     ((AST.TopLevel isPublic (AST.Let isRec usage name@(_ :@ p5) ty ex :@ p3) :@ p4) : ds) -> do
+      {-
+         0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱ A ⊢ f ⇒ⁱ B            0Γ ⊢ e ⇐⁰ A          i = 0
+        ──────────────────────────────────────────────────────────────────────────────────────── [⇐ let-I₀]
+                                       Γ ⊢ let x :ⁱ A := e
+
+         0Γ₁ ⊢ A ⇐⁰ type ℓ             Γ₁, x :ⁱ A ⊢ f ⇒ⁱ B           Γ₂ ⊢ e ⇐¹ A
+        ────────────────────────────────────────────────────────────────────────── [⇐ let-I₁]
+                                 Γ₁ + iΓ₂ ⊢ let x :ⁱ A := e
+
+      -}
       (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p4) ty (VType :@ p3)
-      ty' <- plugNormalisation $ eval ctx ty
+      ty' <- eval ctx ty
 
       (ex, ex') <- mdo
         let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
-        (_, ex') <- check ctx' usage ex ty'
-        ex'' <- plugNormalisation $ eval ctx' ex'
+        (_, ex') <- case unLoc usage of
+          TAST.O -> check (scale ctx' TAST.O) (TAST.O :@ getPos usage) ex ty'
+          _ -> check ctx' (TAST.I :@ getPos usage) ex ty'
+        ex'' <- eval ctx' ex'
         pure (ex', ex'')
 
-      TAST.Mod defs :@ p <- checkProgram' (define TAST.Unrestricted name ex' ty' ctx) (AST.Mod imports ds :@ p)
+      TAST.Mod defs :@ p <- checkProgram' (define (unLoc usage) name ex' ty' ctx) (AST.Mod imports ds :@ p)
 
       pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec usage name ty ex :@ p3) :@ p4) : defs) :@ p)
 
 insert' :: forall m. MonadElab m => (Context, Located TAST.Expression, Located Value, Located TAST.Usage) -> m (Context, Located TAST.Expression, Located Value, Located TAST.Usage)
 insert' (ctx, expr, ty, usage) = do
-  ty <- plugNormalisation $ force ctx ty
+  ty <- force ctx ty
   case ty of
     VPi _ _ imp _ b :@ p | imp == implicit -> do
       let m = freshMeta ctx :@ p
-      mv <- plugNormalisation $ eval ctx m
-      ty <- plugNormalisation $ apply ctx b mv
+      mv <- eval ctx m
+      ty <- apply ctx b mv
       insert' (ctx, TAST.EApplication expr True m :@ p, ty, usage)
     va -> pure (ctx, expr, va, usage)
 
@@ -74,112 +88,159 @@ insert (ctx, expr, ty, usage) = case (expr, ty) of
   (t@(TAST.ELam (TAST.Parameter True _ _ _ :@ _) _ :@ _), va) -> pure (ctx, t, va, usage)
   (t, va) -> insert' (ctx, t, va, usage)
 
--- | @Ρ, Γ ⊢ e ⇐ τ@
+-- | @check Γ i e τ@ is the typing judgment @Γ ⊢ e ⇐ⁱ τ@.
 check :: forall m. MonadElab m => Context -> Located TAST.Usage -> Located AST.Expression -> Located Value -> m (Context, Located TAST.Expression)
 check ctx usage expr ty = do
-  ty <- plugNormalisation $ force ctx ty
+  ty <- force ctx ty
   case (expr, ty) of
     (AST.ELam (AST.Parameter isImplicit u1 x ty :@ p1) expr :@ p3, VPi u2 _ imp ty2 ty3 :@ p2) | isImplicit == not imp -> do
+      when (unLoc u1 /= u2) do
+        throwError $ UsageMismatch (u2 :@ p2) u1
       {-
-          0Γ ⊢ (y :^π A) → B ⇐^0 type ℓ       Γ, x :^σπ A ⊢ e ⇐^σ B
-        ─────────────────────────────────────────────────────────────
-                  Γ ⊢ λ(x :^π A) → e ⇐^σ (y :^π A) → B
+         0Γ ⊢ A :⁰ type ℓ        Γ, x :ⁱᵖ A ⊢ e ⇐ⁱ B
+        ───────────────────────────────────────────── [⇐ λ-I]
+          Γ ⊢ (λ(x :ᵖ A) ⇒ e) ⇐ⁱ (x :ᵖ A) → B
       -}
-      unifyUsage u1 (u2 :@ p2)
       (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p2) ty (VType :@ p1)
-      ty3' <- plugNormalisation $ apply ctx ty3 (VVariable x (lvl ctx) :@ p2)
+      ty3' <- apply ctx ty3 (VVariable x (lvl ctx) :@ p2)
 
       let xUsage = unLoc usage * unLoc u1
 
       (ctx', u) <- check (bind xUsage x ty2 ctx) usage expr ty3'
 
-      when (xUsage == TAST.Linear) do
-        let xUsage = indexContext ctx' x
-        when (xUsage == TAST.Linear) do
-          throwError $ UnusedLinearVariable x (getPos expr)
+      case (xUsage, indexContext ctx' x) of
+        -- if @x@ has not been used and was bound as linear, then throw an error
+        (TAST.I, TAST.I) -> throwError $ UnusedLinearVariable x (getPos expr)
+        _ -> pure ()
 
-      ty' <- plugNormalisation $ eval ctx ty
+      ty' <- eval ctx ty
       unify ctx ty' ty2
       pure (unbind ctx', TAST.ELam (TAST.Parameter isImplicit u1 x ty :@ p1) u :@ p3)
     (expr@(_ :@ p1), VPi u2 x imp ty2 ty3 :@ p2) | imp == implicit -> do
-      ty' <- plugNormalisation $ apply ctx ty3 (VVariable ("x?" :@ p2) (lvl ctx) :@ p2)
+      ty' <- apply ctx ty3 (VVariable ("x?" :@ p2) (lvl ctx) :@ p2)
       (ctx', u) <- check (insertBinder u2 (x :@ p2) ty2 ctx) (TAST.Unrestricted :@ p2) expr ty'
+      -- TODO: is @ω@ the correct multiplicity to be infered for the parameter here?
 
-      ty2 <- plugNormalisation $ quote ctx (lvl ctx) ty2
+      ty2 <- quote ctx (lvl ctx) ty2
 
       pure (unbind ctx', TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) u :@ p1)
-    (AST.ELet (AST.Let False usage x ty ex :@ p1) expr :@ p2, ty2) -> do
+    (AST.ELet (AST.Let False usage' x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
-           0Γ ⊢ A ⇐^0 type ℓ₁                 Γ ⊢ e₁ ⇐^σ A
-          Γ, x :^σ A ⊢ e₂ ⇐^π B        0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
-        ────────────────────────────────────────────────────────────
-                      Γ ⊢ let x :^σ A = e₁ ; e₂ ⇐^π B
+         0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ ⊢ e ⇐⁰ A          ip = 0
+        ──────────────────────────────────────────────────────────────────────────────────────── [⇐ let-I₀]
+                               Γ ⊢ (let x :ⁱ A := e; f) ⇐ᵖ B
+
+         0Γ₁ ⊢ A ⇐⁰ type ℓ             Γ₁, x :ⁱᵖ A ⊢ f ⇐ᵖ B           Γ₂ ⊢ e ⇐¹ A
+        ────────────────────────────────────────────────────────────────────────── [⇐ let-I₁]
+                         Γ₁ + ipΓ₂ ⊢ (let x :ⁱ A := e; f) ⇐ᵖ B
       -}
       (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p1) ty (VType :@ p1)
-      ty' <- plugNormalisation $ eval ctx ty
-      (_, ex) <- check ctx (TAST.Unrestricted :@ p1) ex ty'
-      ex' <- plugNormalisation $ eval ctx ex
-      (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
-      -- TODO: add usage in AST for `x` and check if used when linear
-      pure (unbind ctx', TAST.ELet (TAST.Let False usage x ty ex :@ p1) u :@ p2)
-    (AST.ELet (AST.Let True usage x ty ex :@ p1) expr :@ p2, ty2) -> do
+      ty' <- eval ctx ty
+
+      case unLoc usage * unLoc usage' of
+        TAST.O -> do
+          -- apply [⇐ let-I₀]
+          (_, ex) <- check (scale ctx TAST.O) (TAST.O :@ getPos usage') ex ty'
+          ex' <- eval ctx ex
+
+          (ctx, u) <- check (define TAST.O x ex' ty' ctx) usage expr ty2
+
+          pure (unbind ctx, TAST.ELet (TAST.Let False usage' x ty ex :@ p1) u :@ p2)
+        xUsage -> do
+          -- apply [⇐ let-I₁]
+
+          (ctx2, ex) <- check ctx (TAST.I :@ getPos usage') ex ty'
+          ex' <- eval ctx ex
+
+          (ctx1, u) <- check (define xUsage x ex' ty' ctx) usage expr ty2
+
+          case (xUsage, indexContext ctx1 x) of
+            -- if @x@ has not been used and was bound as linear, then throw an error
+            (TAST.I, TAST.I) -> throwError $ UnusedLinearVariable x (getPos expr)
+            _ -> pure ()
+          ctx <- combineContexts ctx (unbind ctx1) (scale ctx2 xUsage) (getPos expr)
+
+          pure (ctx, TAST.ELet (TAST.Let False usage' x ty ex :@ p1) u :@ p2)
+    (AST.ELet (AST.Let True usage' x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
-           0Γ ⊢ A ⇐^0 type ℓ₁             Γ, x :^σ' A ⊢ e₁ ⇐^σ A
-          Γ, x :^σ A ⊢ e₂ ⇐^π B        0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
-                         σ' = ω if σ ≠ 0 else 0
-        ────────────────────────────────────────────────────────────
-                      Γ ⊢ rec x :^σ A = e₁ ; e₂ ⇐^π B
+         0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ, x :⁰ A ⊢ e ⇐⁰ A          ip = 0
+        ──────────────────────────────────────────────────────────────────────────────────────────────── [⇐ rec-I₀]
+                                     Γ ⊢ (rec x :ⁱ A := e; f) ⇐ᵖ B
+
+         0Γ₁ ⊢ A ⇐⁰ type ℓ             Γ₁, x :ⁱᵖ A ⊢ f ⇐ᵖ B           Γ₂, x :⁻ A ⊢ e ⇐¹ A
+        ────────────────────────────────────────────────────────────────────────────────── [⇐ rec-I₁]
+                                Γ₁ + ipΓ₂ ⊢ (rec x :ⁱ A := e; f) ⇐ᵖ B
       -}
       (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p1) ty (VType :@ p1)
-      ty' <- plugNormalisation $ eval ctx ty
+      ty' <- eval ctx ty
 
-      (ex, ex') <- mdo
-        let ctx' = define TAST.Unrestricted x (VThunk ex' :@ p1) ty' ctx
-        -- TODO: put correct usage for recursive call
-        (ctx'', ex') <- check ctx' (TAST.Unrestricted :@ p1) ex ty'
-        -- TODO: add usage check for `x` in ctx'' if it is linear
+      case unLoc usage * unLoc usage' of
+        TAST.O -> do
+          -- apply [⇐ rec-I₀]
 
-        ex'' <- plugNormalisation $ eval ctx' ex'
-        pure (ex', ex'')
-      (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
-      -- TODO: check that local binding has been used if linear
-      pure (unbind ctx', TAST.ELet (TAST.Let False usage x ty ex :@ p1) u :@ p2)
+          (ctx, ex) <- mdo
+            let ctx' = define TAST.O x (VThunk ex' :@ p1) ty' ctx
+            (ctx'', ex') <- check (scale ctx' TAST.O) (TAST.O :@ p1) ex ty'
+            pure (ctx'', ex')
+
+          ex' <- eval ctx ex
+          (ctx, u) <- check (define TAST.O x ex' ty' ctx) usage expr ty2
+
+          pure (unbind ctx, TAST.ELet (TAST.Let False usage' x ty ex :@ p1) u :@ p2)
+        xUsage -> do
+          -- apply [⇐ rec-I₁]
+
+          (ctx2, ex) <- mdo
+            let ctx' = define TAST.Unrestricted x (VThunk ex' :@ p1) ty' ctx
+            (ctx'', ex') <- check ctx' (TAST.I :@ p1) ex ty'
+            pure (ctx'', ex')
+
+          ex' <- eval ctx ex
+          (ctx1, u) <- check (define xUsage x ex' ty' ctx) usage expr ty2
+
+          case (xUsage, indexContext ctx1 x) of
+            -- if @x@ has not been used and was bound as linear, then throw an error
+            (TAST.I, TAST.I) -> throwError $ UnusedLinearVariable x (getPos expr)
+            _ -> pure ()
+          ctx <- combineContexts ctx (unbind ctx1) (scale ctx2 xUsage) (getPos expr)
+
+          pure (ctx, TAST.ELet (TAST.Let True usage' x ty ex :@ p1) u :@ p2)
     (AST.EPi (AST.Parameter isImplicit u1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
+      when (unLoc usage /= TAST.O) do
+        throwError $ UsageMismatch usage (TAST.O :@ p3)
       {-
-          0Γ ⊢ S ⇐^0 type ℓ₁          0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
-        ───────────────────────────────────────────────────────────
-                0Γ ⊢ (x :^σ S) -> T ⇐^0 type (ℓ₁ ⊔ ℓ₂)
+         0Γ ⊢ S ⇐⁰ type ℓ₁          0Γ, x :⁰ A ⊢ B ⇐⁰ type ℓ₂
+        ────────────────────────────────────────────────────── [⇐ Π-F]
+                 0Γ ⊢ (x :ᵖ S) → T ⇐⁰ type (ℓ₁ ⊔ ℓ₂)
       -}
-      unifyUsage (TAST.Erased :@ p2) usage
       let ctx' = scale ctx TAST.Erased
       (_, ty) <- check ctx' (TAST.Erased :@ p1) ty (VType :@ p1)
-      ty' <- plugNormalisation $ eval ctx' ty
+      ty' <- eval ctx' ty
       (_, ty2) <- check (bind TAST.Erased x ty' ctx') (TAST.Erased :@ p1) ty2 (VType :@ p2)
       pure (ctx, TAST.EPi (TAST.Parameter isImplicit u1 x ty :@ p1) ty2 :@ p2)
     (AST.EHole :@ p1, _) -> do
       pure (ctx, freshMeta ctx :@ p1)
     (e@(_ :@ p), v) -> do
       {-
-          Γ ⊢ e ⇒ τ₁          τ₁ ≡ τ₂
-        ───────────────────────────────
-                 Γ ⊢ e ⇐ τ₂
+         Γ ⊢ e ⇒ⁱ A        A ≅ B       p ⩽ i
+        ───────────────────────────────────── [⇐ ≅-F]
+                     Γ ⊢ e ⇐ᵖ B
       -}
       (ctx', e, ty, u1) <- insert =<< synthetize ctx e
 
-      -- traceShow (show e <> " ⇐^" <> show u1 <> " " <> show ty) $ pure ()
-      -- traceShow ("Expected :^" <> show usage <> " " <> show v) $ pure ()
-
-      unifyUsage usage u1
-      unify ctx' v ty
-      pure (ctx', e)
+      if unLoc usage <= unLoc u1
+        then do
+          unify ctx' v ty
+          pure (ctx', e)
+        else throwError $ UsageMismatch u1 usage
 
 -- | @Ρ, Γ ⊢ e ⇒ τ@
 synthetize :: forall m. MonadElab m => Context -> Located AST.Expression -> m (Context, Located TAST.Expression, Located Value, Located TAST.Usage)
 synthetize ctx (AST.EInteger i suffix :@ p) =
   {-
-      n is a literal number
-    ─────────────────────────
-          Γ ⊢ n ⇒^ω nat
+     n is a literal number
+    ─────────────────────── [⇒ integer-I]
+         Γ ⊢ n ⇒^ω uN
   -}
   pure (ctx, TAST.EInteger i :@ p, typeForSuffix suffix :@ p, TAST.Unrestricted :@ p)
   where
@@ -193,9 +254,9 @@ synthetize ctx (AST.EInteger i suffix :@ p) =
     typeForSuffix SuffixS8 = VBuiltinS8
 synthetize ctx (AST.ECharacter c :@ p) =
   {-
-      c is a literal character
-    ────────────────────────────
-           Γ ⊢ c ⇒^ω char
+     c is a literal character
+    ────────────────────────── [⇒ char-I]
+          Γ ⊢ c ⇒^ω char
   -}
   pure (ctx, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.Unrestricted :@ p)
 synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
@@ -215,7 +276,7 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
 
   -- (ctx', e1, t1, usage) <- synthetize ctx e1
 
-  t1 <- plugNormalisation $ force ctx t1
+  t1 <- force ctx t1
   (u2, a, b) <- case t1 of
     VPi u _ i a b :@ p2
       | i == icit -> pure (u :@ p2, a, b)
@@ -223,7 +284,7 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
     t1@(_ :@ p2) -> do
       -- try η-expanding
       let usage = TAST.Unrestricted
-      a <- plugNormalisation $ eval ctx (freshMeta ctx :@ p)
+      a <- eval ctx (freshMeta ctx :@ p)
       let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) :@ p
       unify ctx t1 (VPi usage "x?" explicit a b :@ p)
       pure (usage :@ p2, a, b)
@@ -234,15 +295,15 @@ synthetize ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
           else TAST.Linear
 
   (ctx'', e2) <- check ctx' (u1 :@ getPos e2) e2 a
-  t2 <- plugNormalisation do
+  t2 <- do
     e2 <- eval ctx e2
     apply ctx b e2
   pure (ctx'', TAST.EApplication e1 (not icit) e2 :@ p, t2, usage)
 synthetize ctx (AST.EImplicit e2 :@ _) = synthetize ctx e2
 synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
   {-
-    ────────────────────────
-      Γ, x :^σ A ⊢ x ⇒^σ A
+    ──────────────────── [⇒ var-I]
+     Γ, x :ᵖ A ⊢ x ⇒ᵖ A
   -}
   (ex, ty, usage) <- go 0 (types ctx)
 
@@ -250,7 +311,7 @@ synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
         if usage == TAST.Linear
           then setContext ctx x TAST.Erased
           else ctx
-  -- TODO: if usage is Linear, then set it to Erased in the context
+  -- if usage is Linear, then set it to Erased in the context
   pure (ctx', ex, ty, usage :@ p)
   where
     go _ [] = throwError $ BindingNotFound x p
@@ -259,67 +320,87 @@ synthetize ctx (AST.EIdentifier (x :@ _) :@ p) = do
       | otherwise = go (ix + 1) types
 synthetize ctx (AST.EType :@ p) =
   {-
-    ──────────────────────
-      Γ ⊢ type ⇒^0 type
+    ────────────────── [⇒ type-F]
+     Γ ⊢ type ⇒⁰ type
   -}
   pure (ctx, TAST.EType :@ p, VType :@ p, TAST.Erased :@ p)
 synthetize ctx (AST.EPi (AST.Parameter isImplicit usage name ty :@ p2) expr :@ p) = do
   {-
-      0Γ ⊢ A ⇐^0 type       0Γ, x :^0 A ⊢ B ⇐^0 type
-    ──────────────────────────────────────────────────
-               0Γ ⊢ (x :^σ A) → B ⇒^0 type
+     0Γ ⊢ A ⇐⁰ type       0Γ, x :⁰ A ⊢ B ⇐⁰ type
+    ───────────────────────────────────────────── [⇒ Π-F]
+              0Γ ⊢ (x :ᵖ A) → B ⇒⁰ type
   -}
   let usage' = TAST.Erased
   (_, ty) <- check (scale ctx usage') usage ty (VType :@ p)
-  ty' <- plugNormalisation $ eval ctx ty
+  ty' <- eval ctx ty
   (_, b) <- check (scale (bind usage' name ty' ctx) usage') (usage' :@ p) expr (VType :@ p)
   pure (ctx, TAST.EPi (TAST.Parameter isImplicit usage name ty :@ p2) b :@ p, VType :@ p, usage' :@ p)
--- synthetize ctx (AST.ELet (AST.Let False (name :@ p1) ty val :@ p2) expr :@ p) = do
---   {-
---       Ρ, Γ ⊢ A ⇐ type        Ρ, Γ ⊢ e₁ ⇐ A        Ρ, Γ, x : A ⊢ e₂ ⇐ B
---     ────────────────────────────────────────────────────────────────────
---                     Ρ, Γ ⊢ let x : A = e₁ ; e₂ ⇒ B
---   -}
---   ty <- check ctx ty (VType :@ p)
---   ty' <- plugNormalisation $ eval ctx ty
---   val <- check ctx val ty'
---   val' <- plugNormalisation $ eval ctx val
---   (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
---   pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
--- synthetize ctx (AST.ELet (AST.Let True (name :@ p1) ty val :@ p2) expr :@ p) = do
---   {-
---       Ρ, Γ ⊢ A ⇐ type        Ρ, Γ, x : A ⊢ e₁ ⇐ A        Ρ, Γ, x : A ⊢ e₂ ⇐ B
---     ───────────────────────────────────────────────────────────────────────────
---                          Ρ, Γ ⊢ rec x : A = e₁ ; e₂ ⇒ B
---   -}
---   ty <- check ctx ty (VType :@ p)
---   ty' <- plugNormalisation $ eval ctx ty
-
---   (val, val') <- mdo
---     let ctx' = define (name :@ p1) ty' (VThunk val' :@ p2) ctx
---     val' <- check ctx' val ty'
---     val'' <- plugNormalisation $ eval ctx' val'
---     pure (val', val'')
---   (u, b) <- synthetize (define (name :@ p1) val' ty' ctx) expr
---   pure (TAST.ELet (TAST.Let False (name :@ p1) ty val :@ p2) u :@ p, b)
 synthetize ctx (AST.ELam (AST.Parameter isImplicit usage name ty :@ p2) ex :@ p) = do
   {-
-      0Γ ⊢ A ⇐^0 type ℓ       Γ, x :^σπ A ⊢ e ⇒^σ B
-    ─────────────────────────────────────────────────
-          Γ ⊢ lam(x :^π A) → e ⇒^σ (x :^π A) → B
+     0Γ ⊢ A ⇐⁰ type ℓ       Γ, x :ⁱ A ⊢ e ⇒¹ B
+    ─────────────────────────────────────────── [⇒ λ-I]
+       Γ ⊢ (λ(x :ⁱ A) ⇒ e) ⇒¹ (x :ⁱ A) → B
+
+   NOTE: We trick a little bit here by only infering a linear use.
+         There are cases where we could want 0 too, so this might be considered kind of erroneous.
+         Ideally, we'd say that we cannot infer the type of the literal lambda, and it should be fine as such case may not happen that frequently
+         (if at all, who writes @(λ(x :ⁱ A). x) e@ anyway?).
+
+         Instead, we choose to infer a usage of @1@ because such functions are applied directly, hence only once.
   -}
   (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p) ty (VType :@ p)
-  ty' <- plugNormalisation $ eval ctx ty
+  ty' <- eval ctx ty
   (ctx', ex, b, u2) <- synthetize (bind (unLoc usage) name ty' ctx) ex
-  clos <- closeVal ctx b
+
+  case (unLoc usage, indexContext ctx' name) of
+    (TAST.I, TAST.I) -> throwError $ UnusedLinearVariable name (getPos ex)
+    _ -> pure ()
+
+  clos <- closeVal ctx' b
   pure (unbind ctx', TAST.ELam (TAST.Parameter isImplicit usage name ty :@ p2) ex :@ p, VPi (unLoc usage) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
 synthetize ctx (AST.EHole :@ p1) = do
-  a <- plugNormalisation do eval ctx (freshMeta ctx :@ p1)
+  a <- eval ctx (freshMeta ctx :@ p1)
   let t = freshMeta ctx :@ p1
   pure (ctx, t, a, TAST.Unrestricted :@ p1)
 synthetize _ expr = error $ "not yet handled: " <> show expr
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure
 closeVal ctx ty = do
-  ty <- plugNormalisation $ quote ctx (lvl ctx + 1) ty
+  ty <- quote ctx (lvl ctx + 1) ty
   pure $ Clos (env ctx) ty
+
+combineContexts :: forall m. MonadElab m => Context -> Context -> Context -> Position -> m Context
+combineContexts base c1 c2 pos = do
+  let vars1 = map (\(_, x, _, _) -> x) (types base)
+      vars2 = map (\(_, x, _, _) -> x) (types c1)
+      vars3 = map (\(_, x, _, _) -> x) (types c2)
+
+      vars = vars1 `List.union` vars2 `List.union` vars3
+
+  types' <- forM' vars (types base) (types c1) (types c2) checkLinearVar
+  pure $ base {types = types'}
+  where
+    forM' [] _ _ _ _ = pure []
+    forM' (x : xs) v1 v2 v3 f = do
+      y <- f (lookup' x v1) (lookup' x v2) (lookup' x v3)
+      ys <- forM' xs v1 v2 v3 f
+
+      case y of
+        Nothing -> pure ys
+        Just y -> pure (y : ys)
+
+    lookup' _ [] = Nothing
+    lookup' x (u@(_, y, _, _) : ys)
+      | x == y = Just u
+      | otherwise = lookup' x ys
+
+    checkLinearVar (Just (TAST.I, x, src, ty)) v2 v3 = case (v2, v3) of
+      (Just (TAST.O, _, _, _), Just (TAST.O, _, _, _)) -> throwError $ NonLinearUseOfVariable x pos
+      (Just (TAST.I, _, _, _), Just (TAST.O, _, _, _)) -> pure $ Just (TAST.O, x, src, ty)
+      (Just (TAST.O, _, _, _), Just (TAST.I, _, _, _)) -> pure $ Just (TAST.O, x, src, ty)
+      (Just (TAST.I, _, _, _), Just (TAST.I, _, _, _)) -> pure $ Just (TAST.I, x, src, ty)
+      (Just (u2, _, _, _), Nothing) -> pure $ Just (u2, x, src, ty)
+      (Nothing, Just (u2, _, _, _)) -> pure $ Just (u2, x, src, ty)
+      (_, _) -> pure $ Just (TAST.I, x, src, ty)
+    checkLinearVar (Just (u, x, src, ty)) _ _ = pure $ Just (u, x, src, ty)
+    checkLinearVar Nothing _ _ = pure Nothing
