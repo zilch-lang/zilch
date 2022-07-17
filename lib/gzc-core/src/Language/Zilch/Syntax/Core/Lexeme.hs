@@ -26,7 +26,7 @@ data Token
     TkOpen
   | -- | @λ@: @lam@ but Unicode
     TkUniLam
-  | -- | @do@: anonymous function without parameter (alias to @lam() ->@)
+  | -- | @do@: anonymous function without parameter (alias to @lam() =>@)
     TkDo
   | -- | @type@: the builtin type of types
     TkType
@@ -60,6 +60,10 @@ data Token
     TkRightArrow
   | -- | @→@: @->@ but Unicode
     TkUniRightArrow
+  | -- | @=>@: lambda expression separator
+    TkDoubleRightArrow
+  | -- | @⇒@: @=>@ but Unicode
+    TkUniDoubleRightArrow
   | -- | @forall@: universal type quantifier
     TkForall
   | -- | @∀@: @forall@ but Unicode

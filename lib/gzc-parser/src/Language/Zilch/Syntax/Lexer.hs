@@ -109,6 +109,8 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken "∃" = TkUniExists
     toToken "->" = TkRightArrow
     toToken "→" = TkUniRightArrow
+    toToken "=>" = TkDoubleRightArrow
+    toToken "⇒" = TkUniDoubleRightArrow
     toToken "let" = TkLet
     toToken "rec" = TkRec
     toToken "val" = TkVal

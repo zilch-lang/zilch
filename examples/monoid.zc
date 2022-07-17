@@ -1,5 +1,5 @@
 public record monoid
-  (a : type) :=
+  (0 a : type) :=
 
   val mempty : a
 
@@ -11,7 +11,7 @@ public open {{monoid}}
 public let +-monoid-u64 
   : monoid u64 :=
   
-  {{ let mempty := 0 }}
+  @{ let mempty := 0 }
 
 /--
   Multiplicative monoid on unsigned 64-bis integer.
@@ -19,4 +19,4 @@ public let +-monoid-u64
 public let ×-monoid-u64 
   : monoid u64 :=
 
-  {{ let mempty := 1 }}
+  @{ let mempty := 1 }

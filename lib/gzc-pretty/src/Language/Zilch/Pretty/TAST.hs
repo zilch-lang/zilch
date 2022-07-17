@@ -71,7 +71,7 @@ instance Pretty (Located Expression) where
       <> space
       <> pretty name
       <> space
-      <> "→"
+      <> "⇒"
       <> line
       <> indent 2 (pretty ret)
   pretty (ELet def ret :@ _) =

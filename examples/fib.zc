@@ -13,8 +13,8 @@ public let fib
     : nat :=
 
     match n with 
-      0 -> -2
-      1 -> -1
-      _ -> aux (-1, -2 + -1) (n - 1)
+      0 => -2
+      1 => -1
+      _ => aux (-1, -2 + -1) (n - 1)
 
   aux (0, 1)

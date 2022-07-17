@@ -35,4 +35,4 @@ public let flip
   (f : a -> b -> e c)
   : b -> a -> e c :=
 
-  lam y -> lam x -> f x y
+  lam y => lam x => f x y

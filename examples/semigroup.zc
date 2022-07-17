@@ -2,7 +2,7 @@ public open import data::monoid::{monoid, mempty}
 
 
 public record semigroup
-	(a : type)
+	(0 a : type)
   {{ m : monoid a }}
 	:=
 
@@ -17,4 +17,4 @@ public let +-semigroup-u64
 	: semigroup u64
   :=
 
-  {{ let mappend := _+_ }}
+  @{ let mappend := _+_ }

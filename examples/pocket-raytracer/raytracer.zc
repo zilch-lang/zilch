@@ -35,8 +35,8 @@ public let render
   let ORIG : vec3 f32 := vec3::vec3 0.0 0.0 0.0
   let FOV := π / 2.0
 
-  for 0 HEIGHT lam i ->
-    for 0 WIDTH lam j ->
+  for 0 HEIGHT lam i =>
+    for 0 WIDTH lam j =>
       let dir-x := (2.0 * (i + 0.5) / WIDTH - 1.0) * tan (FOV / 2.0) * WIDTH / HEIGHT
       let dir-y := - (2.0 * (j + 0.5) / HEIGHT - 1.0) * tan (FOV / 2.0)
 

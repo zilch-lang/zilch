@@ -195,7 +195,7 @@ parseLambda s = do
         ] ::
           [m [Located Parameter]]
       )
-  _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
+  _ <- lexeme (token TkDoubleRightArrow <|> token TkUniDoubleRightArrow) <* s
   expr <- parseExpression s
   pure $ ELam params expr
 

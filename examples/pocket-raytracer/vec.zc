@@ -22,7 +22,7 @@ let vec3-is-num :
   {a : type} {{_ : num a}}
   : num (vec3 a) :=
 
-  {{ 
+  @{ 
     let _+_ v1 v2 := vec3 (v1::x + v2::x) (v1::y + v2::y) (v1::z + v2::z)
     let _-_ v1 v2 := vec3 (v1::x - v2::x) (v1::y - v2::y) (v1::z - v2::z)
     -- cross product
@@ -30,7 +30,7 @@ let vec3-is-num :
                           (v1::z * v2::x - v1::x * v2::z)
                           (v1::x * v2::y - v1::y * v2::x)
     let _/_ v1 v2 := undefined -- ???
-  }}
+  }
 
 
 public alias vec3f := vec3 f32

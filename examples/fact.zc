@@ -21,7 +21,7 @@ public let fact
     : nat :=
     
     match n with
-      0 | 1 -> acc 
-      _     -> aux (acc * n) (n - 1)
+      0 | 1 => acc 
+      _     => aux (acc * n) (n - 1)
 
   aux 1
