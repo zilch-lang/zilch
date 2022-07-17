@@ -21,8 +21,10 @@ instance Pretty (Located TopLevel) where
       <> hardline
 
 instance Pretty (Located Definition) where
-  pretty (Let isRec name typ val :@ _) =
+  pretty (Let isRec usage name typ val :@ _) =
     (if isRec then "rec" else "let")
+      <> space
+      <> pretty usage
       <> space
       <> pretty (unLoc name)
       <> space

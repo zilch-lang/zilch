@@ -24,6 +24,8 @@ data Definition
     Let
       Bool
       -- ^ Is the binding a recursive one?
+      (Located Usage)
+      -- ^ An optional resource usage annotation for the defined binding
       (Located Text)
       -- ^ Binding name
       (Located Expression)

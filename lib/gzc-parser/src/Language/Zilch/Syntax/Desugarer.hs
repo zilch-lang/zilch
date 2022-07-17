@@ -42,27 +42,35 @@ desugarModule (CST.Mod _ defs :@ p) = do
 desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m (Located AST.TopLevel)
 desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   def' <- desugarDefinition def
+
+  -- we forbid top-level linear definitions
+  case def' of
+    AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos -> throwError $ LinearTopLevelBinding name pos
+    _ -> pure ()
+
   pure $ AST.TopLevel isPublic def' :@ p
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Located AST.Definition)
-desugarDefinition (CST.Let name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
+desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
+  usage' <- desugarUsage usage p2
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
   let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam params ret :@ p1)
 
-  pure $ AST.Let False name ty val :@ p
+  pure $ AST.Let False usage' name ty val :@ p
   where
     mkPi param expr = AST.EPi param expr :@ p
-desugarDefinition (CST.Rec name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
+desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
+  usage' <- desugarUsage usage p2
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
   let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam params ret :@ p1)
 
-  pure $ AST.Let True name ty val :@ p
+  pure $ AST.Let True usage' name ty val :@ p
   where
     mkPi param expr = AST.EPi param expr :@ p
 

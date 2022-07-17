@@ -47,6 +47,9 @@ data DesugarError
   = InvalidIntegerSuffix
       Text
       Position
+  | LinearTopLevelBinding
+      Text
+      Position
 
 data DesugarWarning
 
@@ -55,7 +58,12 @@ fromDesugarerError (InvalidIntegerSuffix suffix pos) =
   err
     "Parse error"
     [(pos, This $ "Integral constant contains the suffix '" <> Text.unpack suffix <> "', which is invalid")]
-    ["Numeric prefixes are only available for builtin integer and floating point types"]
+    ["Numeric prefixes are only available for builtin integer and floating point types."]
+fromDesugarerError (LinearTopLevelBinding name pos) =
+  err
+    "Parse error"
+    [(pos, This $ "Top-level binding '" <> Text.unpack name <> "' cannot be made linear")]
+    ["Top-level bindings may only be either erased (usage 0) or unrestricted (usage ω)."]
 fromDesugarerError _ = err "sorry" [] []
 
 fromDesugarerWarning :: DesugarWarning -> Report String

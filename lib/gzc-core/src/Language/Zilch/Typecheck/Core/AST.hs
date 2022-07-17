@@ -23,6 +23,8 @@ data Definition
   = Let
       Bool
       -- ^ Is it recursive?
+      (Located Usage)
+      -- ^ Usage information
       (Located Text)
       -- ^ The name of the binding
       (Located Expression)

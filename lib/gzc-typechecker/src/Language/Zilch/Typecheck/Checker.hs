@@ -44,19 +44,19 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
   case defs of
     [] -> do
       pure (TAST.Mod [] :@ p)
-    ((AST.TopLevel isPublic (AST.Let isRec name@(_ :@ p5) ty ex :@ p3) :@ p4) : ds) -> do
+    ((AST.TopLevel isPublic (AST.Let isRec usage name@(_ :@ p5) ty ex :@ p3) :@ p4) : ds) -> do
       (_, ty) <- check (scale ctx TAST.Erased) (TAST.Erased :@ p4) ty (VType :@ p3)
       ty' <- plugNormalisation $ eval ctx ty
 
       (ex, ex') <- mdo
         let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
-        (_, ex') <- check ctx' (TAST.Unrestricted :@ p5) ex ty'
+        (_, ex') <- check ctx' usage ex ty'
         ex'' <- plugNormalisation $ eval ctx' ex'
         pure (ex', ex'')
 
       TAST.Mod defs :@ p <- checkProgram' (define TAST.Unrestricted name ex' ty' ctx) (AST.Mod imports ds :@ p)
 
-      pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec name ty ex :@ p3) :@ p4) : defs) :@ p)
+      pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec usage name ty ex :@ p3) :@ p4) : defs) :@ p)
 
 insert' :: forall m. MonadElab m => (Context, Located TAST.Expression, Located Value, Located TAST.Usage) -> m (Context, Located TAST.Expression, Located Value, Located TAST.Usage)
 insert' (ctx, expr, ty, usage) = do
@@ -108,7 +108,7 @@ check ctx usage expr ty = do
       ty2 <- plugNormalisation $ quote ctx (lvl ctx) ty2
 
       pure (unbind ctx', TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) u :@ p1)
-    (AST.ELet (AST.Let False x ty ex :@ p1) expr :@ p2, ty2) -> do
+    (AST.ELet (AST.Let False usage x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
            0Γ ⊢ A ⇐^0 type ℓ₁                 Γ ⊢ e₁ ⇐^σ A
           Γ, x :^σ A ⊢ e₂ ⇐^π B        0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
@@ -121,8 +121,8 @@ check ctx usage expr ty = do
       ex' <- plugNormalisation $ eval ctx ex
       (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
       -- TODO: add usage in AST for `x` and check if used when linear
-      pure (unbind ctx', TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
-    (AST.ELet (AST.Let True x ty ex :@ p1) expr :@ p2, ty2) -> do
+      pure (unbind ctx', TAST.ELet (TAST.Let False usage x ty ex :@ p1) u :@ p2)
+    (AST.ELet (AST.Let True usage x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
            0Γ ⊢ A ⇐^0 type ℓ₁             Γ, x :^σ' A ⊢ e₁ ⇐^σ A
           Γ, x :^σ A ⊢ e₂ ⇐^π B        0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂
@@ -143,7 +143,7 @@ check ctx usage expr ty = do
         pure (ex', ex'')
       (ctx', u) <- check (define TAST.Unrestricted x ex' ty' ctx) usage expr ty2
       -- TODO: check that local binding has been used if linear
-      pure (unbind ctx', TAST.ELet (TAST.Let False x ty ex :@ p1) u :@ p2)
+      pure (unbind ctx', TAST.ELet (TAST.Let False usage x ty ex :@ p1) u :@ p2)
     (AST.EPi (AST.Parameter isImplicit u1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
       {-
           0Γ ⊢ S ⇐^0 type ℓ₁          0Γ, x :^0 A ⊢ B ⇐^0 type ℓ₂

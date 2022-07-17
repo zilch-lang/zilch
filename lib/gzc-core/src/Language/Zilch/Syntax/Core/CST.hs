@@ -33,12 +33,14 @@ data MetaAttribute
 data Definition
   = -- | A non-recursive value definition
     Let
+      (Maybe (Located Integer))
       (Located Text)
       [Located Parameter]
       (Maybe (Located Expression))
       (Located Expression)
   | -- | A (potentially) recursive value definition
     Rec
+      (Maybe (Located Integer))
       (Located Text)
       [Located Parameter]
       (Maybe (Located Expression))

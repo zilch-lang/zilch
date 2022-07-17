@@ -116,7 +116,8 @@ parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do
   tk <- lexeme (token TkLet <|> token TkRec) <* s
   (if unLoc tk == TkLet then Let else Rec)
-    <$> (lexeme parseIdentifier <* s)
+    <$> (MP.optional parseResourceUsage <* s)
+    <*> (lexeme parseIdentifier <* s)
     <*> (MP.many (lexeme $ parseParameter s) <* s)
     <*> (MP.optional (lexeme (token TkColon) *> s *> lexeme (parseExpression s)) <* s)
     <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> s *> parseExpression s)
@@ -148,6 +149,7 @@ parseResourceUsage = do
   case usage of
     "0" -> pure (0 :@ p)
     "1" -> pure (1 :@ p)
+    _ -> undefined
   where
     isUsageNumber (TkNumber "0" Nothing :@ _) = True
     isUsageNumber (TkNumber "1" Nothing :@ _) = True

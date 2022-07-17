@@ -51,11 +51,11 @@ eval ctx (TAST.EApplication e1 isImplicit e2 :@ _) = do
   v2 <- eval ctx e2
 
   applyVal ctx v1 v2 (not isImplicit)
-eval ctx (TAST.ELet (TAST.Let True _ _ val :@ _) u :@ _) = mdo
+eval ctx (TAST.ELet (TAST.Let True _ _ _ val :@ _) u :@ _) = mdo
   let ctx' = ctx {env = Env.extend (env ctx) val'}
   val' <- eval ctx' val
   eval ctx' u
-eval ctx (TAST.ELet (TAST.Let False _ _ val :@ _) u :@ _) = do
+eval ctx (TAST.ELet (TAST.Let False _ _ _ val :@ _) u :@ _) = do
   val' <- eval ctx val
   let env' = Env.extend (env ctx) val'
   eval (ctx {env = env'}) u
