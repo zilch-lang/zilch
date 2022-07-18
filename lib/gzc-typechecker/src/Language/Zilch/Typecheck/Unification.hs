@@ -14,9 +14,9 @@ import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context, bds, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..))
-import qualified Language.Zilch.Typecheck.Core.Usage as TAST
+import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
-import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError, UsageMismatch))
+import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError, MultiplicityMismatch))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -116,7 +116,7 @@ unify' ctx lvl t u = do
   u <- force ctx u
   case (t, u) of
     (VLam u1 _ _ a1 t1 :@ p1, VLam u2 _ _ a2 t2 :@ p2) -> do
-      -- unifyUsage (u1 :@ p1) (u2 :@ p2)
+      -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)
@@ -136,7 +136,7 @@ unify' ctx lvl t u = do
           <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
       unify' ctx (lvl + 1) v1 v2
     (VPi u1 _ i1 a1 t1 :@ p1, VPi u2 _ i2 a2 t2 :@ p2) | i1 == i2 -> do
-      -- unifyUsage (u1 :@ p1) (u2 :@ p2)
+      -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)

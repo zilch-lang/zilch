@@ -2,7 +2,7 @@ module Language.Zilch.Syntax.Core.AST where
 
 import Data.Located (Located)
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Core.Usage (Usage)
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
 -------
 
@@ -24,7 +24,7 @@ data Definition
     Let
       Bool
       -- ^ Is the binding a recursive one?
-      (Located Usage)
+      (Located Multiplicity)
       -- ^ An optional resource usage annotation for the defined binding
       (Located Text)
       -- ^ Binding name
@@ -38,7 +38,7 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
-      (Located Usage)
+      (Located Multiplicity)
       -- ^ Resource usage
       (Located Text)
       -- ^ The name of the parameter

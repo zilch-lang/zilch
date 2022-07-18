@@ -1,6 +1,6 @@
 module Language.Zilch.Typecheck.Errors where
 
-import Data.Located (Located ((:@)), Position)
+import Data.Located (Located ((:@)), Position, unLoc, getPos)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Report, err)
@@ -8,7 +8,7 @@ import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Typecheck.Core.AST (Expression)
 import Language.Zilch.Typecheck.Core.Eval (Implicitness, explicit, implicit)
-import Language.Zilch.Typecheck.Core.Usage (Usage (..))
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 import Prettyprinter (group, pretty)
 
 data ElabError
@@ -34,9 +34,9 @@ data ElabError
       (Located Expression)
       (Located Expression)
   | -- | Actual usage cannot be used in place of expected usage
-    UsageMismatch
-      (Located Usage)
-      (Located Usage)
+    MultiplicityMismatch
+      (Located Multiplicity)
+      (Located Multiplicity)
   | -- | A linear variable has not been used
     UnusedLinearVariable
       (Located Text)
@@ -49,6 +49,10 @@ data ElabError
   | -- | A variable has been used non-linearly
     NonLinearUseOfVariable
       Text
+      Position
+  | -- | A multiplicity mismatch happened.
+    UsageMismatches
+      [(Multiplicity, Multiplicity, Located Text, Located Expression)]
       Position
 
 fromElabError :: ElabError -> Report String
@@ -87,7 +91,7 @@ fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
       (p2, This $ "...with term `" <> show (pretty $ t2 :@ p2) <> "`")
     ]
     []
-fromElabError (UsageMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
+fromElabError (MultiplicityMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
   err
     Nothing
     "Type-checking error"
@@ -120,3 +124,16 @@ fromElabError (NonLinearUseOfVariable x pos) =
     "Type-checking error"
     [(pos, This $ "Variable " <> Text.unpack x <> " has been used non linearly")]
     []
+fromElabError (UsageMismatches matches pos) =
+  err
+    Nothing
+    "Type-checking error"
+    messages
+    []
+  where
+    messages = [(getPos x, This $ "Variable " <> Text.unpack (unLoc x) <> " of type " <> show (pretty ty) <> " was expected to be used " <> showMult q <> " times but has been used " <> showMult p <> " times") | (p, q, x, ty) <- matches]
+      <> [(pos, Where $ "...while type-checking this expression")]
+
+    showMult O = "0"
+    showMult I = "1"
+    showMult W = "ω"

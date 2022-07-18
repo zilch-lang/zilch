@@ -6,7 +6,7 @@ module Language.Zilch.Pretty.AST where
 
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
-import Language.Zilch.Typecheck.Core.Usage (Usage (..))
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
@@ -50,7 +50,7 @@ instance Pretty (Located Parameter) where
         <> space
         <> pretty ty
 
-instance Pretty (Located Usage) where
+instance Pretty (Located Multiplicity) where
   pretty (Unrestricted :@ _) = "ω"
   pretty (Linear :@ _) = "1"
   pretty (Erased :@ _) = "0"

@@ -9,7 +9,7 @@ module Language.Zilch.Typecheck.Core.Eval (Value (.., VVariable, VMeta), Name, E
 import Data.Located (Located ((:@)))
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.AST (Expression)
-import Language.Zilch.Typecheck.Core.Usage (Usage)
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
 type Name = Text
 
@@ -46,14 +46,14 @@ data Value
       (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
-      Usage
+      Multiplicity
       Name
       Implicitness
       (Located Value)
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
-      Usage
+      Multiplicity
       Name
       Implicitness
       (Located Value)

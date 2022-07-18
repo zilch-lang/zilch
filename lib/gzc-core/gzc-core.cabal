@@ -18,7 +18,7 @@ library
       Language.Zilch.Typecheck.Core
       Language.Zilch.Typecheck.Core.AST
       Language.Zilch.Typecheck.Core.Eval
-      Language.Zilch.Typecheck.Core.Usage
+      Language.Zilch.Typecheck.Core.Multiplicity
   other-modules:
       Paths_gzc_core
   hs-source-dirs:

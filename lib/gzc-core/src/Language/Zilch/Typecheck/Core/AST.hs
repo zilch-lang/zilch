@@ -4,7 +4,7 @@ module Language.Zilch.Typecheck.Core.AST where
 
 import Data.Located (Located)
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Core.Usage (Usage)
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
 data Module
   = Mod [Located TopLevel]
@@ -23,8 +23,8 @@ data Definition
   = Let
       Bool
       -- ^ Is it recursive?
-      (Located Usage)
-      -- ^ Usage information
+      (Located Multiplicity)
+      -- ^ Multiplicity information
       (Located Text)
       -- ^ The name of the binding
       (Located Expression)
@@ -40,7 +40,7 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
-      (Located Usage)
+      (Located Multiplicity)
       -- ^ Resource usage
       (Located Text)
       -- ^ The name of the parameter

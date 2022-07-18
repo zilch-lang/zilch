@@ -18,7 +18,7 @@ import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
-import Language.Zilch.Typecheck.Core.Usage (Usage (..))
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 
 type MonadDesugar m = (MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState () m)
 
@@ -52,7 +52,7 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Located AST.Definition)
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
-  usage' <- desugarUsage usage p2
+  usage' <- desugarMultiplicity usage p2
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
@@ -63,7 +63,7 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   where
     mkPi param expr = AST.EPi param expr :@ p
 desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
-  usage' <- desugarUsage usage p2
+  usage' <- desugarMultiplicity usage p2
   params' <- traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
@@ -77,16 +77,16 @@ desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  usage' <- desugarUsage usage p1
+  usage' <- desugarMultiplicity usage p1
   pure $ AST.Parameter True usage' name ty' :@ p
 desugarParameter (CST.Explicit usage name@(_ :@ p1) ty :@ p) = do
   ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
-  usage' <- desugarUsage usage p1
+  usage' <- desugarMultiplicity usage p1
   pure $ AST.Parameter False usage' name ty' :@ p
 
-desugarUsage :: forall m. MonadDesugar m => Maybe (Located Integer) -> Position -> m (Located Usage)
-desugarUsage Nothing p = pure (Unrestricted :@ p)
-desugarUsage (Just (u :@ p)) _ = pure (fromInteger u :@ p)
+desugarMultiplicity :: forall m. MonadDesugar m => Maybe (Located Integer) -> Position -> m (Located Multiplicity)
+desugarMultiplicity Nothing p = pure (Unrestricted :@ p)
+desugarMultiplicity (Just (u :@ p)) _ = pure (fromInteger u :@ p)
 
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p
