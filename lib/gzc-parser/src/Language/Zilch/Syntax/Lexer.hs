@@ -91,6 +91,7 @@ identifierOrReserved =
             TkLeftParen <$ MPC.string "(",
             TkRightParen <$ MPC.string ")",
             TkColonEquals <$ MPC.string ":=",
+            TkColonEquals <$ MPC.string "≔",
             TkLeftBrace <$ MPC.string "{",
             TkRightBrace <$ MPC.string "}",
             TkColon <$ MPC.string ":",

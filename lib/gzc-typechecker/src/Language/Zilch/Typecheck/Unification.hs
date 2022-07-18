@@ -16,7 +16,7 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..))
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
-import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError, MultiplicityMismatch))
+import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, MultiplicityMismatch, UnificationError))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
@@ -150,6 +150,14 @@ unify' ctx lvl t u = do
     (VFlexible m sp :@ p1, t) -> solve lvl m sp t
     (t, VFlexible m sp :@ p2) -> solve lvl m sp t
     (VType :@ _, VType :@ _) -> pure ()
+    (VBuiltinS8 :@ _, VBuiltinS8 :@ _) -> pure ()
+    (VBuiltinS16 :@ _, VBuiltinS16 :@ _) -> pure ()
+    (VBuiltinS32 :@ _, VBuiltinS32 :@ _) -> pure ()
+    (VBuiltinU64 :@ _, VBuiltinS64 :@ _) -> pure ()
+    (VBuiltinU8 :@ _, VBuiltinU8 :@ _) -> pure ()
+    (VBuiltinU16 :@ _, VBuiltinU16 :@ _) -> pure ()
+    (VBuiltinU32 :@ _, VBuiltinU32 :@ _) -> pure ()
+    (VBuiltinU64 :@ _, VBuiltinU64 :@ _) -> pure ()
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()

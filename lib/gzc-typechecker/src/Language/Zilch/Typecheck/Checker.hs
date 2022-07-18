@@ -370,12 +370,25 @@ synthetize rel ctx (AST.EIdentifier x :@ p) = do
      Γ, x :ᵖ A ⊢ x ⇒ᵖ A
   -}
   (ex, ty, usage) <- go 0 (types ctx)
-  pure (Map.singleton x $ TAST.extend rel, ex, ty, usage :@ p)
+  case ex of
+    TAST.EBuiltin _ :@ _ -> pure (mempty, ex, ty, usage :@ p)
+    _ -> pure (Map.singleton x $ TAST.extend rel, ex, ty, usage :@ p)
   where
-    go _ [] = throwError $ BindingNotFound (unLoc x) p
+    go _ [] = checkBuiltin
     go ix ((usage, x', origin, a) : types)
       | x == x' && origin == Source = pure (TAST.EIdentifier x' ix :@ p, a, usage)
       | otherwise = go (ix + 1) types
+
+    checkBuiltin = case unLoc x of
+      "u8" -> pure (TAST.EBuiltin TAST.TyU8 :@ p, VType :@ p, TAST.O)
+      "u16" -> pure (TAST.EBuiltin TAST.TyU16 :@ p, VType :@ p, TAST.O)
+      "u32" -> pure (TAST.EBuiltin TAST.TyU32 :@ p, VType :@ p, TAST.O)
+      "u64" -> pure (TAST.EBuiltin TAST.TyU64 :@ p, VType :@ p, TAST.O)
+      "s8" -> pure (TAST.EBuiltin TAST.TyS8 :@ p, VType :@ p, TAST.O)
+      "s16" -> pure (TAST.EBuiltin TAST.TyS16 :@ p, VType :@ p, TAST.O)
+      "s32" -> pure (TAST.EBuiltin TAST.TyS32 :@ p, VType :@ p, TAST.O)
+      "s64" -> pure (TAST.EBuiltin TAST.TyS64 :@ p, VType :@ p, TAST.O)
+      name -> throwError $ BindingNotFound name p
 synthetize rel ctx (AST.EType :@ p) = do
   when (rel /= TAST.Irrelevant) do
     error $ "TODO: error for EType in non-erased context"

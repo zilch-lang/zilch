@@ -5,6 +5,8 @@ module Language.Zilch.Typecheck.Context where
 import Data.Functor ((<&>))
 import Data.Located (Located ((:@)), unLoc)
 import Data.Text (Text)
+import qualified Data.Text as Text
+import GHC.Stack (HasCallStack)
 import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined))
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable))
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
@@ -27,10 +29,10 @@ data Context = Context
 emptyContext :: Context
 emptyContext = Context mempty mempty (Lvl 0) []
 
-indexContext :: Context -> Located Name -> (Multiplicity, Located Text, Located Value)
+indexContext :: HasCallStack => Context -> Located Name -> (Multiplicity, Located Text, Located Value)
 indexContext ctx x = go (types ctx)
   where
-    go [] = error "impossible"
+    go [] = error $ "impossible: cannot access variable named " <> Text.unpack (unLoc x) <> " in context"
     go ((usage, y, _, ty) : _) | y == x = (usage, y, ty)
     go (_ : ts) = go ts
 
