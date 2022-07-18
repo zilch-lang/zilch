@@ -9,7 +9,7 @@ import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
-import Data.Located (Located ((:@)), unLoc)
+import Data.Located (Located ((:@)), Position (..), getPos, unLoc)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -17,11 +17,37 @@ import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
 import Language.Zilch.Syntax.Core
 import Language.Zilch.Syntax.Errors
-import Language.Zilch.Syntax.Internal (located)
+import Language.Zilch.Syntax.Internal ()
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
 type MonadParser m = (MonadWriter [ParsingWarning] m, MP.MonadParsec ParsingError [Located Token] m, MonadFail m)
+
+-- | Transforms a simple parser into a parser returning a located value.
+located :: forall m a. MonadParser m => m a -> m (Located a)
+located p = do
+  MP.SourcePos file beginLine beginColumn <- MP.getSourcePos
+  MP.State input0 offset0 _ _ <- MP.getParserState
+  -- NOTE: we need to fetch the input stream before, because it is not complete
+  -- (it does not necessarily contain all tokens at once).
+
+  res <- p
+
+  MP.State _ offset _ _ <- MP.getParserState
+  let Position _ (endLine, endColumn) _ = getPos $ input0 !! (offset - 1 - offset0)
+
+  -- NOTE: We need to fetch the last token parsed, which is located right before the
+  --       currently available token.
+  --       Thankfully, our tokens have their locations, so we can use the ending location
+  --       of the previous token to get the ending location of the result of our parser @p@.
+
+  let pos =
+        Position
+          (fromIntegral $ MP.unPos beginLine, fromIntegral $ MP.unPos beginColumn)
+          (endLine, endColumn)
+          file
+
+  pure $ res :@ pos
 
 token :: forall m. MonadParser m => Token -> m (Located Token)
 token tk = MP.satisfy ((== tk) . unLoc)

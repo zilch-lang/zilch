@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Zilch.Syntax.Internal (located, showToken) where
+module Language.Zilch.Syntax.Internal (showToken) where
 
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NonEmpty
@@ -12,37 +12,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Language.Zilch.Syntax.Core (Token)
 import qualified Language.Zilch.Syntax.Core as Core
-import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Text.Megaparsec as MP
-
--- | Wraps the result of a parser with its starting and ending positions.
-located :: (MP.MonadParsec e s m, MP.TraversableStream s) => m a -> m (Located a)
-located p = do
-  MP.SourcePos
-    { MP.sourceName = file,
-      MP.sourceLine = lineB,
-      MP.sourceColumn = colB
-    } <-
-    MP.getSourcePos
-  let !start = both (fromIntegral . MP.unPos) (lineB, colB)
-
-  res <- p
-
-  MP.SourcePos
-    { MP.sourceName = _file,
-      MP.sourceLine = lineE,
-      MP.sourceColumn = colE
-    } <-
-    MP.getSourcePos
-  let !end = both (fromIntegral . MP.unPos) (lineE, colE)
-
-  pure (res :@ Position start end file)
-
--- | Applies a computation to both element of a tuple.
---
---   > both f = bimap @(,) f f
-both :: (a -> b) -> (a, a) -> (b, b)
-both f ~(x, y) = (f x, f y)
 
 instance MP.VisualStream [Located Token] where
   showTokens _ = commaSeparated . fmap (showToken . unLoc) . NonEmpty.toList

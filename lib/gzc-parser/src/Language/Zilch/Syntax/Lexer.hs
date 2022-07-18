@@ -8,19 +8,33 @@ import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.Foldable (foldl')
-import Data.Located (Located)
+import Data.Located (Located ((:@)), Position (..))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec
 import Language.Zilch.Syntax.Core (Token (..))
 import Language.Zilch.Syntax.Errors (LexicalError, LexicalWarning, fromLexicalWarning)
-import Language.Zilch.Syntax.Internal (located)
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
 type MonadLexer m = (MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m, MonadFail m)
+
+-- | Transforms a simple parser into a parser returning a located value.
+located :: forall m a. MonadLexer m => m a -> m (Located a)
+located p = do
+  MP.SourcePos file beginLine beginColumn <- MP.getSourcePos
+  res <- p
+  MP.SourcePos _ endLine endColumn <- MP.getSourcePos
+
+  let pos =
+        Position
+          (fromIntegral $ MP.unPos beginLine, fromIntegral $ MP.unPos beginColumn)
+          (fromIntegral $ MP.unPos endLine, fromIntegral $ MP.unPos endColumn)
+          file
+
+  pure $ res :@ pos
 
 space :: MonadLexer m => m ()
 space = MPL.space MPC.space1 MP.empty MP.empty
