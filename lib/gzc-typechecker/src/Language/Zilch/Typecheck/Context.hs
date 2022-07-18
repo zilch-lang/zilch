@@ -3,7 +3,7 @@
 module Language.Zilch.Typecheck.Context where
 
 import Data.Functor ((<&>))
-import Data.Located (Located ((:@)))
+import Data.Located (Located ((:@)), unLoc)
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined))
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable))
@@ -17,7 +17,7 @@ data Context = Context
   { -- | The evaluation environment
     env :: Environment,
     -- | Known types for name lookup
-    types :: [(Multiplicity, Text, Origin, Located Value)],
+    types :: [(Multiplicity, Located Text, Origin, Located Value)],
     -- | Current DeBruijn level for unification
     lvl :: DeBruijnLvl,
     -- | Bindings
@@ -27,14 +27,14 @@ data Context = Context
 emptyContext :: Context
 emptyContext = Context mempty mempty (Lvl 0) []
 
-indexContext :: Context -> Located Name -> (Multiplicity, Text, Located Value)
-indexContext ctx (x :@ _) = go (types ctx)
+indexContext :: Context -> Located Name -> (Multiplicity, Located Text, Located Value)
+indexContext ctx x = go (types ctx)
   where
     go [] = error "impossible"
     go ((usage, y, _, ty) : _) | y == x = (usage, y, ty)
     go (_ : ts) = go ts
 
-setContext :: Context -> Name -> Multiplicity -> Context
+setContext :: Context -> Located Name -> Multiplicity -> Context
 setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
   where
     go [] = []
@@ -42,38 +42,35 @@ setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
       | x == y = (usage, y, origin, ty) : go tys
       | otherwise = (u, y, origin, ty) : go tys
 
-unbind :: Context -> Context
-unbind (Context (_ : env) (_ : tys) lvl (_ : bds)) = Context env tys (lvl - 1) bds
-
 -- | Extend the context with a bound variable (that is, a variable found next to a @lam@).
 bind :: Multiplicity -> Located Name -> Located Value -> Context -> Context
-bind usage (x :@ p) ty ctx =
+bind usage x@(_ :@ p) ty ctx =
   let level = lvl ctx
    in ctx
-        { env = Env.extend (env ctx) (VVariable (x :@ p) level :@ p),
+        { env = Env.extend (env ctx) (VVariable x level :@ p),
           types = (usage, x, Source, ty) : types ctx,
           lvl = level + 1,
-          bds = Bound x : bds ctx
+          bds = Bound (unLoc x) : bds ctx
         }
 
 insertBinder :: Multiplicity -> Located Name -> Located Value -> Context -> Context
-insertBinder usage (x :@ p) typ ctx =
+insertBinder usage x@(_ :@ p) typ ctx =
   let level = lvl ctx
    in ctx
-        { env = Env.extend (env ctx) (VVariable (x :@ p) level :@ p),
+        { env = Env.extend (env ctx) (VVariable x level :@ p),
           types = (usage, x, Inserted, typ) : types ctx,
           lvl = level + 1,
-          bds = Bound x : bds ctx
+          bds = Bound (unLoc x) : bds ctx
         }
 
 -- | Extend the context with a new value definition.
 define :: Multiplicity -> Located Name -> Located Value -> Located Value -> Context -> Context
-define usage (f :@ _) val ty ctx =
+define usage f val ty ctx =
   ctx
     { env = Env.extend (env ctx) val,
       types = (usage, f, Source, ty) : types ctx,
       lvl = lvl ctx + 1,
-      bds = Defined f : bds ctx
+      bds = Defined (unLoc f) : bds ctx
     }
 
 scale :: Context -> Multiplicity -> Context
@@ -87,7 +84,7 @@ union (Context env1 tys1 lvl1 bds1) (Context env2 tys2 lvl2 bds2)
     let tys = go tys1 tys2
      in Context env1 tys lvl1 bds1
   where
-    go :: [(Multiplicity, Text, Origin, Located Value)] -> [(Multiplicity, Text, Origin, Located Value)] -> [(Multiplicity, Text, Origin, Located Value)]
+    go :: [(Multiplicity, Located Text, Origin, Located Value)] -> [(Multiplicity, Located Text, Origin, Located Value)] -> [(Multiplicity, Located Text, Origin, Located Value)]
     go [] [] = []
     go ((u1, name1, origin1, ty1) : env1) ((u2, name2, origin2, ty2) : env2)
       | name1 == name2 =

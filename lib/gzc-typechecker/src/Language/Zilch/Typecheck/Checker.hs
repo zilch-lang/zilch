@@ -105,24 +105,24 @@ checkUsage ctx usage pos = do
     throwError $ UsageMismatches errs pos
   where
     findMismatches x mult acc =
-      let (m', _, ty) = indexContext ctx (x :@ pos)
+      let (m', _, ty) = indexContext ctx x
        in if mult <= m'
             then acc
             else Just (mult, m', x, ty) : acc
 
-    quoteTypes :: forall m. MonadElab m => [(TAST.Multiplicity, TAST.Multiplicity, Text, Located Value)] -> m [(TAST.Multiplicity, TAST.Multiplicity, Located Text, Located TAST.Expression)]
+    quoteTypes :: forall m. MonadElab m => [(TAST.Multiplicity, TAST.Multiplicity, Located Text, Located Value)] -> m [(TAST.Multiplicity, TAST.Multiplicity, Located Text, Located TAST.Expression)]
     quoteTypes [] = pure []
     quoteTypes ((p, q, x, ty) : xs) = do
       ty <- quote ctx (lvl ctx) ty
       xs <- quoteTypes xs
-      pure $ (p, q, x :@ getPos ty, ty) : xs
+      pure $ (p, q, x, ty) : xs
 
 -- | Locally bind a variable for use in a typechecking computation, and check afterwards that its usage matches the one expected.
 withLocalVar :: forall m a. MonadElab m => Located Text -> TAST.Multiplicity -> Located Value -> Context -> (Context -> m (Usage, Position, a)) -> m (Usage, a)
 withLocalVar x mult ty ctx f = do
   let ctx' = bind mult x ty ctx
   (qs, pos, exp) <- f ctx'
-  qs' <- checkVar ctx' (unLoc x) qs pos
+  qs' <- checkVar ctx' x qs pos
   pure (qs', exp)
   where
     checkVar ctx x qs pos = do
@@ -137,7 +137,7 @@ defineLocal :: forall m. MonadElab m => Located Text -> TAST.Multiplicity -> Loc
 defineLocal x mult ex ty ctx f = do
   let ctx' = define mult x ex ty ctx
   (qs, exp) <- f ctx'
-  qs' <- checkVar ctx' (unLoc x) qs (getPos exp)
+  qs' <- checkVar ctx' x qs (getPos exp)
   pure (qs', exp)
   where
     checkVar ctx x qs pos = do
@@ -364,7 +364,7 @@ synthetize rel ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
 
       pure (qs1 `Usage.concat` Usage.scale xMultiplicity qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
 synthetize rel ctx (AST.EImplicit e2 :@ _) = synthetize rel ctx e2
-synthetize rel ctx (AST.EIdentifier (x :@ _) :@ p) = do
+synthetize rel ctx (AST.EIdentifier x :@ p) = do
   {-
     ──────────────────── [⇒ var-I]
      Γ, x :ᵖ A ⊢ x ⇒ᵖ A
@@ -372,9 +372,9 @@ synthetize rel ctx (AST.EIdentifier (x :@ _) :@ p) = do
   (ex, ty, usage) <- go 0 (types ctx)
   pure (Map.singleton x $ TAST.extend rel, ex, ty, usage :@ p)
   where
-    go _ [] = throwError $ BindingNotFound x p
+    go _ [] = throwError $ BindingNotFound (unLoc x) p
     go ix ((usage, x', origin, a) : types)
-      | x == x' && origin == Source = pure (TAST.EIdentifier (x' :@ p) ix :@ p, a, usage)
+      | x == x' && origin == Source = pure (TAST.EIdentifier x' ix :@ p, a, usage)
       | otherwise = go (ix + 1) types
 synthetize rel ctx (AST.EType :@ p) = do
   when (rel /= TAST.Irrelevant) do
