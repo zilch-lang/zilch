@@ -63,6 +63,8 @@ data Value
   | -- | Basic integers
     VInteger
       Integer
+      Value
+      -- ^ The type of integer
   | -- | Basic characters
     VCharacter
       Char

@@ -5,7 +5,7 @@
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (forM, guard, unless, when)
+import Control.Monad (forM, unless, when)
 import Control.Monad.Except (throwError)
 import Data.Bifunctor (first)
 import Data.IORef (readIORef)
@@ -13,19 +13,18 @@ import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
-import Debug.Trace (traceShow)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), DeBruijnLvl, MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
+import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..))
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
-import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
+import Language.Zilch.Typecheck.Metavariables (mcxt)
 import Language.Zilch.Typecheck.Unification (freshMeta, unify)
 import Language.Zilch.Typecheck.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Usage as Usage
@@ -295,13 +294,16 @@ check rel ctx expr ty = do
 
 -- | @Ρ, Γ ⊢ e ⇒ τ@
 synthetize :: forall m. MonadElab m => TAST.Relevance -> Context -> Located AST.Expression -> m (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity)
-synthetize rel ctx (AST.EInteger i suffix :@ p) =
+synthetize rel ctx (AST.EInteger i suffix :@ p) = do
   {-
      n is a literal number
     ─────────────────────── [⇒ integer-I]
          Γ ⊢ n ⇒^ω uN
   -}
-  pure (mempty, TAST.EInteger i :@ p, typeForSuffix suffix :@ p, TAST.extend rel :@ p)
+  let ty = typeForSuffix suffix :@ p
+  tmp <- quote ctx (lvl ctx) ty
+  let TAST.EBuiltin ty' :@ _ = tmp
+  pure (mempty, TAST.EInteger i ty' :@ p, ty, TAST.extend rel :@ p)
   where
     typeForSuffix SuffixU64 = VBuiltinU64
     typeForSuffix SuffixU32 = VBuiltinU32

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 module Language.Zilch.Syntax.Parser (parseTokens) where
@@ -13,7 +14,6 @@ import Data.List (foldl')
 import Data.Located (Located ((:@)), Position (..), getPos, unLoc)
 import Data.Maybe (isJust)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
 import Language.Zilch.Syntax.Core
@@ -202,7 +202,7 @@ parseAtom s = located do
   MP.choice
     ( [ ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
         do
-          (nb, suf) :@ p <- parseNumber
+          (nb, suf) :@ _ <- parseNumber
           pure $ EInt nb suf,
         ETypedHole <$ token TkQuestionMark,
         EHole <$ token TkUnderscore,

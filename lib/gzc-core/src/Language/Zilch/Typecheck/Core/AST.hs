@@ -75,6 +75,7 @@ data Expression
       DeBruijnIdx
   | EInteger
       (Located Text)
+      BuiltinType
   | ECharacter
       (Located Text)
   | EMeta

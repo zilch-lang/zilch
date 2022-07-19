@@ -63,7 +63,7 @@ instance Pretty (Located Parameter) where
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
-  pretty (EInteger val :@ _) = pretty $ unLoc val
+  pretty (EInteger val ty :@ _) = pretty (unLoc val) <> pretty ty
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
   pretty (EIdentifier (name :@ _) _ :@ _) = pretty name
   pretty (ELam name ret :@ _) =

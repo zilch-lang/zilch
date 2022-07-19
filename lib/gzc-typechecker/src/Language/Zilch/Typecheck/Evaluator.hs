@@ -4,25 +4,17 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Typecheck.Evaluator (normalize, normalize0, eval, apply, quote, applyVal, debruijnLevelToIndex, force) where
+module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force) where
 
-import Control.Monad ((<=<))
-import Control.Monad.Except (Except, MonadError, runExcept, throwError)
-import Control.Monad.Fix (MonadFix)
-import Data.Bifunctor (first)
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Debug.Trace (trace)
-import Error.Diagnose (Diagnostic, addReport, def)
-import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext)
+import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
-import Language.Zilch.Typecheck.Defaults (defaultContext)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Environment (lookup)
 import qualified Language.Zilch.Typecheck.Environment as Env
-import Language.Zilch.Typecheck.Errors
 import Language.Zilch.Typecheck.Metavariables (lookupMeta)
 import Prelude hiding (lookup, read)
 import qualified Prelude (read)
@@ -34,7 +26,9 @@ import qualified Prelude (read)
 -- * An integer
 -- * The pi type
 eval :: forall m. MonadElab m => Context -> Located TAST.Expression -> m (Located Value)
-eval _ (TAST.EInteger e :@ p) = pure $ VInteger (read $ unLoc e) :@ p
+eval ctx (TAST.EInteger e ty :@ p) = do
+  ty :@ _ <- eval ctx (TAST.EBuiltin ty :@ p)
+  pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = case lookup (env ctx) i of
   VThunk expr :@ _ -> eval ctx expr
@@ -123,7 +117,10 @@ quote ctx level val = do
     VFlexible m sp :@ p -> quoteSpine ctx level (TAST.EMeta m :@ p) sp p
     VRigid name m sp :@ p -> quoteSpine ctx level (TAST.EIdentifier name (debruijnLevelToIndex level m) :@ p) sp p
     (VCharacter c :@ p) -> pure $ TAST.ECharacter (Text.singleton c :@ p) :@ p
-    (VInteger n :@ p) -> pure $ TAST.EInteger (Text.pack (show n) :@ p) :@ p
+    (VInteger n ty :@ p) -> do
+      tmp <- quote ctx level (ty :@ p)
+      let TAST.EBuiltin ty :@ _ = tmp
+      pure $ TAST.EInteger (Text.pack (show n) :@ p) ty :@ p
     (VLam usage name isExplicit ty1 clos :@ p) -> do
       x' <- apply ctx clos (VVariable (name :@ p) level :@ p)
       x' <- quote ctx (level + 1) x'
@@ -160,22 +157,6 @@ quoteSpine ctx lvl term ((u, i) : sp) pos = do
   t1 <- quote ctx lvl u
   t2 <- quoteSpine ctx lvl term sp pos
   pure $ TAST.EApplication t2 (not i) t1 :@ pos
-
-toNF :: Context -> Located TAST.Expression -> Either (Diagnostic String) (Located TAST.Expression)
-toNF ctx =
-  first toDiagnostic
-    . runExcept
-    . (quote ctx (Lvl . Env.length $ env ctx) <=< eval ctx)
-  where
-    toDiagnostic = addReport def . fromElabError
-
-normalize :: Context -> Located TAST.Expression -> Either (Diagnostic String) (Located TAST.Expression)
-normalize = toNF
-{-# INLINE normalize #-}
-
-normalize0 :: Located TAST.Expression -> Either (Diagnostic String) (Located TAST.Expression)
-normalize0 = normalize defaultContext
-{-# INLINE normalize0 #-}
 
 ------------
 
