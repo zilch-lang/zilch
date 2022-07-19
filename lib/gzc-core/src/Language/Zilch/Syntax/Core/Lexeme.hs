@@ -30,6 +30,8 @@ data Token
     TkDo
   | -- | @type@: the builtin type of types
     TkType
+  | -- | @assume@: parameter introduction
+    TkAssume
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition

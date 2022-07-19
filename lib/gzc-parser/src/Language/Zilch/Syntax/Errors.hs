@@ -7,7 +7,7 @@ module Language.Zilch.Syntax.Errors where
 import Data.Located (Located ((:@)), Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (Hint), Report, err, warn)
 import Error.Diagnose.Compat.Megaparsec
 import qualified Text.Megaparsec as MP
 
@@ -50,6 +50,11 @@ data DesugarError
   | LinearTopLevelBinding
       Text
       Position
+  | PublicAssumptions
+      Position
+  | TypelessAssumption
+      Text
+      Position
 
 data DesugarWarning
 
@@ -66,7 +71,18 @@ fromDesugarerError (LinearTopLevelBinding name pos) =
     "Parse error"
     [(pos, This $ "Top-level binding '" <> Text.unpack name <> "' cannot be made linear")]
     ["Top-level bindings may only be either erased (usage 0) or unrestricted (usage ω)."]
-fromDesugarerError _ = err Nothing "sorry" [] []
+fromDesugarerError (PublicAssumptions pos) =
+  err
+    Nothing
+    "Parse error"
+    [(pos, This "Cannot bind assumptions publicly")]
+    [Hint "Remove the 'public' modifier from this declaration."]
+fromDesugarerError (TypelessAssumption name pos) =
+  err
+    Nothing
+    "Parse error"
+    [(pos, This $ "Assumption '" <> Text.unpack name <> "' is missing a type")]
+    ["Every top-level assumption must have a type to be complete."]
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn Nothing "sorry" [] []

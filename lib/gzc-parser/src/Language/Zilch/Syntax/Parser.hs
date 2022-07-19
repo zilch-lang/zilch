@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 module Language.Zilch.Syntax.Parser (parseTokens) where
 
@@ -136,7 +137,7 @@ parseTopLevelDefinition = located $
       <$> pure []
       <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
       <*> MP.choice
-        ([parseLet s] :: [m (Located Definition)])
+        ([parseLet s, parseAssume s] :: [m (Located Definition)])
 
 parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do
@@ -147,6 +148,11 @@ parseLet s = lexeme $ located do
     <*> (MP.many (lexeme $ parseParameter s) <* s)
     <*> (MP.optional (lexeme (token TkColon) *> s *> lexeme (parseExpression s)) <* s)
     <*> (lexeme (token TkColonEquals <|> token TkUniColonEquals) *> s *> parseExpression s)
+
+parseAssume :: forall m. MonadParser m => m () -> m (Located Definition)
+parseAssume s = lexeme $ located do
+  lexeme (token TkAssume) <* s
+  Assume <$> (lexeme (parseParameter s) `MP.sepBy1` MP.try s)
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =

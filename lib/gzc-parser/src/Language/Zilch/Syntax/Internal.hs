@@ -92,3 +92,4 @@ showToken (Core.TkInlineComment c) = "--" <> Text.unpack c
 showToken (Core.TkMultilineComment c) = "/-" <> Text.unpack c <> "-/"
 showToken Core.TkQuestionMark = "?"
 showToken Core.TkType = "type"
+showToken Core.TkAssume = "assume"

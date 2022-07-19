@@ -45,6 +45,9 @@ data Definition
       [Located Parameter]
       (Maybe (Located Expression))
       (Located Expression)
+  | -- | Assumption (as parameters) introduced at the top-level
+    Assume
+      [Located Parameter]
   deriving (Show)
 
 data Parameter
