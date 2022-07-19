@@ -95,7 +95,7 @@ nonIndented = MPL.nonIndented whitespace
 indentBlock :: forall m a. MonadParser m => m a -> m [a]
 indentBlock p = do
   pos <- whitespace *> MPL.indentLevel
-  p `MP.sepBy1` indentGuard EQ pos
+  (p <* whitespace) `MP.sepBy1` indentGuard EQ pos
 
 -- | See @'MPL.lineFold'@.
 lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
@@ -161,13 +161,15 @@ parseParameter s =
     explicit =
       Explicit
         <$> (MP.optional (lexeme parseResourceUsage) <* s)
-        <*> (lexeme parseIdentifier <* s)
+        <*> (lexeme idOrIgnore <* s)
         <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
     implicit =
       Implicit
         <$> (MP.optional (lexeme parseResourceUsage) <* s)
-        <*> (lexeme parseIdentifier <* s)
+        <*> (lexeme idOrIgnore <* s)
         <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+
+    idOrIgnore = parseIdentifier <|> fmap ("_" <$) (token TkUnderscore)
 
 parseResourceUsage :: forall m. MonadParser m => m (Located Integer)
 parseResourceUsage = do
