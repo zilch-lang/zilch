@@ -83,8 +83,9 @@ data Expression
   | EInsertedMeta
       Int
       [Binding]
-  | -- builtin types
+  | -- | Builtin types
     EBuiltin BuiltinType
+  | EBoolean Bool
   | EUnknown
   deriving (Show)
 
@@ -100,4 +101,5 @@ data BuiltinType
   | TyS32
   | TyS16
   | TyS8
+  | TyBool
   deriving (Show)

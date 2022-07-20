@@ -100,6 +100,8 @@ instance Pretty (Located Expression) where
     pretty ty
   pretty (EUnknown :@ _) =
     "???"
+  pretty (EBoolean bool :@ _) =
+    if bool then "true" else "false"
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"
@@ -110,3 +112,4 @@ instance Pretty BuiltinType where
   pretty TyS32 = "s32"
   pretty TyS16 = "s16"
   pretty TyS8 = "s8"
+  pretty TyBool = "bool"

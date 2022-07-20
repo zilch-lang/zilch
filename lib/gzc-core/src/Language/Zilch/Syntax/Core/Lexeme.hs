@@ -66,6 +66,10 @@ data Token
     TkDoubleRightArrow
   | -- | @⇒@: @=>@ but Unicode
     TkUniDoubleRightArrow
+  | -- | @true@
+    TkTrue
+  | -- | @false@
+    TkFalse
   | -- | @forall@: universal type quantifier
     TkForall
   | -- | @∀@: @forall@ but Unicode

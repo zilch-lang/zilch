@@ -30,6 +30,7 @@ eval ctx (TAST.EInteger e ty :@ p) = do
   ty :@ _ <- eval ctx (TAST.EBuiltin ty :@ p)
   pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
+eval _ (TAST.EBoolean bool :@ p) = pure $ (if bool then VTrue else VFalse) :@ p
 eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = case lookup (env ctx) i of
   VThunk expr :@ _ -> eval ctx expr
   -- val <- eval ctx expr
@@ -67,6 +68,7 @@ eval ctx (TAST.EBuiltin TAST.TyS64 :@ p) = pure $ VBuiltinS64 :@ p
 eval ctx (TAST.EBuiltin TAST.TyS32 :@ p) = pure $ VBuiltinS32 :@ p
 eval ctx (TAST.EBuiltin TAST.TyS16 :@ p) = pure $ VBuiltinS16 :@ p
 eval ctx (TAST.EBuiltin TAST.TyS8 :@ p) = pure $ VBuiltinS8 :@ p
+eval ctx (TAST.EBuiltin TAST.TyBool :@ p) = pure $ VBuiltinBool :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -121,6 +123,8 @@ quote ctx level val = do
       tmp <- quote ctx level (ty :@ p)
       let TAST.EBuiltin ty :@ _ = tmp
       pure $ TAST.EInteger (Text.pack (show n) :@ p) ty :@ p
+    VTrue :@ p -> pure $ TAST.EBoolean True :@ p
+    VFalse :@ p -> pure $ TAST.EBoolean False :@ p
     (VLam usage name isExplicit ty1 clos :@ p) -> do
       x' <- apply ctx clos (VVariable (name :@ p) level :@ p)
       x' <- quote ctx (level + 1) x'
@@ -149,6 +153,7 @@ quote ctx level val = do
     VBuiltinS32 :@ p -> pure $ TAST.EBuiltin TAST.TyS32 :@ p
     VBuiltinS16 :@ p -> pure $ TAST.EBuiltin TAST.TyS16 :@ p
     VBuiltinS8 :@ p -> pure $ TAST.EBuiltin TAST.TyS8 :@ p
+    VBuiltinBool :@ p -> pure $ TAST.EBuiltin TAST.TyBool :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

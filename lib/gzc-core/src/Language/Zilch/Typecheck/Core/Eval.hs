@@ -81,6 +81,9 @@ data Value
   | VBuiltinS16
   | VBuiltinS8
   | VUnknown
+  | VBuiltinBool
+  | VTrue
+  | VFalse
   deriving (Show)
 
 data MetaEntry

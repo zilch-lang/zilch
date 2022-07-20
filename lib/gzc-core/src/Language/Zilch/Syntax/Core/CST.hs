@@ -94,4 +94,6 @@ data Expression
   | EPi
       (Located Parameter)
       (Located Expression)
+  | ETrue
+  | EFalse
   deriving (Show)

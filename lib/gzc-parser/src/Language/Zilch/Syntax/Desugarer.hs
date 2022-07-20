@@ -136,6 +136,8 @@ desugarExpression (CST.EPi param ret :@ p) = do
   param' <- desugarParameter param
   ret' <- desugarExpression ret
   pure $ AST.EPi param' ret' :@ p
+desugarExpression (CST.ETrue :@ p) = pure $ AST.EBoolean True :@ p
+desugarExpression (CST.EFalse :@ p) = pure $ AST.EBoolean False :@ p
 desugarExpression _ = error "todo"
 
 desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix

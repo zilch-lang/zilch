@@ -201,6 +201,8 @@ parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
     ( [ ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
+        ETrue <$ token TkTrue,
+        EFalse <$ token TkFalse,
         do
           (nb, suf) :@ _ <- parseNumber
           pure $ EInt nb suf,

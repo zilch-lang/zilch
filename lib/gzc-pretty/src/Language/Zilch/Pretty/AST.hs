@@ -90,6 +90,8 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
+  pretty (EBoolean bool :@ _) =
+    if bool then "true" else "false"
 
 instance Pretty IntegerSuffix where
   pretty SuffixS8 = "s8"

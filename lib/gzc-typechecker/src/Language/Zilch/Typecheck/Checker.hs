@@ -320,6 +320,13 @@ synthetize rel ctx (AST.ECharacter c :@ p) =
           Γ ⊢ c ⇒^ω char
   -}
   pure (mempty, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.extend rel :@ p)
+synthetize rel ctx (AST.EBoolean bool :@ p) =
+  {-
+     b is a boolean literal
+    ──────────────────────── [⇒ bool-I]
+         Γ ⊢ b ⇒^ω bool
+  -}
+  pure (mempty, TAST.EBoolean bool :@ p, VBuiltinBool :@ p, TAST.extend rel :@ p)
 synthetize rel ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
   {-
      Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
@@ -390,6 +397,7 @@ synthetize rel ctx (AST.EIdentifier x :@ p) = do
       "s16" -> pure (TAST.EBuiltin TAST.TyS16 :@ p, VType :@ p, TAST.O)
       "s32" -> pure (TAST.EBuiltin TAST.TyS32 :@ p, VType :@ p, TAST.O)
       "s64" -> pure (TAST.EBuiltin TAST.TyS64 :@ p, VType :@ p, TAST.O)
+      "bool" -> pure (TAST.EBuiltin TAST.TyBool :@ p, VType :@ p, TAST.O)
       name -> throwError $ BindingNotFound name p
 synthetize rel ctx (AST.EType :@ p) = do
   when (rel /= TAST.Irrelevant) do
@@ -442,39 +450,3 @@ closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure
 closeVal ctx ty = do
   ty <- quote ctx (lvl ctx + 1) ty
   pure $ Clos (env ctx) ty
-
--- combineContexts :: forall m. MonadElab m => Context -> Context -> Context -> Position -> m Context
--- combineContexts base c1 c2 pos = do
---   let vars1 = map (\(_, x, _, _) -> x) (types base)
---       vars2 = map (\(_, x, _, _) -> x) (types c1)
---       vars3 = map (\(_, x, _, _) -> x) (types c2)
-
---       vars = vars1 `List.union` vars2 `List.union` vars3
-
---   types' <- forM' vars (types base) (types c1) (types c2) checkLinearVar
---   pure $ base {types = types'}
---   where
---     forM' [] _ _ _ _ = pure []
---     forM' (x : xs) v1 v2 v3 f = do
---       y <- f (lookup' x v1) (lookup' x v2) (lookup' x v3)
---       ys <- forM' xs v1 v2 v3 f
-
---       case y of
---         Nothing -> pure ys
---         Just y -> pure (y : ys)
-
---     lookup' _ [] = Nothing
---     lookup' x (u@(_, y, _, _) : ys)
---       | x == y = Just u
---       | otherwise = lookup' x ys
-
---     checkLinearVar (Just (TAST.I, x, src, ty)) v2 v3 = case (v2, v3) of
---       (Just (TAST.O, _, _, _), Just (TAST.O, _, _, _)) -> throwError $ NonLinearUseOfVariable x pos
---       (Just (TAST.I, _, _, _), Just (TAST.O, _, _, _)) -> pure $ Just (TAST.O, x, src, ty)
---       (Just (TAST.O, _, _, _), Just (TAST.I, _, _, _)) -> pure $ Just (TAST.O, x, src, ty)
---       (Just (TAST.I, _, _, _), Just (TAST.I, _, _, _)) -> pure $ Just (TAST.I, x, src, ty)
---       (Just (u2, _, _, _), Nothing) -> pure $ Just (u2, x, src, ty)
---       (Nothing, Just (u2, _, _, _)) -> pure $ Just (u2, x, src, ty)
---       (_, _) -> pure $ Just (TAST.I, x, src, ty)
---     checkLinearVar (Just (u, x, src, ty)) _ _ = pure $ Just (u, x, src, ty)
---     checkLinearVar Nothing _ _ = pure Nothing

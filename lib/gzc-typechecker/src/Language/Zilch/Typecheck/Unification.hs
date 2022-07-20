@@ -68,16 +68,7 @@ rename ctx m ren v = go ren v
           a' <- go ren a
           t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
           pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
-        VType :@ p -> pure $ TAST.EType :@ p
-        VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p
-        VBuiltinU32 :@ p -> pure $ TAST.EBuiltin TAST.TyU32 :@ p
-        VBuiltinU16 :@ p -> pure $ TAST.EBuiltin TAST.TyU16 :@ p
-        VBuiltinU8 :@ p -> pure $ TAST.EBuiltin TAST.TyU8 :@ p
-        VBuiltinS64 :@ p -> pure $ TAST.EBuiltin TAST.TyS64 :@ p
-        VBuiltinS32 :@ p -> pure $ TAST.EBuiltin TAST.TyS32 :@ p
-        VBuiltinS16 :@ p -> pure $ TAST.EBuiltin TAST.TyS16 :@ p
-        VBuiltinS8 :@ p -> pure $ TAST.EBuiltin TAST.TyS8 :@ p
-        t :@ p -> error "TODO: rename base terms"
+        val -> quote ctx (lvl ctx) val
 
     goSpine ren t [] = pure t
     goSpine ren t@(_ :@ p) ((u, i) : sp) = do

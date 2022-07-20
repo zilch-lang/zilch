@@ -80,6 +80,8 @@ data Expression
     EPi
       (Located Parameter)
       (Located Expression)
+  | EBoolean
+      Bool
   deriving (Show)
 
 data IntegerSuffix
