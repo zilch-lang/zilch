@@ -6,7 +6,7 @@
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
 import Control.Monad (forM, unless, when)
-import Control.Monad.Except (throwError)
+import Control.Monad.Except (catchError, throwError)
 import Data.Bifunctor (first)
 import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
@@ -402,13 +402,15 @@ synthetize rel ctx (AST.EIdentifier x :@ p) = do
       name -> throwError $ BindingNotFound name p
 synthetize rel ctx (AST.EType :@ p) = do
   when (rel /= TAST.Irrelevant) do
-    error $ "TODO: error for EType in non-erased context"
+    throwError $ ErasedInRelevantContext p
   {-
     ────────────────── [⇒ type-F]
      Γ ⊢ type ⇒⁰ type
   -}
   pure (mempty, TAST.EType :@ p, VType :@ p, TAST.O :@ p)
 synthetize rel ctx (AST.EPi (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ p) = do
+  when (rel /= TAST.Irrelevant) do
+    throwError $ ErasedInRelevantContext p
   {-
      0Γ ⊢ A ⇐⁰ type       0Γ, x :⁰ A ⊢ B ⇐⁰ type
     ───────────────────────────────────────────── [⇒ Π-F]
@@ -441,36 +443,47 @@ synthetize rel ctx (AST.EHole :@ p1) = do
   pure (mempty, t, a, TAST.extend rel :@ p1)
 synthetize rel ctx (AST.EIfThenElse c t e :@ p) = do
   {-
-     0Γ ⊢ c ⇐⁰ bool         0Γ ⊢ t ⇒⁰ A         0Γ ⊢ e ⇒⁰ B
+     0Γ ⊢ c ⇐⁰ bool          Γ ⊢ t ⇒ᵖ A          Γ ⊢ e ⇒ᵖ B
     ──────────────────────────────────────────────────────── [⇐ bool-E₀]
-          Γ ⊢ if c then t else e ⇒⁰ if c then A else B
+          Γ ⊢ if c then t else e ⇒ᵖ if c then A else B
 
-      Γ₀ ⊢ c ⇒ⁱ bool         Γ₁ ⊢ t ⇒¹ A            Γ₁ ⊢ e ⇒¹ B
+      Γ₀ ⊢ c ⇒ⁱ bool         Γ₁ ⊢ t ⇒¹ A            Γ₁ ⊢ e ⇒¹ A
     ───────────────────────────────────────────────────────────── [⇐ bool-E₁]
-         Γ₀ + pΓ₁ ⊢ if c then t else e ⇒ᵖ if c then A else B
+               Γ₀ + pΓ₁ ⊢ if c then t else e ⇒ᵖ A
   -}
-  case TAST.extend rel of
-    TAST.O -> do
+  (qs0, c, bool, m1) <-
+    do
+      (qs, c) <- check TAST.Irrelevant ctx c (VBuiltinBool :@ getPos c)
+      pure (qs, c, VBuiltinBool :@ getPos c, TAST.O :@ getPos c)
+      `catchError` \_ -> synthetize TAST.Present ctx c
+  c' <- eval ctx c
+
+  case m1 of
+    TAST.O :@ _ -> do
       -- apply [⇐ bool-E₀]
-      (_, c) <- check TAST.Irrelevant ctx c (VBuiltinBool :@ getPos c)
-      c' <- eval ctx c
+      (qs1, t, a, u1) <- synthetize rel ctx t
+      (qs2, e, b, u2) <- synthetize rel ctx e
 
-      (_, t, a, u1 :@ _) <- synthetize TAST.Irrelevant ctx t
-      (_, e, b, u2 :@ _) <- synthetize TAST.Irrelevant ctx e
-
-      pure (mempty, TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, TAST.lub u1 u2 :@ p)
-    p' -> do
-      -- apply [⇐ bool-E₁]
-      (qs0, c, bool, _) <- synthetize TAST.Present ctx c
-      unify ctx bool (VBuiltinBool :@ getPos c)
-      c' <- eval ctx c
-
-      (qs1, t, a, _) <- synthetize TAST.Present ctx t
-      (qs2, e, b, _) <- synthetize TAST.Present ctx e
+      when (unLoc u1 /= unLoc u2) do
+        throwError $ MultiplicityMismatch u1 u2
 
       let qs1' = qs1 `Usage.merge` qs2
 
-      pure (qs0 `Usage.concat` Usage.scale p' qs1', TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, p' :@ p)
+      pure (qs0 `Usage.concat` qs1', TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, u1)
+    p' -> do
+      -- apply [⇐ bool-E₁]
+      unify ctx bool (VBuiltinBool :@ getPos c)
+
+      (qs1, t, a, u1) <- synthetize TAST.Present ctx t
+      (qs2, e, b, u2) <- synthetize TAST.Present ctx e
+
+      unify ctx a b
+      when (unLoc u1 /= unLoc u2) do
+        throwError $ MultiplicityMismatch u1 u2
+
+      let qs1' = qs1 `Usage.merge` qs2
+
+      pure (qs0 `Usage.concat` Usage.scale (unLoc p') qs1', TAST.EIfThenElse c t e :@ p, a, p')
 synthetize _ _ expr = error $ "not yet handled: " <> show expr
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

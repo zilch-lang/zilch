@@ -1,6 +1,6 @@
 module Language.Zilch.Typecheck.Errors where
 
-import Data.Located (Located ((:@)), Position, unLoc, getPos)
+import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Report, err)
@@ -53,6 +53,8 @@ data ElabError
   | -- | A multiplicity mismatch happened.
     UsageMismatches
       [(Multiplicity, Multiplicity, Located Text, Located Expression)]
+      Position
+  | ErasedInRelevantContext
       Position
 
 fromElabError :: ElabError -> Report String
@@ -131,9 +133,16 @@ fromElabError (UsageMismatches matches pos) =
     messages
     []
   where
-    messages = [(getPos x, This $ "Variable " <> Text.unpack (unLoc x) <> " of type " <> show (pretty ty) <> " was expected to be used " <> showMult q <> " times but has been used " <> showMult p <> " times") | (p, q, x, ty) <- matches]
-      <> [(pos, Where $ "...while type-checking this expression")]
+    messages =
+      [(getPos x, This $ "Variable " <> Text.unpack (unLoc x) <> " of type " <> show (pretty ty) <> " was expected to be used " <> showMult q <> " times\nbut has been used " <> showMult p <> " times") | (p, q, x, ty) <- matches]
+        <> [(pos, Where $ "...while type-checking this expression")]
 
     showMult O = "0"
     showMult I = "1"
     showMult W = "ω"
+fromElabError (ErasedInRelevantContext pos) =
+  err
+    Nothing
+    "Type-checking error"
+    [(pos, This $ "This term was meant to be used in an irrelevant position\nbut was found in a relevant context")]
+    []
