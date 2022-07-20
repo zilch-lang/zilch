@@ -15,6 +15,7 @@ import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
+import Debug.Trace (traceShow)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -421,29 +422,55 @@ synthetize rel ctx (AST.EPi (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ 
   pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 name ty :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
 synthetize rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) ex :@ p) = do
   {-
-     0Γ ⊢ A ⇐⁰ type ℓ       Γ, x :ⁱ A ⊢ e ⇒¹ B
-    ─────────────────────────────────────────── [⇒ λ-I]
-       Γ ⊢ (λ(x :ⁱ A) ⇒ e) ⇒¹ (x :ⁱ A) → B
-
-   NOTE: We trick a little bit here by only infering a linear use.
-         There are cases where we could want 0 too, so this might be considered kind of erroneous.
-         Ideally, we'd say that we cannot infer the type of the literal lambda, and it should be fine as such case may not happen that frequently
-         (if at all, who writes @(λ(x :ⁱ A). x) e@ anyway?).
-
-         Instead, we choose to infer a usage of @1@ because such functions are applied directly, hence only once.
+     0Γ ⊢ A ⇐⁰ type ℓ       Γ, x :ⁱᵖ A ⊢ e ⇒ᵖ B
+    ──────────────────────────────────────────── [⇒ λ-I]
+       ipΓ ⊢ (λ(x :ⁱ A) ⇒ e) ⇒ᵖ (x :ⁱ A) → B
   -}
   (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
   ty' <- eval ctx ty
-  (qs1, (ex, b, u2)) <- withLocalVar name (unLoc m1) ty' ctx \ctx -> do
-    (u, ex, b, u2) <- synthetize TAST.Present ctx ex
+  let ip = unLoc m1 * TAST.extend rel
+  (qs1, (ex, b, u2)) <- withLocalVar name ip ty' ctx \ctx -> do
+    (u, ex, b, u2) <- synthetize rel ctx ex
     pure (u, getPos ex, (ex, b, u2))
 
   clos <- closeVal ctx b
-  pure (qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
+  pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
 synthetize rel ctx (AST.EHole :@ p1) = do
   a <- eval ctx (freshMeta ctx :@ p1)
   let t = freshMeta ctx :@ p1
   pure (mempty, t, a, TAST.extend rel :@ p1)
+synthetize rel ctx (AST.EIfThenElse c t e :@ p) = do
+  {-
+     0Γ ⊢ c ⇐⁰ bool         0Γ ⊢ t ⇒⁰ A         0Γ ⊢ e ⇒⁰ B
+    ──────────────────────────────────────────────────────── [⇐ bool-E₀]
+          Γ ⊢ if c then t else e ⇒⁰ if c then A else B
+
+      Γ₀ ⊢ c ⇒ⁱ bool         Γ₁ ⊢ t ⇒¹ A            Γ₁ ⊢ e ⇒¹ B
+    ───────────────────────────────────────────────────────────── [⇐ bool-E₁]
+         Γ₀ + pΓ₁ ⊢ if c then t else e ⇒ᵖ if c then A else B
+  -}
+  case TAST.extend rel of
+    TAST.O -> do
+      -- apply [⇐ bool-E₀]
+      (_, c) <- check TAST.Irrelevant ctx c (VBuiltinBool :@ getPos c)
+      c' <- eval ctx c
+
+      (_, t, a, u1 :@ _) <- synthetize TAST.Irrelevant ctx t
+      (_, e, b, u2 :@ _) <- synthetize TAST.Irrelevant ctx e
+
+      pure (mempty, TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, TAST.lub u1 u2 :@ p)
+    p' -> do
+      -- apply [⇐ bool-E₁]
+      (qs0, c, bool, _) <- synthetize TAST.Present ctx c
+      unify ctx bool (VBuiltinBool :@ getPos c)
+      c' <- eval ctx c
+
+      (qs1, t, a, _) <- synthetize TAST.Present ctx t
+      (qs2, e, b, _) <- synthetize TAST.Present ctx e
+
+      let qs1' = qs1 `Usage.merge` qs2
+
+      pure (qs0 `Usage.concat` Usage.scale p' qs1', TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, p' :@ p)
 synthetize _ _ expr = error $ "not yet handled: " <> show expr
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

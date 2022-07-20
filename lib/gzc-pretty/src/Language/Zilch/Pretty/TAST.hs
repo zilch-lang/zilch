@@ -8,7 +8,7 @@ import Data.List (intersperse)
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
-import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -102,6 +102,19 @@ instance Pretty (Located Expression) where
     "???"
   pretty (EBoolean bool :@ _) =
     if bool then "true" else "false"
+  pretty (EIfThenElse cond t e :@ _) =
+    align $
+      "if"
+        <> space
+        <> pretty cond
+        <> line
+        <> "then"
+        <> space
+        <> pretty t
+        <> line
+        <> "else"
+        <> space
+        <> pretty e
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

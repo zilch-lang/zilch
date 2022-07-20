@@ -82,6 +82,10 @@ data Expression
       (Located Expression)
   | EBoolean
       Bool
+  | EIfThenElse
+      (Located Expression)
+      (Located Expression)
+      (Located Expression)
   deriving (Show)
 
 data IntegerSuffix

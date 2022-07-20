@@ -96,4 +96,8 @@ data Expression
       (Located Expression)
   | ETrue
   | EFalse
+  | EIfThenElse
+      (Located Expression)
+      (Located Expression)
+      (Located Expression)
   deriving (Show)

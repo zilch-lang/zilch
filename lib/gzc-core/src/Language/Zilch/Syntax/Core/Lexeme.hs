@@ -32,6 +32,12 @@ data Token
     TkType
   | -- | @assume@: parameter introduction
     TkAssume
+  | -- | @if@
+    TkIf
+  | -- | @then@
+    TkThen
+  | -- | @else@
+    TkElse
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition

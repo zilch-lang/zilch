@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.AST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Pretty (pretty), braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =
@@ -92,6 +92,19 @@ instance Pretty (Located Expression) where
       <> pretty val
   pretty (EBoolean bool :@ _) =
     if bool then "true" else "false"
+  pretty (EIfThenElse cond t e :@ _) =
+    align $
+      "if"
+        <> space
+        <> pretty cond
+        <> line
+        <> "then"
+        <> space
+        <> pretty t
+        <> line
+        <> "else"
+        <> space
+        <> pretty e
 
 instance Pretty IntegerSuffix where
   pretty SuffixS8 = "s8"

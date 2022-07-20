@@ -144,6 +144,9 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken "assume" = TkAssume
     toToken "true" = TkTrue
     toToken "false" = TkFalse
+    toToken "if" = TkIf
+    toToken "then" = TkThen
+    toToken "else" = TkElse
     toToken s = TkSymbol (Text.pack s)
 
 number :: forall m. MonadLexer m => m (Located Token)

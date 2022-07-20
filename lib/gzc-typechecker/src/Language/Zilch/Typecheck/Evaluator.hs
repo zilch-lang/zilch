@@ -9,6 +9,7 @@ module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruij
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Debug.Trace (traceShow)
 import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
@@ -31,12 +32,13 @@ eval ctx (TAST.EInteger e ty :@ p) = do
   pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval _ (TAST.EBoolean bool :@ p) = pure $ (if bool then VTrue else VFalse) :@ p
-eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) = case lookup (env ctx) i of
-  VThunk expr :@ _ -> eval ctx expr
-  -- val <- eval ctx expr
-  -- setValue (env ctx) i val
-  -- pure val
-  val -> pure val
+eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) =
+  case lookup (env ctx) i of
+    VThunk expr :@ _ -> eval ctx expr
+    -- val <- eval ctx expr
+    -- setValue (env ctx) i val
+    -- pure val
+    val -> pure val
 eval ctx (TAST.EApplication e1 isImplicit e2 :@ _) = do
   v1 <- eval ctx e1
   v2 <- eval ctx e2
@@ -69,6 +71,11 @@ eval ctx (TAST.EBuiltin TAST.TyS32 :@ p) = pure $ VBuiltinS32 :@ p
 eval ctx (TAST.EBuiltin TAST.TyS16 :@ p) = pure $ VBuiltinS16 :@ p
 eval ctx (TAST.EBuiltin TAST.TyS8 :@ p) = pure $ VBuiltinS8 :@ p
 eval ctx (TAST.EBuiltin TAST.TyBool :@ p) = pure $ VBuiltinBool :@ p
+eval ctx (TAST.EIfThenElse c t e :@ p) = do
+  c' <- eval ctx c
+  t' <- eval ctx t
+  e' <- eval ctx e
+  pure (VIfThenElse c' t' e' :@ p)
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -143,6 +150,11 @@ quote ctx level val = do
           (TAST.Parameter (not isExplicit) (usage :@ p) (y :@ p) val' :@ p)
           x'
           :@ p
+    (VIfThenElse c t e :@ p) -> do
+      c' <- quote ctx level c
+      t' <- quote ctx level t
+      e' <- quote ctx level e
+      pure $ TAST.EIfThenElse c' t' e' :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p
     (VUnknown :@ p) -> pure $ TAST.EUnknown :@ p
     VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p

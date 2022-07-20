@@ -74,23 +74,3 @@ define usage f val ty ctx =
       lvl = lvl ctx + 1,
       bds = Defined (unLoc f) : bds ctx
     }
-
-scale :: Context -> Multiplicity -> Context
-scale (Context env types lvl bds) pi = Context env types' lvl bds
-  where
-    types' = types <&> \(usage, name, origin, ty) -> (pi * usage, name, origin, ty)
-
-union :: Context -> Context -> Context
-union (Context env1 tys1 lvl1 bds1) (Context env2 tys2 lvl2 bds2)
-  | length env1 == length env2 && length tys1 == length tys2 && lvl1 == lvl2 && bds1 == bds2 =
-    let tys = go tys1 tys2
-     in Context env1 tys lvl1 bds1
-  where
-    go :: [(Multiplicity, Located Text, Origin, Located Value)] -> [(Multiplicity, Located Text, Origin, Located Value)] -> [(Multiplicity, Located Text, Origin, Located Value)]
-    go [] [] = []
-    go ((u1, name1, origin1, ty1) : env1) ((u2, name2, origin2, ty2) : env2)
-      | name1 == name2 =
-        let tys = go env1 env2
-         in (u1 + u2, name1, origin1, ty1) : tys
-    go _ _ = error "inconsistent contexts"
-union _ _ = error "inconsistent contexts"

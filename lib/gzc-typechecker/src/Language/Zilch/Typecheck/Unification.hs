@@ -68,7 +68,9 @@ rename ctx m ren v = go ren v
           a' <- go ren a
           t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
           pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
-        val -> quote ctx (lvl ctx) val
+        -- maybe we have a better way of handling all base terms?
+        -- this is merely to avoid duplicated code
+        val -> quote ctx cod val
 
     goSpine ren t [] = pure t
     goSpine ren t@(_ :@ p) ((u, i) : sp) = do
@@ -134,6 +136,10 @@ unify' ctx lvl t u = do
           <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
       unify' ctx (lvl + 1) v1 v2
+    (VIfThenElse c1 t1 e1 :@ _, VIfThenElse c2 t2 e2 :@ _) -> do
+      unify' ctx lvl c1 c2
+      unify' ctx lvl t1 t2
+      unify' ctx lvl e1 e2
     (VRigid _ l1 sp1 :@ p1, VRigid _ l2 sp2 :@ p2)
       | l1 == l2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m1 sp1 :@ p1, VFlexible m2 sp2 :@ p2)
@@ -141,6 +147,8 @@ unify' ctx lvl t u = do
     (VFlexible m sp :@ p1, t) -> solve lvl m sp t
     (t, VFlexible m sp :@ p2) -> solve lvl m sp t
     (VType :@ _, VType :@ _) -> pure ()
+    (VTrue :@ _, VTrue :@ _) -> pure ()
+    (VFalse :@ _, VFalse :@ _) -> pure ()
     (VBuiltinS8 :@ _, VBuiltinS8 :@ _) -> pure ()
     (VBuiltinS16 :@ _, VBuiltinS16 :@ _) -> pure ()
     (VBuiltinS32 :@ _, VBuiltinS32 :@ _) -> pure ()
@@ -149,6 +157,7 @@ unify' ctx lvl t u = do
     (VBuiltinU16 :@ _, VBuiltinU16 :@ _) -> pure ()
     (VBuiltinU32 :@ _, VBuiltinU32 :@ _) -> pure ()
     (VBuiltinU64 :@ _, VBuiltinU64 :@ _) -> pure ()
+    (VBuiltinBool :@ _, VBuiltinBool :@ _) -> pure ()
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()

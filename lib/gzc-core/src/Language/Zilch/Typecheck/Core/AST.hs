@@ -86,6 +86,10 @@ data Expression
   | -- | Builtin types
     EBuiltin BuiltinType
   | EBoolean Bool
+  | EIfThenElse
+      (Located Expression)
+      (Located Expression)
+      (Located Expression)
   | EUnknown
   deriving (Show)
 

@@ -10,6 +10,7 @@ import Data.Bifunctor (first)
 import Data.IntMap (IntMap)
 import Data.Located (Located)
 import Error.Diagnose (Diagnostic, addReport, def)
+import GHC.Stack (HasCallStack)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Checker (checkProgram)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
@@ -17,7 +18,7 @@ import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Defaults
 import Language.Zilch.Typecheck.Errors
 
-type MonadElab m = (MonadError ElabError m, MonadFix m)
+type MonadElab m = (HasCallStack, MonadError ElabError m, MonadFix m)
 
 -------------
 

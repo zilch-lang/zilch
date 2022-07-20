@@ -71,6 +71,13 @@ data Value
   | -- | An unevaluated piece of code
     VThunk
       (Located Expression)
+  | -- | A conditional expression
+    VIfThenElse
+      (Located Value)
+      (Located Value)
+      (Located Value)
+  | VTrue
+  | VFalse
   | -- builtin types
     VBuiltinU64
   | VBuiltinU32
@@ -82,8 +89,6 @@ data Value
   | VBuiltinS8
   | VUnknown
   | VBuiltinBool
-  | VTrue
-  | VFalse
   deriving (Show)
 
 data MetaEntry

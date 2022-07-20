@@ -208,6 +208,7 @@ parseAtom s = located do
           pure $ EInt nb suf,
         ETypedHole <$ token TkQuestionMark,
         EHole <$ token TkUnderscore,
+        parseIf s,
         parseLambda s,
         parseDo s,
         EType <$ token TkType,
@@ -247,3 +248,13 @@ parsePi s = do
   _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
   ret <- parseExpression s
   pure $ EPi param ret
+
+parseIf :: forall m. MonadParser m => m () -> m Expression
+parseIf s = do
+  lexeme (token TkIf) <* s
+  cond <- parseExpression s
+  s *> lexeme (token TkThen) <* s
+  t <- parseExpression s
+  s *> lexeme (token TkElse) <* s
+  e <- parseExpression s
+  pure (EIfThenElse cond t e)
