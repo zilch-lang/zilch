@@ -62,7 +62,7 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
         ─────────────────────────────────────────── [⇐ let-I₁]
                  Γ₁ + iΓ₂ ⊢ let x :ⁱ A := e
       -}
-      go name (types ctx) p5
+      checkAlreadyBound name (types ctx) p5
 
       (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p3)
       ty' <- eval ctx ty
@@ -88,10 +88,10 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
 
       pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4) : defs) :@ p)
   where
-    go _ [] p5 = pure ()
-    go x ((usage, x', origin, a) : types) p5
+    checkAlreadyBound _ [] p5 = pure ()
+    checkAlreadyBound x ((usage, x', origin, a) : types) p5
       | x == x' && origin == Source = throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
-      | otherwise = go x types p5
+      | otherwise = checkAlreadyBound x types p5
 
 insert' :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity) -> m (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity)
 insert' ctx (qs, expr, ty, usage) = do
