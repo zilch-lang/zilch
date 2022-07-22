@@ -105,12 +105,12 @@ applyBDs ctx (t : env) v (TAST.Defined _ : bds) = applyBDs ctx env v bds
 applyBDs _ _ _ _ = error "impossible"
 
 metaValue :: Int -> Position -> Located Value
-metaValue m pos = case lookupMeta m of
+metaValue m pos = case fst $ lookupMeta m of
   Solved v -> v :@ pos
   Unsolved -> VMeta m :@ pos
 
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
-force ctx (VFlexible m sp :@ p) | Solved t <- lookupMeta m = do
+force ctx (VFlexible m sp :@ p) | (Solved t, _) <- lookupMeta m = do
   v1 <- applySpine ctx (t :@ p) sp
   force ctx v1
 force ctx t = pure t

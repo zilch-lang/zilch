@@ -70,6 +70,9 @@ data ElabError
     RecursiveValueBinding
       Text
       Position
+  | -- | A hole could not solved.
+    CannotSolveHole
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -201,6 +204,12 @@ fromElabError (RecursiveValueBinding x p) =
     "Type-checking error"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is recursively bound to a value which is not a function")]
     [Hint "Potential fixes include transforming this binding into a function"]
+fromElabError (CannotSolveHole p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This "Cannot infer any term to replace this hole")]
+    []
 
 showMult :: Multiplicity -> String
 showMult O = "0"

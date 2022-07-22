@@ -3,18 +3,19 @@ module Language.Zilch.Typecheck.Metavariables where
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.Located (Position)
 import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 nextMeta :: IORef Int
-nextMeta = unsafeDupablePerformIO $ newIORef 0 -- alternative: ReaderT IO (reader has metacontext)
+nextMeta = unsafeDupablePerformIO $ newIORef 0
 {-# NOINLINE nextMeta #-}
 
-mcxt :: IORef (IntMap MetaEntry) -- in "production", we'd have mutable array instead of IntMap
+mcxt :: IORef (IntMap (MetaEntry, Position))
 mcxt = unsafeDupablePerformIO $ newIORef mempty
 {-# NOINLINE mcxt #-}
 
-lookupMeta :: Int -> MetaEntry
+lookupMeta :: Int -> (MetaEntry, Position)
 lookupMeta m = unsafeDupablePerformIO $ do
   ms <- readIORef mcxt
   case IntMap.lookup m ms of

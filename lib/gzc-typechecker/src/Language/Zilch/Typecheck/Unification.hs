@@ -9,7 +9,7 @@ import Control.Monad.Except (catchError, throwError)
 import Data.IORef (modifyIORef', readIORef, writeIORef)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
-import Data.Located (Located ((:@)))
+import Data.Located (Located ((:@)), Position)
 import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context, bds, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
@@ -22,11 +22,11 @@ import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- | Generate new fresh metavariables from the context.
-freshMeta :: Context -> TAST.Expression
-freshMeta ctx = unsafeDupablePerformIO do
+freshMeta :: Context -> Position -> TAST.Expression
+freshMeta ctx p = unsafeDupablePerformIO do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt (IntMap.insert m Unsolved)
+  modifyIORef' mcxt (IntMap.insert m (Unsolved, p))
   pure $ TAST.EInsertedMeta m (bds ctx)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
@@ -84,7 +84,10 @@ solve gamma m sp val = do
   ren@(Renaming dom _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
   solution :@ _ <- eval ctx $ lams (reverse $ snd <$> sp) val' p
-  let !_ = unsafeDupablePerformIO $ modifyIORef' mcxt $ IntMap.insert m (Solved solution)
+  let !_ = unsafeDupablePerformIO do
+        IntMap.lookup m <$> readIORef mcxt >>= \case
+          Nothing -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p)
+          Just (_, p) -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p)
   pure ()
   where
     lams = go 0

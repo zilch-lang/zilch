@@ -41,8 +41,8 @@ checkProgram ctx mod = do
   let metas = unsafePerformIO $ IntMap.toList <$> readIORef mcxt
   addBinds <- forM metas \(m, e) -> do
     case e of
-      Unsolved -> pure (TAST.LetMeta m Nothing :@ p)
-      Solved val -> do
+      (Unsolved, p) -> throwError $ CannotSolveHole p --pure (TAST.LetMeta m Nothing :@ p)
+      (Solved val, p) -> do
         val@(_ :@ p1) <- quote ctx (lvl ctx) (val :@ p)
         pure (TAST.LetMeta m (Just val) :@ p1)
   let addBinds' = (:@ p) . TAST.TopLevel [] False <$> addBinds
@@ -100,7 +100,7 @@ insert' ctx (qs, expr, ty, usage) = do
   ty <- force ctx ty
   case ty of
     VPi _ _ imp _ b :@ p | imp == implicit -> do
-      let m = freshMeta ctx :@ p
+      let m = freshMeta ctx p :@ p
       mv <- eval ctx m
       ty <- apply ctx b mv
       insert' ctx (qs, TAST.EApplication expr True m :@ p, ty, usage)
@@ -317,7 +317,7 @@ check rel ctx expr ty = do
         pure (qs, getPos e, e)
       pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
     (AST.EHole :@ p1, _) -> do
-      pure (mempty, freshMeta ctx :@ p1)
+      pure (mempty, freshMeta ctx p1 :@ p1)
     (e@(_ :@ p), v) -> do
       {-
          Γ ⊢ e ⇒ⁱ A        A ≅ B       p ⩽ i
@@ -393,8 +393,8 @@ synthetize rel ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
     t1@(_ :@ p2) -> do
       -- try η-expanding
       let usage = TAST.Unrestricted
-      a <- eval ctx (freshMeta ctx :@ p)
-      let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) :@ p
+      a <- eval ctx (freshMeta ctx p :@ p)
+      let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) p :@ p
       unify ctx t1 (VPi usage "x?" explicit a b :@ p)
       pure (usage :@ p2, a, b)
 
@@ -481,8 +481,8 @@ synthetize rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) ex :@ p
   clos <- closeVal ctx b
   pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
 synthetize rel ctx (AST.EHole :@ p1) = do
-  a <- eval ctx (freshMeta ctx :@ p1)
-  let t = freshMeta ctx :@ p1
+  a <- eval ctx (freshMeta ctx p1 :@ p1)
+  let t = freshMeta ctx p1 :@ p1
   pure (mempty, t, a, TAST.extend rel :@ p1)
 synthetize rel ctx (AST.EIfThenElse c t e :@ p) = do
   {-
