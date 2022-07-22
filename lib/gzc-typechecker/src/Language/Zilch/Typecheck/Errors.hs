@@ -61,6 +61,11 @@ data ElabError
       Text
       Multiplicity
       Position
+  | -- | Top-level identifier already bound.
+    IdentifierAlreadyBound
+      Text
+      Position
+      Position
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -152,6 +157,14 @@ fromElabError (RelevantVariableInIrrelevantContext x m p) =
     Nothing
     "Type-checking error"
     [(p, This $ "Cannot used relevant variable " <> Text.unpack x <> " (usage " <> showMult m <> ") inside\nan irrelevant context.")]
+    []
+fromElabError (IdentifierAlreadyBound x p1 p2) =
+  err
+    Nothing
+    "Type-checking error"
+    [ (p1, This $ "Identifier '" <> Text.unpack x <> "' is already bound at the top-level"),
+      (p2, Where "While trying to type-check this definition")
+    ]
     []
 
 showMult :: Multiplicity -> String
