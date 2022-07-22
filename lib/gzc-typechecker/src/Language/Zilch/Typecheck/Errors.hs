@@ -56,6 +56,11 @@ data ElabError
       Position
   | ErasedInRelevantContext
       Position
+  | -- | A relevant variable has been used in an erased context.
+    RelevantVariableInIrrelevantContext
+      Text
+      Multiplicity
+      Position
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
@@ -136,13 +141,20 @@ fromElabError (UsageMismatches matches pos) =
     messages =
       [(getPos x, This $ "Variable " <> Text.unpack (unLoc x) <> " of type " <> show (pretty ty) <> " was expected to be used " <> showMult q <> " times\nbut has been used " <> showMult p <> " times") | (p, q, x, ty) <- matches]
         <> [(pos, Where $ "...while type-checking this expression")]
-
-    showMult O = "0"
-    showMult I = "1"
-    showMult W = "ω"
 fromElabError (ErasedInRelevantContext pos) =
   err
     Nothing
     "Type-checking error"
     [(pos, This $ "This term was meant to be used in an irrelevant position\nbut was found in a relevant context")]
     []
+fromElabError (RelevantVariableInIrrelevantContext x m p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Cannot used relevant variable " <> Text.unpack x <> " (usage " <> showMult m <> ") inside\nan irrelevant context.")]
+    []
+
+showMult :: Multiplicity -> String
+showMult O = "0"
+showMult I = "1"
+showMult W = "ω"
