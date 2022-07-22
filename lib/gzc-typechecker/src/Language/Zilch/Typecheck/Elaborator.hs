@@ -6,8 +6,10 @@ module Language.Zilch.Typecheck.Elaborator (elabProgram, MonadElab) where
 
 import Control.Monad.Except (MonadError, runExcept)
 import Control.Monad.Fix (MonadFix)
-import Data.Bifunctor (first)
+import Control.Monad.Writer (MonadWriter, runWriterT)
+import Data.Bifunctor (bimap, first, second)
 import Data.IntMap (IntMap)
+import Data.List (foldl')
 import Data.Located (Located)
 import Error.Diagnose (Diagnostic, addReport, def)
 import GHC.Stack (HasCallStack)
@@ -18,12 +20,17 @@ import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Defaults
 import Language.Zilch.Typecheck.Errors
 
-type MonadElab m = (HasCallStack, MonadError ElabError m, MonadFix m)
+type MonadElab m = (HasCallStack, MonadError ElabError m, MonadFix m, MonadWriter [ElabWarning] m)
 
 -------------
 
-elabProgram :: Located AST.Module -> Either (Diagnostic String) (Located TAST.Module)
-elabProgram mod = first toDiagnostic . runExcept $ checkProgram defaultContext mod
+elabProgram :: Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, Diagnostic String)
+elabProgram mod = bimap errToDiagnostic warnToDiagnostic . runExcept . runWriterT $ checkProgram defaultContext mod
 
-toDiagnostic :: ElabError -> Diagnostic String
-toDiagnostic = addReport def . fromElabError
+errToDiagnostic :: ElabError -> Diagnostic String
+errToDiagnostic = addReport def . fromElabError
+
+warnToDiagnostic :: (Located TAST.Module, [ElabWarning]) -> (Located TAST.Module, Diagnostic String)
+warnToDiagnostic = second toDiag
+  where
+    toDiag = foldl' addReport def . fmap fromElabWarning

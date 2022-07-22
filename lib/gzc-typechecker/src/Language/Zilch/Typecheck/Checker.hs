@@ -7,6 +7,7 @@ module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
 import Control.Monad (forM, unless, when)
 import Control.Monad.Except (catchError, throwError)
+import Control.Monad.Writer (tell)
 import Data.Bifunctor (first)
 import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
@@ -23,7 +24,7 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
-import Language.Zilch.Typecheck.Errors (ElabError (..))
+import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt)
 import Language.Zilch.Typecheck.Unification (freshMeta, unify)
@@ -73,6 +74,10 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
             TAST.O -> check TAST.Irrelevant ctx' ex ty'
             _ -> check TAST.Present ctx' ex ty'
         checkUsage ctx' usage (getPos ex)
+
+        case Map.lookup name usage of
+          Nothing | isRec -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
+          _ -> pure ()
 
         ex'' <- eval ctx' ex'
         pure (ex', ex'')

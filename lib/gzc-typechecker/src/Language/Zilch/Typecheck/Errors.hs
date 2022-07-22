@@ -3,7 +3,7 @@ module Language.Zilch.Typecheck.Errors where
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Report, err)
+import Error.Diagnose (Marker (This, Where), Report, err, warn)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Typecheck.Core.AST (Expression)
@@ -66,6 +66,20 @@ data ElabError
       Text
       Position
       Position
+
+data ElabWarning
+  = -- | A recursive binding isn't used recursively.
+    NonRecursiveRecursiveBinding
+      Text
+      Position
+
+fromElabWarning :: ElabWarning -> Report String
+fromElabWarning (NonRecursiveRecursiveBinding x p) =
+  warn
+    Nothing
+    "Type-checking warning"
+    [(p, This $ "Identifier '" <> Text.unpack x <> "' is defined recursively but isn't used in its own definition.")]
+    ["Consider transforming this 'rec' binding into a 'let' binding."]
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
