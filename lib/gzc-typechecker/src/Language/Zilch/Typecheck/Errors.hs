@@ -3,7 +3,7 @@ module Language.Zilch.Typecheck.Errors where
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (..), Report, err, warn)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Typecheck.Core.AST (Expression)
@@ -65,6 +65,10 @@ data ElabError
     IdentifierAlreadyBound
       Text
       Position
+      Position
+  | -- | A recursive value binding.
+    RecursiveValueBinding
+      Text
       Position
 
 data ElabWarning
@@ -180,6 +184,12 @@ fromElabError (IdentifierAlreadyBound x p1 p2) =
       (p2, Where "While trying to type-check this definition")
     ]
     []
+fromElabError (RecursiveValueBinding x p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Identifier '" <> Text.unpack x <> "' is recursively bound to a value which is not a function")]
+    [Hint "Potential fixes include transforming this binding into a function"]
 
 showMult :: Multiplicity -> String
 showMult O = "0"
