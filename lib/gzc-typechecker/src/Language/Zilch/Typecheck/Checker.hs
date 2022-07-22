@@ -76,11 +76,10 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
         checkUsage ctx' usage (getPos ex)
 
         when isRec do
-          case Map.lookup name usage of
-            Nothing -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
-            _ -> case ty' of
-              VPi {} :@ _ -> pure ()
-              _ -> throwError $ RecursiveValueBinding (unLoc name) p5
+          case (Map.lookup name usage, ty') of
+            (Nothing, _) -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
+            (_, VPi {} :@ _) -> pure ()
+            _ -> throwError $ RecursiveValueBinding (unLoc name) p5
 
         ex'' <- eval ctx' ex'
         pure (ex', ex'')
