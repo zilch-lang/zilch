@@ -9,7 +9,7 @@ import Control.Monad.Fix (MonadFix)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, first, second)
 import Data.IntMap (IntMap)
-import Data.List (foldl')
+import Data.List (foldl', nub)
 import Data.Located (Located)
 import Error.Diagnose (Diagnostic, addReport, def)
 import GHC.Stack (HasCallStack)
@@ -33,4 +33,4 @@ errToDiagnostic = addReport def . fromElabError
 warnToDiagnostic :: (Located TAST.Module, [ElabWarning]) -> (Located TAST.Module, Diagnostic String)
 warnToDiagnostic = second toDiag
   where
-    toDiag = foldl' addReport def . fmap fromElabWarning
+    toDiag = foldl' addReport def . fmap fromElabWarning . nub

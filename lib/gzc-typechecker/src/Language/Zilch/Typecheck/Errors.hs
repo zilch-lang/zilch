@@ -76,6 +76,11 @@ data ElabWarning
     NonRecursiveRecursiveBinding
       Text
       Position
+  | -- | Binding isn't used.
+    UnusedBinding
+      Text
+      Position
+  deriving (Eq)
 
 fromElabWarning :: ElabWarning -> Report String
 fromElabWarning (NonRecursiveRecursiveBinding x p) =
@@ -84,6 +89,12 @@ fromElabWarning (NonRecursiveRecursiveBinding x p) =
     "Type-checking warning"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is defined recursively but isn't used in its own definition.")]
     ["Consider transforming this 'rec' binding into a 'let' binding."]
+fromElabWarning (UnusedBinding x p) =
+  warn
+    Nothing
+    "Type-checking warning"
+    [(p, This $ "Binding '" <> Text.unpack x <> "' has not been used")]
+    []
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =

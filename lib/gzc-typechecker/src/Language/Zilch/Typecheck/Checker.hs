@@ -1,6 +1,8 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
@@ -140,13 +142,29 @@ withLocalVar x mult ty ctx f = do
   pure (qs', exp)
   where
     checkVar ctx x qs pos = do
-      let (q, qs') = splitUsage x qs
+      (q, qs') <- splitUsage x qs
       checkUsage ctx (Map.singleton x q) pos
       pure qs'
 
-    splitUsage x m = (fromMaybe TAST.O $ Map.lookup x m, Map.delete x m)
+    splitUsage :: Located Text -> Usage -> m (TAST.Multiplicity, Usage)
+    splitUsage x m =
+      let m' = Map.delete x m
+       in (,m') <$> case Map.lookup x m of
+            Nothing -> do
+              -- tell [UnusedBinding (unLoc x) (getPos x)]
 
--- | Locally bind a variable for use in a typechecking computation, and check afterwards that its usage matches the one expected.
+              -- FIXME: `let f(x) := x` reports `x` as unused
+              -- This is because of how it is desugared:
+              --
+              -- > let f : (ω x : _) → _ ≔ λ(ω x : _) ⇒ x
+              --
+              -- In such case, `x` is not used in the second hole, therefore unused when
+              -- locally bound at the type-level.
+              -- This function will need a bit of refinement.
+              pure TAST.O
+            Just m -> pure m
+
+-- | Locally define a variable for use in a typechecking computation, and check afterwards that its usage matches the one expected.
 defineLocal :: forall m. MonadElab m => Located Text -> TAST.Multiplicity -> Located Value -> Located Value -> Context -> (Context -> m (Usage, Located TAST.Expression)) -> m (Usage, Located TAST.Expression)
 defineLocal x mult ex ty ctx f = do
   let ctx' = define mult x ex ty ctx
@@ -155,11 +173,18 @@ defineLocal x mult ex ty ctx f = do
   pure (qs', exp)
   where
     checkVar ctx x qs pos = do
-      let (q, qs') = splitUsage x qs
+      (q, qs') <- splitUsage x qs
       checkUsage ctx (Map.singleton x q) pos
       pure qs'
 
-    splitUsage x m = (fromMaybe TAST.O $ Map.lookup x m, Map.delete x m)
+    splitUsage :: Located Text -> Usage -> m (TAST.Multiplicity, Usage)
+    splitUsage x m =
+      let m' = Map.delete x m
+       in (,m') <$> case Map.lookup x m of
+            Nothing -> do
+              tell [UnusedBinding (unLoc x) (getPos x)]
+              pure TAST.O
+            Just m -> pure m
 
 -- | @check Γ i e τ@ is the typing judgment @Γ ⊢ e ⇐ⁱ τ@.
 check :: forall m. MonadElab m => TAST.Relevance -> Context -> Located AST.Expression -> Located Value -> m (Usage, Located TAST.Expression)
