@@ -2,7 +2,6 @@
 
 module Language.Zilch.Typecheck.Context where
 
-import Data.Functor ((<&>))
 import Data.Located (Located ((:@)), unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text

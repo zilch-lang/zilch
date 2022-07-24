@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.AST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, hsep, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =

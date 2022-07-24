@@ -1,4 +1,3 @@
-{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -16,9 +15,8 @@ import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
-import Debug.Trace (traceShow)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -90,8 +88,8 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
 
       pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4) : defs) :@ p)
   where
-    checkAlreadyBound _ [] p5 = pure ()
-    checkAlreadyBound x ((usage, x', origin, a) : types) p5
+    checkAlreadyBound _ [] _ = pure ()
+    checkAlreadyBound x ((_, x', origin, _) : types) p5
       | x == x' && origin == Source = throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
       | otherwise = checkAlreadyBound x types p5
 
@@ -235,10 +233,10 @@ check rel ctx expr ty = do
       case TAST.extend rel * unLoc m1 of
         TAST.O -> do
           -- apply [⇐ let-I₀]
-          (qs2, ex) <- check TAST.Irrelevant ctx ex ty'
+          (_, ex) <- check TAST.Irrelevant ctx ex ty'
           ex' <- eval ctx ex
 
-          (qs3, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
+          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
             check rel ctx expr ty2
 
           pure (mempty, TAST.ELet (TAST.Let False m1 x ty ex :@ p1) u :@ p2)
@@ -272,7 +270,7 @@ check rel ctx expr ty = do
         TAST.O -> do
           -- apply [⇐ rec-I₀]
 
-          (qs2, ex) <- do
+          (_, ex) <- do
             rec (qs2, ex') <- defineLocal x TAST.O (VThunk ex' :@ p1) ty' ctx \ctx ->
                   check TAST.Irrelevant ctx ex ty'
             -- let ctx' = define TAST.O x (VThunk ex' :@ p1) ty' ctx
@@ -280,7 +278,7 @@ check rel ctx expr ty = do
             pure (qs2, ex')
 
           ex' <- eval ctx ex
-          (qs3, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
+          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
             check rel ctx expr ty2
 
           pure (mempty, TAST.ELet (TAST.Let False m1 x ty ex :@ p1) u :@ p2)
@@ -353,21 +351,21 @@ synthetize rel ctx (AST.EInteger i suffix :@ p) = do
     typeForSuffix SuffixS32 = VBuiltinS32
     typeForSuffix SuffixS16 = VBuiltinS16
     typeForSuffix SuffixS8 = VBuiltinS8
-synthetize rel ctx (AST.ECharacter c :@ p) =
+synthetize rel _ (AST.ECharacter c :@ p) =
   {-
      c is a literal character
     ────────────────────────── [⇒ char-I]
           Γ ⊢ c ⇒^ω char
   -}
   pure (mempty, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.extend rel :@ p)
-synthetize rel ctx (AST.EBoolean bool :@ p) =
+synthetize rel _ (AST.EBoolean bool :@ p) =
   {-
      b is a boolean literal
     ──────────────────────── [⇒ bool-I]
          Γ ⊢ b ⇒^ω bool
   -}
   pure (mempty, TAST.EBoolean bool :@ p, VBuiltinBool :@ p, TAST.extend rel :@ p)
-synthetize rel ctx (AST.EApplication e1@(_ :@ p1) e2 :@ p) = do
+synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
   {-
      Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
     ──────────────────────────────────────────────────────────── [⇐ λ-E₀]
@@ -443,7 +441,7 @@ synthetize rel ctx (AST.EIdentifier x :@ p) = do
       "s64" -> pure (TAST.EBuiltin TAST.TyS64 :@ p, VType :@ p, TAST.O)
       "bool" -> pure (TAST.EBuiltin TAST.TyBool :@ p, VType :@ p, TAST.O)
       name -> throwError $ BindingNotFound name p
-synthetize rel ctx (AST.EType :@ p) = do
+synthetize rel _ (AST.EType :@ p) = do
   when (rel /= TAST.Irrelevant) do
     throwError $ ErasedInRelevantContext p
   {-

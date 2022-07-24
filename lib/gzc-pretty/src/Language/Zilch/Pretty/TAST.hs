@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Zilch.Pretty.TAST where
 
 import Data.Foldable (fold)
-import Data.List (intersperse)
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST

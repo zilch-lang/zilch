@@ -1,9 +1,9 @@
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module Language.Zilch.Typecheck.Defaults (defaultContext) where
 
-import Data.Located (Located ((:@)), Position (Position))
+import Data.Located (Position (Position))
 import Language.Zilch.Typecheck.Context
-import Language.Zilch.Typecheck.Core.Eval (Value (..))
-import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 
 defaultContext :: Context
 defaultContext =

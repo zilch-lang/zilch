@@ -1,7 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 module Language.Zilch.Typecheck.Unification where
 
@@ -73,7 +76,7 @@ rename ctx m ren v = go ren v
         -- this is merely to avoid duplicated code
         val -> quote ctx cod val
 
-    goSpine ren t [] = pure t
+    goSpine _ t [] = pure t
     goSpine ren t@(_ :@ p) ((u, i) : sp) = do
       v1 <- goSpine ren t sp
       v2 <- go ren u
@@ -82,7 +85,7 @@ rename ctx m ren v = go ren v
 solve :: forall m. MonadElab m => DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
 solve gamma m sp val = do
   let ctx = emptyContext
-  ren@(Renaming dom _ _) <- invert ctx gamma sp
+  ren@(Renaming _ _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
   solution :@ _ <- eval ctx $ lams (reverse $ snd <$> sp) val' p
   let !_ = unsafeDupablePerformIO do
@@ -93,7 +96,8 @@ solve gamma m sp val = do
   where
     lams = go 0
 
-    go x [] t _ = t
+    go :: Integer -> _
+    go _ [] t _ = t
     go x (i : is) t p =
       TAST.ELam
         (TAST.Parameter (not i) (TAST.Unrestricted :@ p) (("$" <> Text.pack (show (x + 1))) :@ p) (TAST.EUnknown :@ p) :@ p)
@@ -112,7 +116,7 @@ unify' ctx lvl t u = do
   t <- force ctx t
   u <- force ctx u
   case (t, u) of
-    (VLam u1 _ _ a1 t1 :@ p1, VLam u2 _ _ a2 t2 :@ p2) -> do
+    (VLam _ _ _ a1 t1 :@ p1, VLam _ _ _ a2 t2 :@ p2) -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
@@ -132,7 +136,7 @@ unify' ctx lvl t u = do
           <$> applyVal ctx (t2 :@ p2) (VVariable ("x?" :@ p2) lvl :@ p2) i
           <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
       unify' ctx (lvl + 1) v1 v2
-    (VPi u1 _ i1 a1 t1 :@ p1, VPi u2 _ i2 a2 t2 :@ p2) | i1 == i2 -> do
+    (VPi _ _ i1 a1 t1 :@ p1, VPi _ _ i2 a2 t2 :@ p2) | i1 == i2 -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
@@ -144,12 +148,12 @@ unify' ctx lvl t u = do
       unify' ctx lvl c1 c2
       unify' ctx lvl t1 t2
       unify' ctx lvl e1 e2
-    (VRigid _ l1 sp1 :@ p1, VRigid _ l2 sp2 :@ p2)
+    (VRigid _ l1 sp1 :@ _, VRigid _ l2 sp2 :@ _)
       | l1 == l2 -> unifySpine ctx lvl sp1 sp2
-    (VFlexible m1 sp1 :@ p1, VFlexible m2 sp2 :@ p2)
+    (VFlexible m1 sp1 :@ _, VFlexible m2 sp2 :@ _)
       | m1 == m2 -> unifySpine ctx lvl sp1 sp2
-    (VFlexible m sp :@ p1, t) -> solve lvl m sp t
-    (t, VFlexible m sp :@ p2) -> solve lvl m sp t
+    (VFlexible m sp :@ _, t) -> solve lvl m sp t
+    (t, VFlexible m sp :@ _) -> solve lvl m sp t
     (VType :@ _, VType :@ _) -> pure ()
     (VTrue :@ _, VTrue :@ _) -> pure ()
     (VFalse :@ _, VFalse :@ _) -> pure ()

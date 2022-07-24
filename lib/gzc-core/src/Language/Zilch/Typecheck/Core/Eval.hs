@@ -6,7 +6,7 @@
 
 module Language.Zilch.Typecheck.Core.Eval (Value (.., VVariable, VMeta), Name, Environment, Closure (..), DeBruijnLvl (..), Spine, MetaEntry (..), Implicitness, implicit, explicit) where
 
-import Data.Located (Located ((:@)))
+import Data.Located (Located)
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.AST (Expression)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)

@@ -4,10 +4,10 @@
 
 module Language.Zilch.Syntax.Errors where
 
-import Data.Located (Located ((:@)), Position)
+import Data.Located (Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Note (Hint), Report, err, warn)
+import Error.Diagnose (Marker (This), Note (Hint), Report, err, warn)
 import Error.Diagnose.Compat.Megaparsec
 import qualified Text.Megaparsec as MP
 

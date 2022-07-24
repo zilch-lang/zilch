@@ -7,8 +7,7 @@ module Language.Zilch.Typecheck.Elaborator (elabProgram, MonadElab) where
 import Control.Monad.Except (MonadError, runExcept)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.Writer (MonadWriter, runWriterT)
-import Data.Bifunctor (bimap, first, second)
-import Data.IntMap (IntMap)
+import Data.Bifunctor (bimap, second)
 import Data.List (foldl', nub)
 import Data.Located (Located)
 import Error.Diagnose (Diagnostic, addReport, def)
@@ -16,7 +15,6 @@ import GHC.Stack (HasCallStack)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Checker (checkProgram)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Defaults
 import Language.Zilch.Typecheck.Errors
 

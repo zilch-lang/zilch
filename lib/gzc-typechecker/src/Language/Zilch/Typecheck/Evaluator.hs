@@ -9,7 +9,6 @@ module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruij
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Debug.Trace (traceShow)
 import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
@@ -22,17 +21,17 @@ import qualified Prelude (read)
 
 -- | Evaluate the given expression in normal form, where normal form is either:
 --
--- * A lambda
--- * An application @(e1 e2)@ where @e1@ is /not/ a lambda
--- * An integer
--- * The pi type
+-- - A lambda
+-- - An application @(e1 e2)@ where @e1@ is /not/ a lambda
+-- - An integer
+-- - The pi type
 eval :: forall m. MonadElab m => Context -> Located TAST.Expression -> m (Located Value)
 eval ctx (TAST.EInteger e ty :@ p) = do
   ty :@ _ <- eval ctx (TAST.EBuiltin ty :@ p)
   pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval _ (TAST.EBoolean bool :@ p) = pure $ (if bool then VTrue else VFalse) :@ p
-eval ctx (TAST.EIdentifier (name :@ _) (TAST.Idx i) :@ _) =
+eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ _) =
   case lookup (env ctx) i of
     VThunk expr :@ _ -> eval ctx expr
     -- val <- eval ctx expr
@@ -59,39 +58,39 @@ eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ex :@ p)
   ty1' <- eval ctx ty1
   pure $ VLam (unLoc usage) x (not isImplicit) ty1' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
-eval _ (TAST.EMeta m :@ p) = pure $ metaValue m
-eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m) bds
-eval ctx (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
-eval ctx (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
-eval ctx (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
-eval ctx (TAST.EBuiltin TAST.TyU16 :@ p) = pure $ VBuiltinU16 :@ p
-eval ctx (TAST.EBuiltin TAST.TyU8 :@ p) = pure $ VBuiltinU8 :@ p
-eval ctx (TAST.EBuiltin TAST.TyS64 :@ p) = pure $ VBuiltinS64 :@ p
-eval ctx (TAST.EBuiltin TAST.TyS32 :@ p) = pure $ VBuiltinS32 :@ p
-eval ctx (TAST.EBuiltin TAST.TyS16 :@ p) = pure $ VBuiltinS16 :@ p
-eval ctx (TAST.EBuiltin TAST.TyS8 :@ p) = pure $ VBuiltinS8 :@ p
-eval ctx (TAST.EBuiltin TAST.TyBool :@ p) = pure $ VBuiltinBool :@ p
+eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
+eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
+eval _ (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
+eval _ (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
+eval _ (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
+eval _ (TAST.EBuiltin TAST.TyU16 :@ p) = pure $ VBuiltinU16 :@ p
+eval _ (TAST.EBuiltin TAST.TyU8 :@ p) = pure $ VBuiltinU8 :@ p
+eval _ (TAST.EBuiltin TAST.TyS64 :@ p) = pure $ VBuiltinS64 :@ p
+eval _ (TAST.EBuiltin TAST.TyS32 :@ p) = pure $ VBuiltinS32 :@ p
+eval _ (TAST.EBuiltin TAST.TyS16 :@ p) = pure $ VBuiltinS16 :@ p
+eval _ (TAST.EBuiltin TAST.TyS8 :@ p) = pure $ VBuiltinS8 :@ p
+eval _ (TAST.EBuiltin TAST.TyBool :@ p) = pure $ VBuiltinBool :@ p
 eval ctx (TAST.EIfThenElse c t e :@ p) = do
   c' <- eval ctx c
   t' <- eval ctx t
   e' <- eval ctx e
   pure (VIfThenElse c' t' e' :@ p)
-eval _ e = error $ "unhandled case " <> show e
+
+--eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
-apply ctx (Clos env expr) val =
+apply _ (Clos env expr) val =
   let env' = Env.extend env val
    in eval (emptyContext {env = env'}) expr
 
 applyVal :: forall m. MonadElab m => Context -> Located Value -> Located Value -> Implicitness -> m (Located Value)
 applyVal ctx (VLam _ _ _ _ t :@ _) u _ = apply ctx t u
-applyVal ctx (VFlexible x sp :@ p) u i = pure $ VFlexible x ((u, i) : sp) :@ p
-applyVal ctx (VRigid x name sp :@ p) u i = pure $ VRigid x name ((u, i) : sp) :@ p
-
---applyVal ctx t@(_ :@ p) u = pure $ VApplication t u :@ p -- TODO: remove
+applyVal _ (VFlexible x sp :@ p) u i = pure $ VFlexible x ((u, i) : sp) :@ p
+applyVal _ (VRigid x name sp :@ p) u i = pure $ VRigid x name ((u, i) : sp) :@ p
+applyVal _ _ _ _ = undefined
 
 applySpine :: forall m. MonadElab m => Context -> Located Value -> Spine -> m (Located Value)
-applySpine ctx t [] = pure t
+applySpine _ t [] = pure t
 applySpine ctx t ((u, i) : sp) = do
   v1 <- applySpine ctx t sp
   applyVal ctx v1 u i
@@ -101,19 +100,19 @@ applyBDs _ [] v [] = pure v
 applyBDs ctx (t : env) v (TAST.Bound _ : bds) = do
   v1 <- applyBDs ctx env v bds
   applyVal ctx v1 t explicit
-applyBDs ctx (t : env) v (TAST.Defined _ : bds) = applyBDs ctx env v bds
+applyBDs ctx (_ : env) v (TAST.Defined _ : bds) = applyBDs ctx env v bds
 applyBDs _ _ _ _ = error "impossible"
 
-metaValue :: Int -> Located Value
-metaValue m = case lookupMeta m of
-  (Solved v, pos, _) -> v :@ pos
-  (Unsolved, pos, _) -> VMeta m :@ pos
+metaValue :: Int -> Position -> Located Value
+metaValue m pos = case lookupMeta m of
+  (Solved v, _, _) -> v :@ pos
+  (Unsolved, _, _) -> VMeta m :@ pos
 
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
 force ctx (VFlexible m sp :@ p) | (Solved t, _, _) <- lookupMeta m = do
   v1 <- applySpine ctx (t :@ p) sp
   force ctx v1
-force ctx t = pure t
+force _ t = pure t
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx
 debruijnLevelToIndex (Lvl l) (Lvl x) = TAST.Idx $! l - x - 1
@@ -169,7 +168,7 @@ quote ctx level val = do
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)
-quoteSpine ctx lvl term [] _ = pure term
+quoteSpine _ _ term [] _ = pure term
 quoteSpine ctx lvl term ((u, i) : sp) pos = do
   t1 <- quote ctx lvl u
   t2 <- quoteSpine ctx lvl term sp pos
