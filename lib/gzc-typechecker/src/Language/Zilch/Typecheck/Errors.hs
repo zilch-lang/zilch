@@ -6,6 +6,7 @@ import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Note (..), Report, err, warn)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
+import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Core.AST (Expression)
 import Language.Zilch.Typecheck.Core.Eval (Implicitness, explicit, implicit)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
@@ -73,6 +74,7 @@ data ElabError
   | -- | A hole could not solved.
     CannotSolveHole
       Position
+      AST.HoleLocation
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -204,12 +206,16 @@ fromElabError (RecursiveValueBinding x p) =
     "Type-checking error"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is recursively bound to a value which is not a function")]
     [Hint "Potential fixes include transforming this binding into a function"]
-fromElabError (CannotSolveHole p) =
+fromElabError (CannotSolveHole p loc) =
   err
     Nothing
     "Type-checking error"
-    [(p, This "Cannot infer any term to replace this hole")]
+    [(p, This msg)]
     []
+  where
+    msg = case loc of
+      AST.InsertedHole -> "Cannot infer the type of this term"
+      AST.SourceHole -> "Cannot infer any term to replace this hole"
 
 showMult :: Multiplicity -> String
 showMult O = "0"

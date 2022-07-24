@@ -82,7 +82,7 @@ instance Pretty (Located Expression) where
     pretty fun
       <> line
       <> indent 2 (parens $ pretty arg)
-  pretty (EHole :@ _) = "_"
+  pretty (EHole _ :@ _) = "_"
   pretty (EImplicit expr :@ _) = braces $ pretty expr
   pretty (EPi param val :@ _) =
     pretty param

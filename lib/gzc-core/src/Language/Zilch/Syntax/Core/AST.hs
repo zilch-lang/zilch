@@ -76,6 +76,7 @@ data Expression
   | -- | The @type@ builtin type
     EType
   | EHole
+      HoleLocation
   | -- | The dependent function type
     EPi
       (Located Parameter)
@@ -86,6 +87,9 @@ data Expression
       (Located Expression)
       (Located Expression)
       (Located Expression)
+  deriving (Show)
+
+data HoleLocation = SourceHole | InsertedHole
   deriving (Show)
 
 data IntegerSuffix

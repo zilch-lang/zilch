@@ -58,7 +58,7 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   params' <- (<>) aParams <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
 
   pure . Just $ AST.Let False usage' name ty val :@ p
@@ -70,7 +70,7 @@ desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   params' <- (<>) aParams <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole :@ p2) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ p2) retTy') params'
   val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
 
   pure . Just $ AST.Let True usage' name ty val :@ p
@@ -87,11 +87,11 @@ desugarDefinition (CST.Assume params :@ _) = do
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
+  ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
   usage' <- desugarMultiplicity usage p1
   pure $ AST.Parameter True usage' name ty' :@ p
 desugarParameter (CST.Explicit usage name@(_ :@ p1) ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole :@ p1) desugarExpression ty
+  ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
   usage' <- desugarMultiplicity usage p1
   pure $ AST.Parameter False usage' name ty' :@ p
 
@@ -102,7 +102,7 @@ desugarMultiplicity (Just (u :@ p)) _ = pure (fromInteger u :@ p)
 desugarExpression :: forall m. MonadDesugar m => Located CST.Expression -> m (Located AST.Expression)
 desugarExpression (CST.EType :@ p) = pure $ AST.EType :@ p
 desugarExpression (CST.EId i :@ p) = pure $ AST.EIdentifier i :@ p
-desugarExpression (CST.EHole :@ p) = pure $ AST.EHole :@ p
+desugarExpression (CST.EHole :@ p) = pure $ AST.EHole AST.SourceHole :@ p
 desugarExpression (CST.EInt i suffix :@ p) = do
   suffix' <- maybe (pure SuffixU64) (desugarIntegerSuffix p) suffix
   pure $ AST.EInteger (i :@ p) suffix' :@ p

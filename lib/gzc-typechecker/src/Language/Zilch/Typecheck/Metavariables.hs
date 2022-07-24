@@ -4,6 +4,7 @@ import Data.IORef (IORef, newIORef, readIORef)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Located (Position)
+import Language.Zilch.Syntax.Core.AST (HoleLocation)
 import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
@@ -11,11 +12,11 @@ nextMeta :: IORef Int
 nextMeta = unsafeDupablePerformIO $ newIORef 0
 {-# NOINLINE nextMeta #-}
 
-mcxt :: IORef (IntMap (MetaEntry, Position))
+mcxt :: IORef (IntMap (MetaEntry, Position, HoleLocation))
 mcxt = unsafeDupablePerformIO $ newIORef mempty
 {-# NOINLINE mcxt #-}
 
-lookupMeta :: Int -> (MetaEntry, Position)
+lookupMeta :: Int -> (MetaEntry, Position, HoleLocation)
 lookupMeta m = unsafeDupablePerformIO $ do
   ms <- readIORef mcxt
   case IntMap.lookup m ms of

@@ -59,8 +59,8 @@ eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ex :@ p)
   ty1' <- eval ctx ty1
   pure $ VLam (unLoc usage) x (not isImplicit) ty1' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
-eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
-eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
+eval _ (TAST.EMeta m :@ p) = pure $ metaValue m
+eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m) bds
 eval ctx (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
 eval ctx (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
 eval ctx (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
@@ -104,13 +104,13 @@ applyBDs ctx (t : env) v (TAST.Bound _ : bds) = do
 applyBDs ctx (t : env) v (TAST.Defined _ : bds) = applyBDs ctx env v bds
 applyBDs _ _ _ _ = error "impossible"
 
-metaValue :: Int -> Position -> Located Value
-metaValue m pos = case fst $ lookupMeta m of
-  Solved v -> v :@ pos
-  Unsolved -> VMeta m :@ pos
+metaValue :: Int -> Located Value
+metaValue m = case lookupMeta m of
+  (Solved v, pos, _) -> v :@ pos
+  (Unsolved, pos, _) -> VMeta m :@ pos
 
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
-force ctx (VFlexible m sp :@ p) | (Solved t, _) <- lookupMeta m = do
+force ctx (VFlexible m sp :@ p) | (Solved t, _, _) <- lookupMeta m = do
   v1 <- applySpine ctx (t :@ p) sp
   force ctx v1
 force ctx t = pure t

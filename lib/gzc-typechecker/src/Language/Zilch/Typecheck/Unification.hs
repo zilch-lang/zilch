@@ -11,22 +11,23 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Located (Located ((:@)), Position)
 import qualified Data.Text as Text
+import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context (Context, bds, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..))
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
-import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, MultiplicityMismatch, UnificationError))
+import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
 import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- | Generate new fresh metavariables from the context.
-freshMeta :: Context -> Position -> TAST.Expression
-freshMeta ctx p = unsafeDupablePerformIO do
+freshMeta :: Context -> Position -> AST.HoleLocation -> TAST.Expression
+freshMeta ctx p loc = unsafeDupablePerformIO do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt (IntMap.insert m (Unsolved, p))
+  modifyIORef' mcxt (IntMap.insert m (Unsolved, p, loc))
   pure $ TAST.EInsertedMeta m (bds ctx)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
@@ -86,8 +87,8 @@ solve gamma m sp val = do
   solution :@ _ <- eval ctx $ lams (reverse $ snd <$> sp) val' p
   let !_ = unsafeDupablePerformIO do
         IntMap.lookup m <$> readIORef mcxt >>= \case
-          Nothing -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p)
-          Just (_, p) -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p)
+          Nothing -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p, AST.InsertedHole)
+          Just (_, p, loc) -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p, loc)
   pure ()
   where
     lams = go 0
