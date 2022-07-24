@@ -45,6 +45,7 @@ executables:
     dependencies:
     - gzc-lib
     - gzc-pretty
+    - gzc-flags
     - prettyprinter == 1.7.0
 
 tests:

@@ -34,6 +34,7 @@ packages:
 - lib/gzc-parser
 - lib/gzc-pretty
 - lib/gzc-typechecker
+- lib/gzc-flags
   
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
@@ -45,8 +46,6 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-# - git: https://github.com/mesabloo/diagnose.git
-#   commit: f61525c32a30f640deae6c477ddd54c55a3135de
 - git: https://github.com/zilch-lang/nstar.git
   commit: 9d56d1e2ac3f2f71c1081f5a47a96bc4ade61ccb
   subdirs:

@@ -60,6 +60,7 @@ executable gzc
       base >=4.7 && <5
     , diagnose >=2
     , gzc-core
+    , gzc-flags
     , gzc-lib
     , gzc-parser
     , gzc-pretty
