@@ -5,14 +5,11 @@ module Language.Zilch.Typecheck.Elaborator where
 
 import Control.Monad.Except (MonadError)
 import Control.Monad.Fix (MonadFix)
-import Control.Monad.Reader (MonadReader)
-import Data.IntMap (IntMap)
 import Data.Located (Located)
 import Error.Diagnose (Diagnostic)
 import GHC.Stack (HasCallStack)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import qualified Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Errors (ElabError, ElabWarning)
 import Control.Monad.Writer (MonadWriter)
 

@@ -75,8 +75,7 @@ eval ctx (TAST.EIfThenElse c t e :@ p) = do
   t' <- eval ctx t
   e' <- eval ctx e
   pure (VIfThenElse c' t' e' :@ p)
-
---eval _ e = error $ "unhandled case " <> show e
+eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
 apply _ (Clos env expr) val =

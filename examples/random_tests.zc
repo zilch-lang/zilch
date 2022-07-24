@@ -2,7 +2,7 @@
   Dependent function composition.
 -/
 let _._
-  {0 A}{B : (0 a : A) → type}{C : {0 a} → (0 b : B a) → type}
+  {0 A}{0 B : (0 a : A) → type}{0 C : {0 a} → (0 b : B a) → type}
   (f : {0 a} → (b : B a) → C b)(g : (a : A) → B a)(x : A)
   : C (g x)
   :=
