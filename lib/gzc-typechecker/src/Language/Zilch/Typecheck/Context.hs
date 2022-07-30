@@ -86,6 +86,7 @@ define usage f val ty ctx =
     indexOfUndefined lvl ((VUndefined :@ _) : env) ((_, g, _, _) : types)
       | f == g = Just lvl
       | otherwise = indexOfUndefined (lvl - 1) env types
+    indexOfUndefined lvl (_ : env) (_ : types) = indexOfUndefined (lvl - 1) env types
     indexOfUndefined _ _ _ = error "indexOfUndefined: incoherent context"
 
     replaceAt _ _ [] _ = error "replaceAt: index too large"

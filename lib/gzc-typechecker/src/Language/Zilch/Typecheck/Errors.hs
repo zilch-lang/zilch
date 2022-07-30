@@ -79,6 +79,10 @@ data ElabError
     UndefinedValue
       Text
       Position
+  | -- | A recursive value will call itself.
+    BindingWillEndUpCallingItself
+      Text
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -225,6 +229,12 @@ fromElabError (UndefinedValue x p) =
     Nothing
     "Type-checking error"
     [(p, This $ "Binding '" <> Text.unpack x <> "' has a type declared but has no value associated with it.")]
+    []
+fromElabError (BindingWillEndUpCallingItself x p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Binding '" <> Text.unpack x <> "' will end up calling itself when evaluating its value")]
     []
 
 showMult :: Multiplicity -> String

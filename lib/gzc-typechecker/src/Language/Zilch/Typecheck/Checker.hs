@@ -14,6 +14,7 @@ import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
@@ -34,8 +35,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
 checkProgram ctx mod = do
-  (TAST.Mod binds :@ p, ctx) <- checkProgram' ctx mod
-  checkAllDefined (types ctx) (env ctx)
+  (TAST.Mod binds :@ p, ctx, usages) <- checkProgram' ctx mod
 
   let metas = unsafePerformIO $ IntMap.toList <$> readIORef mcxt
   addBinds <- forM metas \(m, e) -> do
@@ -46,26 +46,46 @@ checkProgram ctx mod = do
         pure (TAST.LetMeta m (Just val) :@ p1)
   let addBinds' = (:@ p) . TAST.TopLevel [] False <$> addBinds
 
+  checkAllDefined (types ctx) (env ctx)
+  checkMutuallyRecursiveValues ctx (types ctx) usages
+
   pure $ TAST.Mod (addBinds' <> binds) :@ p
+  where
+    checkAllDefined :: forall m. MonadElab m => [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> m ()
+    checkAllDefined [] [] = pure ()
+    checkAllDefined ((_, x :@ p, _, _) : _) ((VUndefined :@ _) : _) = throwError $ UndefinedValue x p
+    checkAllDefined (_ : types) (_ : env) = checkAllDefined types env
+    checkAllDefined _ _ = error "checkAllDefined: impossible"
 
-checkAllDefined :: forall m. MonadElab m => [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> m ()
-checkAllDefined [] [] = pure ()
-checkAllDefined ((_, x :@ p, _, _) : _) ((VUndefined :@ _) : _) = throwError $ UndefinedValue x p
-checkAllDefined (_ : types) (_ : env) = checkAllDefined types env
-checkAllDefined _ _ = error "checkAllDefined: impossible"
+    checkMutuallyRecursiveValues :: forall m. MonadElab m => Context -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Map (Located Text) Usage -> m ()
+    checkMutuallyRecursiveValues _ [] _ = pure ()
+    checkMutuallyRecursiveValues ctx ((_, x, _, VPi{} :@ _) : types) usages = checkMutuallyRecursiveValues ctx types usages
+    checkMutuallyRecursiveValues ctx ((_, x, _, _ :@ _) : types) usages = do
+      checkRecursivity ctx [x] x usages
+      checkMutuallyRecursiveValues ctx types usages
 
-checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module, Context)
+    checkRecursivity _ stack x _ | x `elem` stack = throwError $ BindingWillEndUpCallingItself (unLoc x) (getPos x)
+    checkRecursivity ctx stack x usages = do
+      usageX <- removeFunctionals ctx (usages Map.! x)
+      flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx (x : stack) k usages
+      pure ()
+
+    removeFunctionals ctx usage = flip Map.traverseWithKey usage \k mult ->
+      case indexContext ctx k of
+        (_, _, VPi{} :@ _) -> pure Nothing
+        (_, _, _) -> pure $ Just mult
+
+checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module, Context, Map (Located Text) Usage)
 checkProgram' ctx (AST.Mod imports defs :@ p) = do
   case defs of
-    [] -> do
-      pure (TAST.Mod [] :@ p, ctx)
+    [] -> pure (TAST.Mod [] :@ p, ctx, mempty)
     b : bs -> do
-      (b, ctx) <- checkToplevel ctx b
-      (TAST.Mod defs :@ p, ctx) <- checkProgram' ctx (AST.Mod imports bs :@ p)
+      (b, ctx, u1) <- checkToplevel ctx b
+      (TAST.Mod defs :@ p, ctx, u2) <- checkProgram' ctx (AST.Mod imports bs :@ p)
 
-      pure (TAST.Mod (b : defs) :@ p, ctx)
+      pure (TAST.Mod (b : defs) :@ p, ctx, u1 <> u2)
 
-checkToplevel :: forall m. MonadElab m => Context -> Located AST.TopLevel -> m (Located TAST.TopLevel, Context)
+checkToplevel :: forall m. MonadElab m => Context -> Located AST.TopLevel -> m (Located TAST.TopLevel, Context, Map (Located Text) Usage)
 checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
   {-
      0Γ ⊢ A ⇐⁰ type ℓ            0Γ ⊢ e ⇐⁰ A          i = 0
@@ -92,7 +112,7 @@ checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty e
        
       (,ty) <$> quote ctx (lvl ctx) ty
 
-  (ex, ex') <- mdo
+  (ex, ex', usage) <- mdo
     let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
     (usage, ex') <-
       first (Usage.scale $ unLoc mult) <$> case unLoc mult of
@@ -109,15 +129,15 @@ checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty e
     ex'' <- case ty of
       TAST.EPi{} :@ _ -> eval ctx' ex'
       _ -> pure $ VThunk ex' :@ getPos ex'
-    pure (ex', ex'')
+    pure (ex', ex'', usage)
 
-  pure (TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4, define (unLoc mult) name ex' ty' ctx)
+  pure (TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4, define (unLoc mult) name ex' ty' ctx, Map.singleton name usage)
 checkToplevel ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
   (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p4)
   ty' <- eval ctx ty
 
   let ctx' = define (unLoc mult) name (VUndefined :@ p6) ty' ctx
-  pure (TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5, ctx')
+  pure (TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5, ctx', mempty)
 
 checkAlreadyBound :: forall m. MonadElab m => Located Text -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> Position -> m (Maybe (Located TAST.Multiplicity, Located Value))
 checkAlreadyBound _ [] [] _ = pure Nothing
