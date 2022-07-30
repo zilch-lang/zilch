@@ -59,15 +59,19 @@ checkProgram ctx mod = do
 
     checkMutuallyRecursiveValues :: forall m. MonadElab m => Context -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Map (Located Text) Usage -> m ()
     checkMutuallyRecursiveValues _ [] _ = pure ()
-    checkMutuallyRecursiveValues ctx ((_, x, _, VPi{} :@ _) : types) usages = checkMutuallyRecursiveValues ctx types usages
+    checkMutuallyRecursiveValues ctx ((_, _, _, VPi{} :@ _) : types) usages = checkMutuallyRecursiveValues ctx types usages
     checkMutuallyRecursiveValues ctx ((_, x, _, _ :@ _) : types) usages = do
-      checkRecursivity ctx [x] x usages
+      checkRecursivity ctx [] x usages
       checkMutuallyRecursiveValues ctx types usages
 
-    checkRecursivity _ stack x _ | x `elem` stack = throwError $ BindingWillEndUpCallingItself (unLoc x) (getPos x)
+    checkRecursivity _ stack@(_ : _ : _) x _
+      | x == last stack =
+        let y = last stack
+         in throwError $ BindingWillEndUpCallingItself (unLoc y) (getPos y) (getPos x) (init stack)
     checkRecursivity ctx stack x usages = do
       usageX <- removeFunctionals ctx (usages Map.! x)
-      flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx (x : stack) k usages
+      let (_, _ :@ pos, _) = indexContext ctx x
+      flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx ((unLoc x :@ pos) : stack) k usages
       pure ()
 
     removeFunctionals ctx usage = flip Map.traverseWithKey usage \k mult ->

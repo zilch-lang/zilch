@@ -83,6 +83,8 @@ data ElabError
     BindingWillEndUpCallingItself
       Text
       Position
+      Position
+      [Located Text]
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -230,12 +232,17 @@ fromElabError (UndefinedValue x p) =
     "Type-checking error"
     [(p, This $ "Binding '" <> Text.unpack x <> "' has a type declared but has no value associated with it.")]
     []
-fromElabError (BindingWillEndUpCallingItself x p) =
+fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
   err
     Nothing
     "Type-checking error"
-    [(p, This $ "Binding '" <> Text.unpack x <> "' will end up calling itself when evaluating its value")]
+    messages
     []
+  where
+    messages =
+      [(p, This $ "Binding '" <> Text.unpack x <> "' will end up evaluating itself when evaluating its value")]
+      <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
+      <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
 
 showMult :: Multiplicity -> String
 showMult O = "0"
