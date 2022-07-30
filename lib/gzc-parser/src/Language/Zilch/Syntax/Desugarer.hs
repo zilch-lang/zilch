@@ -5,6 +5,7 @@
 
 module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
+import Control.Applicative ((<|>))
 import Control.Monad (forM)
 import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT, get, modify)
@@ -12,7 +13,7 @@ import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position)
-import Data.Maybe (catMaybes, fromJust, fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
@@ -50,23 +51,41 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
     Just (AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
     Just (AST.Val (I :@ _) (name :@ _) _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
     Nothing -> pure []
+    Just (AST.Val _ _ ty :@ p1) | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
     Just def' -> pure [AST.TopLevel isPublic def' :@ p]
-desugarToplevel (CST.Mutual defs :@ p) = do
+desugarToplevel (CST.Mutual defs :@ _) = do
   defs' <- desugarToplevel' defs
-  let defs'' = generateSignatures [] defs'
+  defs'' <- generateSignatures [] defs'
   pure $ defs'' <> defs'
   where
-    generateSignatures :: [Text] -> [Located AST.TopLevel] -> [Located AST.TopLevel]
-    generateSignatures _ [] = []
+    generateSignatures :: forall m. MonadDesugar m => [Text] -> [Located AST.TopLevel] -> m [Located AST.TopLevel]
+    generateSignatures _ [] = pure []
     generateSignatures withSig ((AST.TopLevel _ (AST.Val _ (name :@ _) _ :@ _) :@ _) : ts) = generateSignatures (name : withSig) ts
     generateSignatures withSig ((AST.TopLevel _ (AST.Let _ usage name@(n :@ _) ty _ :@ p) :@ _) : ts)
       | n `elem` withSig = generateSignatures withSig ts
-      | otherwise = (AST.TopLevel False (AST.Val usage name ty :@ p) :@ p) : generateSignatures withSig ts
+      | Just (loc, p1) <- holes ty = throwError $ HoleInValType loc p1 p
+      | otherwise = ((AST.TopLevel False (AST.Val usage name ty :@ p) :@ p) :) <$> generateSignatures withSig ts
 
     desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Located AST.TopLevel]
     desugarToplevel' [] = pure []
     desugarToplevel' ((CST.TopLevel _ _ (CST.Assume _ :@ p) :@ _) : _) = throwError $ AssumptionsInMutualBlock p
     desugarToplevel' (t : ts) = (<>) <$> desugarToplevel t <*> desugarToplevel' ts
+
+holes :: Located AST.Expression -> Maybe (AST.HoleLocation, Position)
+holes (AST.EHole loc :@ p) = Just (loc, p)
+holes (AST.EType :@ _) = Nothing
+holes (AST.EInteger _ _ :@ _) = Nothing
+holes (AST.ECharacter _ :@ _) = Nothing
+holes (AST.EIdentifier _ :@ _) = Nothing
+holes (AST.EDo e :@ _) = holes e
+holes (AST.ELam (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.ELet (AST.Let _ _ _ e1 e2 :@ _) e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
+holes (AST.ELet (AST.Val{} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
+holes (AST.EApplication e1 e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EImplicit e1 :@ _) = holes e1
+holes (AST.EPi (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EBoolean _ :@ _) = Nothing
+holes (AST.EIfThenElse e1 e2 e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do

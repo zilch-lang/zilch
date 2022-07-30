@@ -7,8 +7,9 @@ module Language.Zilch.Syntax.Errors where
 import Data.Located (Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This), Note (Hint), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (Hint), Report, err, warn)
 import Error.Diagnose.Compat.Megaparsec
+import Language.Zilch.Syntax.Core.AST (HoleLocation (..))
 import qualified Text.Megaparsec as MP
 
 data LexicalWarning
@@ -57,6 +58,10 @@ data DesugarError
       Position
   | AssumptionsInMutualBlock
       Position
+  | HoleInValType
+      HoleLocation
+      Position
+      Position
 
 data DesugarWarning
 
@@ -91,6 +96,16 @@ fromDesugarerError (AssumptionsInMutualBlock pos) =
     "Parse error"
     [(pos, This "Cannot bind assumptions inside a 'mutual' block")]
     []
+fromDesugarerError (HoleInValType loc p1 p2) =
+  err
+    Nothing
+    "Parse error"
+    messages 
+    []
+  where
+    messages = case loc of
+      SourceHole -> [(p1, This "Found hole in a 'val' type binding"), (p2, Where "While checking this type declaration")]
+      InsertedHole -> [(p1, This "Binding is missing an explicit type signature"), (p2, Where "While checking this type declaration")]
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn Nothing "sorry" [] []
