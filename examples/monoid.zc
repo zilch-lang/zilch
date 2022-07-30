@@ -1,22 +1,16 @@
-public record monoid
-  (0 a : type) :=
-
+public record 0 monoid(0 a : type) :=
   val mempty : a
 
 public open {{monoid}}
 
 /--
-  Additive monoid on unsigned 64-bis integer.
+  Additive monoid on unsigned 64-bits integer.
 -/
-public let +-monoid-u64 
-  : monoid u64 :=
-  
+public let +-monoid-u64 : monoid u64 :=
   @{ let mempty := 0 }
 
 /--
-  Multiplicative monoid on unsigned 64-bis integer.
+  Multiplicative monoid on unsigned 64-bits integer.
 -/
-public let ×-monoid-u64 
-  : monoid u64 :=
-
+public let ×-monoid-u64 : monoid u64 :=
   @{ let mempty := 1 }

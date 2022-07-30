@@ -31,13 +31,10 @@ eval ctx (TAST.EInteger e ty :@ p) = do
   pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval _ (TAST.EBoolean bool :@ p) = pure $ (if bool then VTrue else VFalse) :@ p
-eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ _) =
+eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ p) =
   case lookup (env ctx) i of
-    VThunk expr :@ _ -> eval ctx expr
-    -- val <- eval ctx expr
-    -- setValue (env ctx) i val
-    -- pure val
-    val -> pure val
+    VThunk (expr :@ _) :@ _ -> eval ctx (expr :@ p)
+    val :@ _ -> pure $ val :@ p
 eval ctx (TAST.EApplication e1 isImplicit e2 :@ _) = do
   v1 <- eval ctx e1
   v2 <- eval ctx e2

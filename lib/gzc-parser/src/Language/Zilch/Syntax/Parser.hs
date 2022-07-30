@@ -190,12 +190,16 @@ parseResourceUsage = do
     isUsageNumber _ = False
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
-parseExpression s = located do
-  MP.choice
-    ( [ EApplication <$> (parseAtom s `MP.sepBy1` MP.try s)
-      ] ::
-        [m Expression]
-    )
+parseExpression s = parseApplication s
+
+parseApplication :: forall m. MonadParser m => m () -> m (Located Expression)
+parseApplication s = located do
+  f <- parseAtom s
+  args <- MP.many (MP.try s *> (implicit s <|> explicit s))
+  pure $ EApplication (f : args)
+  where
+    implicit s = located do EImplicit <$> (lexeme (token TkLeftBrace) *> s *> parseExpression s <* s <* token TkRightBrace)
+    explicit s = lexeme (token TkLeftParen) *> s *> parseExpression s <* s <* token TkRightParen
 
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
