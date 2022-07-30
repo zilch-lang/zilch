@@ -38,6 +38,8 @@ data Token
     TkThen
   | -- | @else@
     TkElse
+  | -- | @mutual@
+    TkMutual
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition

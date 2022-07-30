@@ -50,6 +50,14 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
     Just (AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
     Nothing -> pure Nothing
     Just def' -> pure . Just $ AST.TopLevel isPublic def' :@ p
+desugarToplevel (CST.Mutual defs :@ p) = do
+  defs' <- catMaybes <$> desugarToplevel' defs
+  pure $ Just $ AST.Mutual defs' :@ p
+  where
+    desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Maybe (Located AST.TopLevel)]
+    desugarToplevel' [] = pure []
+    desugarToplevel' ((CST.TopLevel _ _ (CST.Assume _ :@ p) :@ _) : _) = throwError $ AssumptionsInMutualBlock p
+    desugarToplevel' (t : ts) = (:) <$> desugarToplevel t <*> desugarToplevel' ts
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do

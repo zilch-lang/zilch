@@ -125,19 +125,23 @@ parseModule =
     removeFrontComments
     Mod
       <$> pure []
-      <*> MP.many (lexeme parseTopLevelDefinition)
+      <*> MP.many (nonIndented . lexeme $ parseTopLevelDefinition <|> parseMutualDefinitions)
       <* token TkEOF
   where
     removeFrontComments = lexeme (pure ())
 
 parseTopLevelDefinition :: forall m. MonadParser m => m (Located TopLevelDefinition)
-parseTopLevelDefinition = located $
-  nonIndented $ lineFold \s -> do
-    TopLevel
-      <$> pure []
-      <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
-      <*> MP.choice
-        ([parseLet s, parseAssume s] :: [m (Located Definition)])
+parseTopLevelDefinition = located $ lineFold \s -> do
+  TopLevel
+    <$> pure []
+    <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
+    <*> MP.choice
+      ([parseLet s, parseAssume s] :: [m (Located Definition)])
+
+parseMutualDefinitions :: forall m. MonadParser m => m (Located TopLevelDefinition)
+parseMutualDefinitions = located do
+  lexeme (token TkMutual)
+  Mutual <$> indentBlock parseTopLevelDefinition
 
 parseLet :: forall m. MonadParser m => m () -> m (Located Definition)
 parseLet s = lexeme $ located do

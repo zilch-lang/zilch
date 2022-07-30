@@ -17,6 +17,8 @@ data TopLevel
       Bool
       -- ^ Is the toplevel binding public?
       (Located Definition)
+  | Mutual
+      [Located TopLevel]
   deriving (Show)
 
 data Definition

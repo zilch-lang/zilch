@@ -24,6 +24,8 @@ data TopLevelDefinition
       Bool
       -- ^ Is the definition @public@?
       (Located Definition)
+  | Mutual
+      [Located TopLevelDefinition]
   deriving (Show)
 
 data MetaAttribute

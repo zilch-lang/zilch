@@ -55,6 +55,8 @@ data DesugarError
   | TypelessAssumption
       Text
       Position
+  | AssumptionsInMutualBlock
+      Position
 
 data DesugarWarning
 
@@ -83,6 +85,12 @@ fromDesugarerError (TypelessAssumption name pos) =
     "Parse error"
     [(pos, This $ "Assumption '" <> Text.unpack name <> "' is missing a type")]
     ["Every top-level assumption must have a type to be complete."]
+fromDesugarerError (AssumptionsInMutualBlock pos) =
+  err
+    Nothing
+    "Parse error"
+    [(pos, This "Cannot bind assumptions inside a 'mutual' block")]
+    []
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn Nothing "sorry" [] []
