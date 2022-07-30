@@ -27,7 +27,11 @@ pCli = do
 
 pDebug :: Parser DebugFlags
 pDebug =
-  pure DebugFlags
+  DebugFlags
+    <$> option (eitherReader dumpAST) (short 'd' <> value False <> hidden)
+  where
+    dumpAST "dump-ast" = Right True
+    dumpAST _ = Left ""
 
 pConfig :: Parser ConfigFlags
 pConfig =

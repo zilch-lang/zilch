@@ -75,6 +75,10 @@ data ElabError
     CannotSolveHole
       Position
       AST.HoleLocation
+  | -- | A value has a declared type using a @val@ binding but has no value associated.
+    UndefinedValue
+      Text
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -216,6 +220,12 @@ fromElabError (CannotSolveHole p loc) =
     msg = case loc of
       AST.InsertedHole -> "Cannot infer the type of this term"
       AST.SourceHole -> "Cannot infer any term to replace this hole"
+fromElabError (UndefinedValue x p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Binding '" <> Text.unpack x <> "' has a type declared but has no value associated with it.")]
+    []
 
 showMult :: Multiplicity -> String
 showMult O = "0"

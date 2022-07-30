@@ -136,7 +136,7 @@ parseTopLevelDefinition = located $ lineFold \s -> do
     <$> pure []
     <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
     <*> MP.choice
-      ([parseLet s, parseAssume s] :: [m (Located Definition)])
+      ([parseLet s, parseAssume s, parseVal s] :: [m (Located Definition)])
 
 parseMutualDefinitions :: forall m. MonadParser m => m (Located TopLevelDefinition)
 parseMutualDefinitions = located do
@@ -157,6 +157,14 @@ parseAssume :: forall m. MonadParser m => m () -> m (Located Definition)
 parseAssume s = lexeme $ located do
   lexeme (token TkAssume) <* s
   Assume <$> (lexeme (parseParameter s) `MP.sepBy1` MP.try s)
+
+parseVal :: forall m. MonadParser m => m () -> m (Located Definition)
+parseVal s = lexeme $ located do
+  lexeme (token TkVal) <* s
+  Val
+    <$> (MP.optional parseResourceUsage <* s)
+    <*> (lexeme parseIdentifier <* s)
+    <*> (lexeme (token TkColon) *> s *> parseExpression s)
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =

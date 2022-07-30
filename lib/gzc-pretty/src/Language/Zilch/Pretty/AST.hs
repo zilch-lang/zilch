@@ -26,18 +26,28 @@ instance Pretty (Located Definition) where
       <> pretty usage
       <> space
       <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> pretty typ
       <> line
       <> indent
         2
-        ( ":"
-            <> space
-            <> pretty typ
-            <> line
-            <> "≔"
+        ( "≔"
             <> line
             <> line
             <> pretty val
         )
+  pretty (Val usage name typ :@ _) =
+    "val"
+      <> space
+      <> pretty usage
+      <> space
+      <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> pretty typ
 
 instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit usage name ty :@ _) =

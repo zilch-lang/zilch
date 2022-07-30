@@ -9,14 +9,20 @@ data Flags = Flags
   deriving (Show)
 
 data DebugFlags = DebugFlags
-  {}
+  { dumpAST :: Bool }
   deriving (Show)
 
 instance Semigroup DebugFlags where
-  _ <> _ = DebugFlags
+  f1 <> f2 =
+    DebugFlags
+      { dumpAST = dumpAST f1 || dumpAST f2
+      }
 
 instance Monoid DebugFlags where
-  mempty = DebugFlags
+  mempty =
+    DebugFlags
+      { dumpAST = False
+      }
 
 data ConfigFlags = ConfigFlags
   { -- | @-fcolor-diagnostics@ and @-fno-color-diagnostics@

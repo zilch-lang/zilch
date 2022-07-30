@@ -7,7 +7,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Stack (HasCallStack)
 import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined))
-import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable))
+import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable, VUndefined))
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 import qualified Language.Zilch.Typecheck.Environment as Env
 
@@ -24,6 +24,7 @@ data Context = Context
     -- | Bindings
     bds :: [Binding]
   }
+  deriving (Show)
 
 emptyContext :: Context
 emptyContext = Context mempty mempty (Lvl 0) []
@@ -67,9 +68,30 @@ insertBinder usage x@(_ :@ p) typ ctx =
 -- | Extend the context with a new value definition.
 define :: Multiplicity -> Located Name -> Located Value -> Located Value -> Context -> Context
 define usage f val ty ctx =
-  ctx
-    { env = Env.extend (env ctx) val,
-      types = (usage, f, Source, ty) : types ctx,
-      lvl = lvl ctx + 1,
-      bds = Defined (unLoc f) : bds ctx
-    }
+  -- we need to check if @f@ is already in the context with a value of @VUndefined@
+  -- if yes: replace its value
+  -- if no: insert in the context as a new binding
+  let index = indexOfUndefined (lvl ctx) (env ctx) (types ctx)
+   in case index of
+    Nothing ->
+      ctx
+        { env = Env.extend (env ctx) val,
+          types = (usage, f, Source, ty) : types ctx,
+          lvl = lvl ctx + 1,
+          bds = Defined (unLoc f) : bds ctx
+        }
+    Just idx -> ctx { env = replaceAt (lvl ctx) idx (env ctx) val }
+  where
+    indexOfUndefined _ [] [] = Nothing
+    indexOfUndefined lvl ((VUndefined :@ _) : env) ((_, g, _, _) : types)
+      | f == g = Just lvl
+      | otherwise = indexOfUndefined (lvl - 1) env types
+    indexOfUndefined _ _ _ = error "indexOfUndefined: incoherent context"
+
+    replaceAt _ _ [] _ = error "replaceAt: index too large"
+    replaceAt lvl idx (e : env) val
+      | lvl < idx = e : env
+      | lvl == idx = val : env
+      | otherwise =
+        let env' = replaceAt (lvl - 1) idx env val
+         in e : env'

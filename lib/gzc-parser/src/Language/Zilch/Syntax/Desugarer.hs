@@ -37,10 +37,10 @@ desugarCST mod =
 
 desugarModule :: forall m. MonadDesugar m => Located CST.Module -> m (Located AST.Module)
 desugarModule (CST.Mod _ defs :@ p) = do
-  defs' <- catMaybes <$> traverse desugarToplevel defs
+  defs' <- mconcat <$> traverse desugarToplevel defs
   pure $ AST.Mod [] defs' :@ p
 
-desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m (Maybe (Located AST.TopLevel))
+desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m [Located AST.TopLevel]
 desugarToplevel (CST.TopLevel _ True (CST.Assume _ :@ _) :@ p) = throwError $ PublicAssumptions p
 desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   def' <- desugarDefinition def
@@ -48,16 +48,25 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   -- we forbid top-level linear definitions
   case def' of
     Just (AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
-    Nothing -> pure Nothing
-    Just def' -> pure . Just $ AST.TopLevel isPublic def' :@ p
+    Just (AST.Val (I :@ _) (name :@ _) _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
+    Nothing -> pure []
+    Just def' -> pure [AST.TopLevel isPublic def' :@ p]
 desugarToplevel (CST.Mutual defs :@ p) = do
-  defs' <- catMaybes <$> desugarToplevel' defs
-  pure $ Just $ AST.Mutual defs' :@ p
+  defs' <- desugarToplevel' defs
+  let defs'' = generateSignatures [] defs'
+  pure $ defs'' <> defs'
   where
-    desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Maybe (Located AST.TopLevel)]
+    generateSignatures :: [Text] -> [Located AST.TopLevel] -> [Located AST.TopLevel]
+    generateSignatures _ [] = []
+    generateSignatures withSig ((AST.TopLevel _ (AST.Val _ (name :@ _) _ :@ _) :@ _) : ts) = generateSignatures (name : withSig) ts
+    generateSignatures withSig ((AST.TopLevel _ (AST.Let _ usage name@(n :@ _) ty _ :@ p) :@ _) : ts)
+      | n `elem` withSig = generateSignatures withSig ts
+      | otherwise = (AST.TopLevel False (AST.Val usage name ty :@ p) :@ p) : generateSignatures withSig ts
+
+    desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Located AST.TopLevel]
     desugarToplevel' [] = pure []
     desugarToplevel' ((CST.TopLevel _ _ (CST.Assume _ :@ p) :@ _) : _) = throwError $ AssumptionsInMutualBlock p
-    desugarToplevel' (t : ts) = (:) <$> desugarToplevel t <*> desugarToplevel' ts
+    desugarToplevel' (t : ts) = (<>) <$> desugarToplevel t <*> desugarToplevel' ts
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -92,6 +101,14 @@ desugarDefinition (CST.Assume params :@ _) = do
       param -> desugarParameter param
   modify $ bimap (<> params) (<> params')
   pure Nothing
+desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
+  usage' <- desugarMultiplicity usage p2
+  (_, aParams) <- get
+  ty' <- desugarExpression ty
+  let ty'' = foldr mkPi ty' aParams
+  pure . Just $ AST.Val usage' name ty'' :@ p
+  where
+    mkPi param expr = AST.EPi param expr :@ p
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
 desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do

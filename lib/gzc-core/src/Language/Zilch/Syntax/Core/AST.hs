@@ -17,8 +17,6 @@ data TopLevel
       Bool
       -- ^ Is the toplevel binding public?
       (Located Definition)
-  | Mutual
-      [Located TopLevel]
   deriving (Show)
 
 data Definition
@@ -34,6 +32,14 @@ data Definition
       -- ^ The type of the binding, where unknown types are filled by holes
       (Located Expression)
       -- ^ Value
+  | -- | A type hypothesis
+    Val
+      (Located Multiplicity)
+      -- ^ An optional resource usage
+      (Located Text)
+      -- ^ The name of the binding
+      (Located Expression)
+      -- ^ The type assumed
   deriving (Show)
 
 data Parameter

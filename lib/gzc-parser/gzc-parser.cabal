@@ -24,6 +24,7 @@ library
       OverloadedStrings
       OverloadedLists
       BlockArguments
+      ImplicitParams
   ghc-options: -Wall -Wextra -Wno-name-shadowing -Wall -Wextra
   build-depends:
       base >=4.7 && <5

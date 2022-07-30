@@ -47,6 +47,9 @@ executables:
     - gzc-pretty
     - gzc-flags
     - prettyprinter == 1.7.0
+    - mtl ==2.2.2
+    - directory >=1.3
+    - filepath >=1.3
 
 tests:
   gzc-tests:

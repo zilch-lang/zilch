@@ -39,6 +39,16 @@ instance Pretty (Located Definition) where
             <> line
             <> pretty val
         )
+  pretty (Val usage name typ :@ _) =
+    "val"
+      <> space
+      <> pretty usage
+      <> space
+      <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> pretty typ
   pretty (LetMeta idx val :@ _) =
     "let?"
       <> space

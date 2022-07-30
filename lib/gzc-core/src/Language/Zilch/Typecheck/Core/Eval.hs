@@ -89,6 +89,7 @@ data Value
   | VBuiltinS8
   | VUnknown
   | VBuiltinBool
+  | VUndefined
   deriving (Show)
 
 data MetaEntry

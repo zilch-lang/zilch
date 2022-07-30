@@ -21,7 +21,7 @@ import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
+import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Environment, MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
@@ -34,7 +34,8 @@ import System.IO.Unsafe (unsafePerformIO)
 
 checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
 checkProgram ctx mod = do
-  TAST.Mod binds :@ p <- checkProgram' ctx mod
+  (TAST.Mod binds :@ p, ctx) <- checkProgram' ctx mod
+  checkAllDefined (types ctx) (env ctx)
 
   let metas = unsafePerformIO $ IntMap.toList <$> readIORef mcxt
   addBinds <- forM metas \(m, e) -> do
@@ -47,51 +48,85 @@ checkProgram ctx mod = do
 
   pure $ TAST.Mod (addBinds' <> binds) :@ p
 
-checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
+checkAllDefined :: forall m. MonadElab m => [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> m ()
+checkAllDefined [] [] = pure ()
+checkAllDefined ((_, x :@ p, _, _) : _) ((VUndefined :@ _) : _) = throwError $ UndefinedValue x p
+checkAllDefined (_ : types) (_ : env) = checkAllDefined types env
+checkAllDefined _ _ = error "checkAllDefined: impossible"
+
+checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module, Context)
 checkProgram' ctx (AST.Mod imports defs :@ p) = do
   case defs of
     [] -> do
-      pure (TAST.Mod [] :@ p)
-    ((AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) : ds) -> do
-      {-
-         0Γ ⊢ A ⇐⁰ type ℓ            0Γ ⊢ e ⇐⁰ A          i = 0
-        ──────────────────────────────────────────────────────── [⇐ let-I₀]
-                               Γ ⊢ let x :ⁱ A := e
+      pure (TAST.Mod [] :@ p, ctx)
+    b : bs -> do
+      (b, ctx) <- checkToplevel ctx b
+      (TAST.Mod defs :@ p, ctx) <- checkProgram' ctx (AST.Mod imports bs :@ p)
 
-         0Γ₁ ⊢ A ⇐⁰ type ℓ             Γ₂ ⊢ e ⇐¹ A
-        ─────────────────────────────────────────── [⇐ let-I₁]
-                 Γ₁ + iΓ₂ ⊢ let x :ⁱ A := e
-      -}
-      checkAlreadyBound name (types ctx) p5
+      pure (TAST.Mod (b : defs) :@ p, ctx)
 
+checkToplevel :: forall m. MonadElab m => Context -> Located AST.TopLevel -> m (Located TAST.TopLevel, Context)
+checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
+  {-
+     0Γ ⊢ A ⇐⁰ type ℓ            0Γ ⊢ e ⇐⁰ A          i = 0
+    ──────────────────────────────────────────────────────── [⇐ let-I₀]
+                           Γ ⊢ let x :ⁱ A := e
+
+     0Γ₁ ⊢ A ⇐⁰ type ℓ             Γ₂ ⊢ e ⇐¹ A
+    ─────────────────────────────────────────── [⇐ let-I₁]
+             Γ₁ + iΓ₂ ⊢ let x :ⁱ A := e
+  -}
+  mty <- checkAlreadyBound name (types ctx) (env ctx) p5
+
+  (ty, ty') <- case mty of
+    Nothing -> do
       (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p3)
       ty' <- eval ctx ty
 
-      (ex, ex') <- mdo
-        let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
-        (usage, ex') <-
-          first (Usage.scale $ unLoc mult) <$> case unLoc mult of
-            TAST.O -> check TAST.Irrelevant ctx' ex ty'
-            _ -> check TAST.Present ctx' ex ty'
-        checkUsage ctx' usage (getPos ex)
+      pure (ty, ty')
+    Just (m1, ty) -> do
+      -- type has already been checked earlier
+      -- but we still need to check that multiplicities match
+      when (unLoc mult /= unLoc m1) do
+        throwError $ MultiplicityMismatch m1 mult
+       
+      (,ty) <$> quote ctx (lvl ctx) ty
 
-        when isRec do
-          case (Map.lookup name usage, ty') of
-            (Nothing, _) -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
-            (_, VPi {} :@ _) -> pure ()
-            _ -> throwError $ RecursiveValueBinding (unLoc name) p5
+  (ex, ex') <- mdo
+    let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
+    (usage, ex') <-
+      first (Usage.scale $ unLoc mult) <$> case unLoc mult of
+        TAST.O -> check TAST.Irrelevant ctx' ex ty'
+        _ -> check TAST.Present ctx' ex ty'
+    checkUsage ctx' usage (getPos ex)
 
-        ex'' <- eval ctx' ex'
-        pure (ex', ex'')
+    when isRec do
+      case (Map.lookup name usage, ty') of
+        (Nothing, _) -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
+        (_, VPi {} :@ _) -> pure ()
+        _ -> throwError $ RecursiveValueBinding (unLoc name) p5
 
-      TAST.Mod defs :@ p <- checkProgram' (define (unLoc mult) name ex' ty' ctx) (AST.Mod imports ds :@ p)
+    ex'' <- case ty of
+      TAST.EPi{} :@ _ -> eval ctx' ex'
+      _ -> pure $ VThunk ex' :@ getPos ex'
+    pure (ex', ex'')
 
-      pure (TAST.Mod ((TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4) : defs) :@ p)
-  where
-    checkAlreadyBound _ [] _ = pure ()
-    checkAlreadyBound x ((_, x', origin, _) : types) p5
-      | x == x' && origin == Source = throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
-      | otherwise = checkAlreadyBound x types p5
+  pure (TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4, define (unLoc mult) name ex' ty' ctx)
+checkToplevel ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
+  (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p4)
+  ty' <- eval ctx ty
+
+  let ctx' = define (unLoc mult) name (VUndefined :@ p6) ty' ctx
+  pure (TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5, ctx')
+
+checkAlreadyBound :: forall m. MonadElab m => Located Text -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> Position -> m (Maybe (Located TAST.Multiplicity, Located Value))
+checkAlreadyBound _ [] [] _ = pure Nothing
+checkAlreadyBound x ((mult, x', origin, ty) : types) ((val :@ _) : env) p5
+  | x == x' && origin == Source = case val of
+    VUndefined -> pure $ Just (mult <$ x', ty)
+    _ -> throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
+  | otherwise = checkAlreadyBound x types env p5
+checkAlreadyBound _ _ _ _ = error "checkAlreadyDefined: impossible"
 
 insert' :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity) -> m (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity)
 insert' ctx (qs, expr, ty, usage) = do

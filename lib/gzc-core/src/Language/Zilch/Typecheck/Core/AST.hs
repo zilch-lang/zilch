@@ -31,6 +31,10 @@ data Definition
       -- ^ The return type
       (Located Expression)
       -- ^ The value bound
+  | Val
+      (Located Multiplicity)
+      (Located Text)
+      (Located Expression)
   | LetMeta
       Int
       (Maybe (Located Expression))

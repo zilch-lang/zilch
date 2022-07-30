@@ -50,6 +50,11 @@ data Definition
   | -- | Assumption (as parameters) introduced at the top-level
     Assume
       [Located Parameter]
+  | -- | Forward declaration
+    Val
+      (Maybe (Located Integer))
+      (Located Text)
+      (Located Expression)
   deriving (Show)
 
 data Parameter
