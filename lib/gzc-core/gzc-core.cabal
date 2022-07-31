@@ -18,6 +18,7 @@ library
       Language.Zilch.Typecheck.Core
       Language.Zilch.Typecheck.Core.AST
       Language.Zilch.Typecheck.Core.Eval
+      Language.Zilch.Typecheck.Core.Internal
       Language.Zilch.Typecheck.Core.Multiplicity
   other-modules:
       Paths_gzc_core

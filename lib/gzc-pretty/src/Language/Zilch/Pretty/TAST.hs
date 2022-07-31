@@ -4,7 +4,6 @@
 
 module Language.Zilch.Pretty.TAST where
 
-import Data.Foldable (fold)
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
@@ -49,16 +48,6 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
-  pretty (LetMeta idx val :@ _) =
-    "let?"
-      <> space
-      <> pretty idx
-      <> space
-      <> "≔"
-      <> space
-      <> maybe "?" prettyValue val
-    where
-      prettyValue val = hardline <> indent 2 (pretty val)
 
 instance Pretty (Located Parameter) where
   pretty (Parameter isImplicit usage name ty :@ _) =
@@ -97,13 +86,14 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
-  pretty (EInsertedMeta m bds :@ _) =
+  pretty (EInsertedMeta m path :@ _) =
     "?"
       <> pretty m
-      <> fold (prettyBinding <$> reverse bds)
+      <> prettyBinding path
     where
-      prettyBinding (Bound name) = space <> pretty name
-      prettyBinding (Defined _) = ""
+      prettyBinding Here = ""
+      prettyBinding (Bind p _ (name :@ _) _) = prettyBinding p <> space <> pretty name
+      prettyBinding (Define p _ _ _ _) = prettyBinding p
   pretty (EMeta m :@ _) =
     "?" <> pretty m
   pretty (EBuiltin ty :@ _) =

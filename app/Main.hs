@@ -22,7 +22,6 @@ import Language.Zilch.Syntax.Parser (parseTokens)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Elaborator (elabProgram)
 import Prettyprinter (pretty)
-import Prettyprinter.Render.Text (putDoc)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath.Posix (joinPath, splitPath)
 import System.IO

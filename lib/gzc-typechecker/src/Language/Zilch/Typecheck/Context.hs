@@ -6,8 +6,8 @@ import Data.Located (Located ((:@)), unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Stack (HasCallStack)
-import Language.Zilch.Typecheck.Core.AST (Binding (Bound, Defined))
-import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VVariable, VUndefined))
+import Language.Zilch.Typecheck.Core.AST (Path (..))
+import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Environment, Name, Value (VUndefined, VVariable))
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 import qualified Language.Zilch.Typecheck.Environment as Env
 
@@ -22,12 +22,12 @@ data Context = Context
     -- | Current DeBruijn level for unification
     lvl :: DeBruijnLvl,
     -- | Bindings
-    bds :: [Binding]
+    path :: Path
   }
   deriving (Show)
 
 emptyContext :: Context
-emptyContext = Context mempty mempty (Lvl 0) []
+emptyContext = Context mempty mempty (Lvl 0) Here
 
 indexContext :: HasCallStack => Context -> Located Name -> (Multiplicity, Located Text, Located Value)
 indexContext ctx x = go (types ctx)
@@ -37,7 +37,7 @@ indexContext ctx x = go (types ctx)
     go (_ : ts) = go ts
 
 setContext :: Context -> Located Name -> Multiplicity -> Context
-setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (bds ctx)
+setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (path ctx)
   where
     go [] = []
     go ((u, y, origin, ty) : tys)
@@ -52,7 +52,7 @@ bind usage x@(_ :@ p) ty ctx =
         { env = Env.extend (env ctx) (VVariable x level :@ p),
           types = (usage, x, Source, ty) : types ctx,
           lvl = level + 1,
-          bds = Bound (unLoc x) : bds ctx
+          path = Bind (path ctx) usage x ty
         }
 
 insertBinder :: Multiplicity -> Located Name -> Located Value -> Context -> Context
@@ -62,7 +62,7 @@ insertBinder usage x@(_ :@ p) typ ctx =
         { env = Env.extend (env ctx) (VVariable x level :@ p),
           types = (usage, x, Inserted, typ) : types ctx,
           lvl = level + 1,
-          bds = Bound (unLoc x) : bds ctx
+          path = Bind (path ctx) usage x typ
         }
 
 -- | Extend the context with a new value definition.
@@ -73,14 +73,14 @@ define usage f val ty ctx =
   -- if no: insert in the context as a new binding
   let index = indexOfUndefined (lvl ctx) (env ctx) (types ctx)
    in case index of
-    Nothing ->
-      ctx
-        { env = Env.extend (env ctx) val,
-          types = (usage, f, Source, ty) : types ctx,
-          lvl = lvl ctx + 1,
-          bds = Defined (unLoc f) : bds ctx
-        }
-    Just idx -> ctx { env = replaceAt (lvl ctx) idx (env ctx) val }
+        Nothing ->
+          ctx
+            { env = Env.extend (env ctx) val,
+              types = (usage, f, Source, ty) : types ctx,
+              lvl = lvl ctx + 1,
+              path = Define (path ctx) usage f ty val
+            }
+        Just idx -> ctx {env = replaceAt (lvl ctx) idx (env ctx) val}
   where
     indexOfUndefined _ [] [] = Nothing
     indexOfUndefined lvl ((VUndefined :@ _) : env) ((_, g, _, _) : types)

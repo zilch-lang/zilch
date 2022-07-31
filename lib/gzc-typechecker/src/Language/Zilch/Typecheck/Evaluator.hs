@@ -91,21 +91,21 @@ applySpine ctx t ((u, i) : sp) = do
   v1 <- applySpine ctx t sp
   applyVal ctx v1 u i
 
-applyBDs :: forall m. MonadElab m => Context -> Environment -> Located Value -> [TAST.Binding] -> m (Located Value)
-applyBDs _ [] v [] = pure v
-applyBDs ctx (t : env) v (TAST.Bound _ : bds) = do
+applyBDs :: forall m. MonadElab m => Context -> Environment -> Located Value -> TAST.Path -> m (Located Value)
+applyBDs _ [] v TAST.Here = pure v
+applyBDs ctx (t : env) v (TAST.Bind bds _ _ _) = do
   v1 <- applyBDs ctx env v bds
   applyVal ctx v1 t explicit
-applyBDs ctx (_ : env) v (TAST.Defined _ : bds) = applyBDs ctx env v bds
+applyBDs ctx (_ : env) v (TAST.Define bds _ _ _ _) = applyBDs ctx env v bds
 applyBDs _ _ _ _ = error "impossible"
 
 metaValue :: Int -> Position -> Located Value
 metaValue m pos = case lookupMeta m of
-  (Solved v, _, _) -> v :@ pos
-  (Unsolved, _, _) -> VMeta m :@ pos
+  (Solved v _ _, _, _, _) -> v :@ pos
+  (Unsolved _ _, _, _, _) -> VMeta m :@ pos
 
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
-force ctx (VFlexible m sp :@ p) | (Solved t, _, _) <- lookupMeta m = do
+force ctx (VFlexible m sp :@ p) | (Solved t _ _, _, _, _) <- lookupMeta m = do
   v1 <- applySpine ctx (t :@ p) sp
   force ctx v1
 force _ t = pure t

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
@@ -13,11 +14,10 @@ import Data.IORef (modifyIORef', readIORef, writeIORef)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Located (Located ((:@)), Position)
-import qualified Data.Text as Text
 import qualified Language.Zilch.Syntax.Core.AST as AST
-import Language.Zilch.Typecheck.Context (Context, bds, emptyContext, lvl)
+import Language.Zilch.Typecheck.Context (Context, path, emptyContext, lvl, bind)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..))
+import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..), explicit, Implicitness)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
@@ -26,12 +26,12 @@ import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- | Generate new fresh metavariables from the context.
-freshMeta :: Context -> Position -> AST.HoleLocation -> TAST.Expression
-freshMeta ctx p loc = unsafeDupablePerformIO do
+freshMeta :: Context -> TAST.Multiplicity -> Located Value -> Position -> AST.HoleLocation -> TAST.Expression
+freshMeta ctx mult ty p loc = unsafeDupablePerformIO do
   m <- readIORef nextMeta
   writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt (IntMap.insert m (Unsolved, p, loc))
-  pure $ TAST.EInsertedMeta m (bds ctx)
+  modifyIORef' mcxt (IntMap.insert m (Unsolved mult ty, path ctx, p, loc))
+  pure $ TAST.EInsertedMeta m (path ctx)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
 
@@ -84,25 +84,54 @@ rename ctx m ren v = go ren v
 
 solve :: forall m. MonadElab m => DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
 solve gamma m sp val = do
+  (mult, ty, path, _, loc) <- pure $ unsafeDupablePerformIO do
+    IntMap.lookup m <$> readIORef mcxt >>= \case
+      Nothing -> error "solve: impossible -- metavariable not found in context"
+      Just (Unsolved m ty, path, p, loc) -> pure (m, ty, path, p, loc)
+      Just (Solved _ m ty, path, p, loc) -> pure (m, ty, path, p, loc)
+
   let ctx = emptyContext
   ren@(Renaming _ _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
-  solution :@ _ <- eval ctx $ lams (reverse $ snd <$> sp) val' p
-  let !_ = unsafeDupablePerformIO do
-        IntMap.lookup m <$> readIORef mcxt >>= \case
-          Nothing -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p, AST.InsertedHole)
-          Just (_, p, loc) -> modifyIORef' mcxt $ IntMap.insert m (Solved solution, p, loc)
+  solution :@ _ <- uncurry eval =<< lams ctx path (reverse $ snd <$> sp) val' p
+
+  ty <- quote ctx (lvl ctx) ty
+  ty' <- uncurry eval =<< mkPi ctx ty path
+          
+  let !_ = unsafeDupablePerformIO do modifyIORef' mcxt $ IntMap.insert m (Solved solution mult ty', path, p, loc)
+
   pure ()
   where
+    mkPi :: forall m. MonadElab m => Context -> Located TAST.Expression -> TAST.Path -> m (Context, Located TAST.Expression)
+    mkPi ctx ty TAST.Here = pure (ctx, ty)
+    mkPi ctx ty@(_ :@ p) (TAST.Bind path m n a) = do
+      let ctx' = bind m n a ctx
+      (ctx', ret) <- mkPi ctx' ty path
+      a <- quote ctx' (lvl ctx') a
+      
+      pure . (ctx',) $ case ret of
+        TAST.EPi (TAST.Parameter exp mult name x :@ p1) y :@ p2 ->
+          TAST.EPi (TAST.Parameter exp mult name x :@ p1) (TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p) :@ p2
+        y ->
+          TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p      
+    mkPi ctx ty (TAST.Define path _ _ _ _) = mkPi ctx ty path
+    
     lams = go 0
 
-    go :: Integer -> _
-    go _ [] t _ = t
-    go x (i : is) t p =
-      TAST.ELam
-        (TAST.Parameter (not i) (TAST.Unrestricted :@ p) (("$" <> Text.pack (show (x + 1))) :@ p) (TAST.EUnknown :@ p) :@ p)
-        (go (x + 1) is t p)
-        :@ p
+    go :: forall m. MonadElab m => Integer -> Context -> TAST.Path -> [Implicitness] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
+    go _ ctx TAST.Here [] t _ = pure (ctx, t)
+    go x ctx (TAST.Define path _ _ _ _) is t p = go x ctx path is t p
+    go x ctx (TAST.Bind path m n a) (_ : is) t p = do
+      let ctx' = bind m n a ctx
+      (ctx', lam) <- go x ctx' path is t p
+      a <- quote ctx' (lvl ctx') a
+
+      pure . (ctx',) $ case lam of
+        TAST.ELam (TAST.Parameter exp mult name x :@ p1) y :@ p2 ->
+          TAST.ELam (TAST.Parameter exp mult name x :@ p1) (TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p) :@ p2
+        y ->
+          TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p
+    go _ _ _ _ _ _ = error "insertLambdas: incoherent context"
 
 unifySpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Spine -> Spine -> m ()
 unifySpine _ _ [] [] = pure ()

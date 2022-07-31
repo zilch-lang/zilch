@@ -1,5 +1,7 @@
-module Language.Zilch.Typecheck.Errors where
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
+module Language.Zilch.Typecheck.Errors where
+    
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
