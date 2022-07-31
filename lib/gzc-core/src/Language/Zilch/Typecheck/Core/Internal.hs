@@ -79,7 +79,6 @@ data Expression
       (Located Expression)
       (Located Expression)
       (Located Expression)
-  | EUnknown
   deriving (Show)
 
 data BuiltinType
@@ -162,7 +161,6 @@ data Value
   | VBuiltinS32
   | VBuiltinS16
   | VBuiltinS8
-  | VUnknown
   | VBuiltinBool
   | VUndefined
   deriving (Show)

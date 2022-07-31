@@ -98,8 +98,6 @@ instance Pretty (Located Expression) where
     "?" <> pretty m
   pretty (EBuiltin ty :@ _) =
     pretty ty
-  pretty (EUnknown :@ _) =
-    "???"
   pretty (EBoolean bool :@ _) =
     if bool then "true" else "false"
   pretty (EIfThenElse cond t e :@ _) =

@@ -59,7 +59,6 @@ eval _ (TAST.EMeta m :@ p) = metaValue m p
 eval ctx (TAST.EInsertedMeta m bds :@ p) = do
   meta <- metaValue m p
   applyBDs ctx (env ctx) meta bds
-eval _ (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
 eval _ (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
 eval _ (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
 eval _ (TAST.EBuiltin TAST.TyU16 :@ p) = pure $ VBuiltinU16 :@ p
@@ -157,7 +156,6 @@ quote ctx level val = do
       e' <- quote ctx level e
       pure $ TAST.EIfThenElse c' t' e' :@ p
     (VType :@ p) -> pure $ TAST.EType :@ p
-    (VUnknown :@ p) -> pure $ TAST.EUnknown :@ p
     VBuiltinU64 :@ p -> pure $ TAST.EBuiltin TAST.TyU64 :@ p
     VBuiltinU32 :@ p -> pure $ TAST.EBuiltin TAST.TyU32 :@ p
     VBuiltinU16 :@ p -> pure $ TAST.EBuiltin TAST.TyU16 :@ p
