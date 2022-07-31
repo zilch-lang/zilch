@@ -2,36 +2,25 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 module Language.Zilch.Typecheck.Unification where
 
 import Control.Monad.Except (catchError, throwError)
-import Data.IORef (modifyIORef', readIORef, writeIORef)
+import Control.Monad.State (get, modify')
+import Data.Bifunctor (second)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Located (Located ((:@)), Position)
-import qualified Language.Zilch.Syntax.Core.AST as AST
-import Language.Zilch.Typecheck.Context (Context, path, emptyContext, lvl, bind)
+import Language.Zilch.Typecheck.Context (Context, bind, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), MetaEntry (Solved, Unsolved), Spine, Value (..), explicit, Implicitness)
-import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
+import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Implicitness, MetaEntry (Solved, Unsolved), Spine, Value (..), explicit)
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
-import Language.Zilch.Typecheck.Metavariables (mcxt, nextMeta)
-import System.IO.Unsafe (unsafeDupablePerformIO)
-
--- | Generate new fresh metavariables from the context.
-freshMeta :: Context -> TAST.Multiplicity -> Located Value -> Position -> AST.HoleLocation -> TAST.Expression
-freshMeta ctx mult ty p loc = unsafeDupablePerformIO do
-  m <- readIORef nextMeta
-  writeIORef nextMeta (m + 1)
-  modifyIORef' mcxt (IntMap.insert m (Unsolved mult ty, path ctx, p, loc))
-  pure $ TAST.EInsertedMeta m (path ctx)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
 
@@ -82,10 +71,10 @@ rename ctx m ren v = go ren v
       v2 <- go ren u
       pure $ TAST.EApplication v1 (not i) v2 :@ p
 
-solve :: forall m. MonadElab m => DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
-solve gamma m sp val = do
-  (mult, ty, path, _, loc) <- pure $ unsafeDupablePerformIO do
-    IntMap.lookup m <$> readIORef mcxt >>= \case
+solve :: forall m. MonadElab m => Context -> DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
+solve ctx' gamma m sp val = do
+  (mult, ty, path, _, loc) <- do
+    IntMap.lookup m . snd <$> get >>= \case
       Nothing -> error "solve: impossible -- metavariable not found in context"
       Just (Unsolved m ty, path, p, loc) -> pure (m, ty, path, p, loc)
       Just (Solved _ m ty, path, p, loc) -> pure (m, ty, path, p, loc)
@@ -95,10 +84,10 @@ solve gamma m sp val = do
   val'@(_ :@ p) <- rename ctx m ren val
   solution :@ _ <- uncurry eval =<< lams ctx path (reverse $ snd <$> sp) val' p
 
-  ty <- quote ctx (lvl ctx) ty
+  ty <- quote ctx' (lvl ctx') ty
   ty' <- uncurry eval =<< mkPi ctx ty path
-          
-  let !_ = unsafeDupablePerformIO do modifyIORef' mcxt $ IntMap.insert m (Solved solution mult ty', path, p, loc)
+
+  modify' $ second (IntMap.insert m (Solved solution mult ty', path, p, loc))
 
   pure ()
   where
@@ -108,14 +97,14 @@ solve gamma m sp val = do
       let ctx' = bind m n a ctx
       (ctx', ret) <- mkPi ctx' ty path
       a <- quote ctx' (lvl ctx') a
-      
+
       pure . (ctx',) $ case ret of
         TAST.EPi (TAST.Parameter exp mult name x :@ p1) y :@ p2 ->
           TAST.EPi (TAST.Parameter exp mult name x :@ p1) (TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p) :@ p2
         y ->
-          TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p      
+          TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p
     mkPi ctx ty (TAST.Define path _ _ _ _) = mkPi ctx ty path
-    
+
     lams = go 0
 
     go :: forall m. MonadElab m => Integer -> Context -> TAST.Path -> [Implicitness] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
@@ -181,8 +170,8 @@ unify' ctx lvl t u = do
       | l1 == l2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m1 sp1 :@ _, VFlexible m2 sp2 :@ _)
       | m1 == m2 -> unifySpine ctx lvl sp1 sp2
-    (VFlexible m sp :@ _, t) -> solve lvl m sp t
-    (t, VFlexible m sp :@ _) -> solve lvl m sp t
+    (VFlexible m sp :@ _, t) -> solve ctx lvl m sp t
+    (t, VFlexible m sp :@ _) -> solve ctx lvl m sp t
     (VType :@ _, VType :@ _) -> pure ()
     (VTrue :@ _, VTrue :@ _) -> pure ()
     (VFalse :@ _, VFalse :@ _) -> pure ()

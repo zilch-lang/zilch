@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Errors where
-    
+
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -75,6 +75,7 @@ data ElabError
       Position
   | -- | A hole could not solved.
     CannotSolveHole
+      [(Text, Multiplicity, Located Expression)]
       Position
       AST.HoleLocation
   | -- | A value has a declared type using a @val@ binding but has no value associated.
@@ -218,16 +219,20 @@ fromElabError (RecursiveValueBinding x p) =
     "Type-checking error"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is recursively bound to a value which is not a function")]
     [Hint "Potential fixes include transforming this binding into a function"]
-fromElabError (CannotSolveHole p loc) =
+fromElabError (CannotSolveHole env p loc) =
   err
     Nothing
     "Type-checking error"
     [(p, This msg)]
-    []
+    (if null env then [] else [Note $ "Local bindings include:\n" <> genEnv env])
   where
     msg = case loc of
       AST.InsertedHole -> "Cannot infer the type of this term"
       AST.SourceHole -> "Cannot infer any term to replace this hole"
+
+    genEnv [] = ""
+    genEnv [(x, mult, expr)] = "    " <> showMult mult <> " " <> Text.unpack x <> " : " <> show (pretty expr)
+    genEnv (e : env) = genEnv [e] <> "\n" <> genEnv env
 fromElabError (UndefinedValue x p) =
   err
     Nothing
@@ -243,8 +248,8 @@ fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
   where
     messages =
       [(p, This $ "Binding '" <> Text.unpack x <> "' will end up evaluating itself when evaluating its value")]
-      <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
-      <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
+        <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
+        <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
 
 showMult :: Multiplicity -> String
 showMult O = "0"

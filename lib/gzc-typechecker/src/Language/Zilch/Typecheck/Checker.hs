@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,9 +9,9 @@ module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
 import Control.Monad (forM, unless, when)
 import Control.Monad.Except (catchError, throwError)
+import Control.Monad.State (gets)
 import Control.Monad.Writer (tell)
 import Data.Bifunctor (first)
-import Data.IORef (readIORef)
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
@@ -28,20 +29,27 @@ import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
-import Language.Zilch.Typecheck.Metavariables (mcxt)
-import Language.Zilch.Typecheck.Unification (freshMeta, unify)
+import Language.Zilch.Typecheck.Metavars (freshMeta)
+import Language.Zilch.Typecheck.Unification (unify)
 import Language.Zilch.Typecheck.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Usage as Usage
-import System.IO.Unsafe (unsafePerformIO)
 
 checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
 checkProgram ctx mod = do
   (TAST.Mod binds :@ p, ctx, usages) <- checkProgram' ctx mod
 
-  let metas = unsafePerformIO $ IntMap.toList <$> readIORef mcxt
+  metas <- gets (IntMap.toList . snd)
   addBinds <- forM metas \(m, e) -> do
     case e of
-      (Unsolved _ _, _, p, loc) -> throwError $ CannotSolveHole p loc
+      (Unsolved _ _, path, p, loc) -> do
+        let go TAST.Here = pure []
+            go (TAST.Bind path mult x ty) = do
+              ty' <- quote ctx (lvl ctx) ty
+              ((unLoc x, mult, ty') :) <$> go path
+            go (TAST.Define path _ _ _ _) = go path
+
+        path' <- go path
+        throwError $ CannotSolveHole path' p loc
       (Solved val mult ty, _, p, _) -> do
         val@(_ :@ p1) <- quote ctx (lvl ctx) (val :@ p)
         ty' <- quote ctx (lvl ctx) ty
@@ -86,7 +94,7 @@ checkProgram' ctx (AST.Mod imports defs :@ p) = do
   case defs of
     [] -> pure (TAST.Mod [] :@ p, ctx, mempty)
     b : bs -> do
-      (b, ctx, u1) <- checkToplevel ctx b
+      (!b, ctx, u1) <- checkToplevel ctx b
       (TAST.Mod defs :@ p, ctx, u2) <- checkProgram' ctx (AST.Mod imports bs :@ p)
 
       pure (TAST.Mod (b : defs) :@ p, ctx, u1 <> u2)
@@ -118,7 +126,7 @@ checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty e
 
       (,ty) <$> quote ctx (lvl ctx) ty
 
-  (ex, ex', usage) <- mdo
+  (!ex, ex', usage) <- mdo
     let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
     (usage, ex') <-
       first (Usage.scale $ unLoc mult) <$> case unLoc mult of
@@ -159,7 +167,7 @@ insert' ctx (qs, expr, ty, usage) = do
   ty <- force ctx ty
   case ty of
     VPi mult _ imp a b :@ p | imp == implicit -> do
-      let m = freshMeta ctx mult a p AST.InsertedHole :@ p
+      m <- (:@ p) <$> freshMeta ctx mult a p AST.InsertedHole
       mv <- eval ctx m
       ty <- apply ctx b mv
       insert' ctx (qs, TAST.EApplication expr True m :@ p, ty, usage)
@@ -376,7 +384,8 @@ check rel ctx expr ty = do
         pure (qs, getPos e, e)
       pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
     (AST.EHole loc :@ p1, ty) -> do
-      pure (mempty, freshMeta ctx (TAST.extend rel) ty p1 loc :@ p1)
+      meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
+      pure (mempty, meta :@ p1)
     (e@(_ :@ p), v) -> do
       {-
          Γ ⊢ e ⇒ⁱ A        A ≅ B       p ⩽ i
@@ -452,8 +461,9 @@ synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
     t1@(_ :@ p2) -> do
       -- try η-expanding
       let usage = TAST.Unrestricted
-      a <- eval ctx (freshMeta ctx usage (VType :@ p) p AST.InsertedHole :@ p)
-      let b = Clos (env ctx) $ freshMeta (bind usage ("x?" :@ p) a ctx) usage (VType :@ p) p AST.InsertedHole :@ p
+      a <- eval ctx . (:@ p) =<< freshMeta ctx usage (VType :@ p) p AST.InsertedHole
+      meta <- freshMeta (bind usage ("x?" :@ p) a ctx) usage (VType :@ p) p AST.InsertedHole
+      let b = Clos (env ctx) $ meta :@ p
       unify ctx t1 (VPi usage "x?" explicit a b :@ p)
       pure (usage :@ p2, a, b)
 
@@ -540,8 +550,10 @@ synthetize rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) ex :@ p
   clos <- closeVal ctx b
   pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
 synthetize rel ctx (AST.EHole loc :@ p1) = do
-  a <- eval ctx (freshMeta ctx (TAST.extend rel) (VType :@ p1) p1 loc :@ p1)
-  let t = freshMeta ctx (TAST.extend rel) a p1 loc :@ p1
+  meta1 <- freshMeta ctx (TAST.extend rel) (VType :@ p1) p1 loc
+  a <- eval ctx (meta1 :@ p1)
+  meta2 <- freshMeta ctx (TAST.extend rel) a p1 loc
+  let t = meta2 :@ p1
   pure (mempty, t, a, TAST.extend rel :@ p1)
 synthetize rel ctx (AST.EIfThenElse c t e :@ p) = do
   {-

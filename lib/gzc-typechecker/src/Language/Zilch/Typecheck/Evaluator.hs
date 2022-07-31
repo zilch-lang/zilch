@@ -15,7 +15,7 @@ import Language.Zilch.Typecheck.Core.Eval
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Environment (lookup)
 import qualified Language.Zilch.Typecheck.Environment as Env
-import Language.Zilch.Typecheck.Metavariables (lookupMeta)
+import Language.Zilch.Typecheck.Metavars (lookupMeta)
 import Prelude hiding (lookup, read)
 import qualified Prelude (read)
 
@@ -55,8 +55,10 @@ eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ex :@ p)
   ty1' <- eval ctx ty1
   pure $ VLam (unLoc usage) x (not isImplicit) ty1' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
-eval _ (TAST.EMeta m :@ p) = pure $ metaValue m p
-eval ctx (TAST.EInsertedMeta m bds :@ p) = applyBDs ctx (env ctx) (metaValue m p) bds
+eval _ (TAST.EMeta m :@ p) = metaValue m p
+eval ctx (TAST.EInsertedMeta m bds :@ p) = do
+  meta <- metaValue m p
+  applyBDs ctx (env ctx) meta bds
 eval _ (TAST.EUnknown :@ p) = pure $ VUnknown :@ p
 eval _ (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
 eval _ (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
@@ -99,15 +101,19 @@ applyBDs ctx (t : env) v (TAST.Bind bds _ _ _) = do
 applyBDs ctx (_ : env) v (TAST.Define bds _ _ _ _) = applyBDs ctx env v bds
 applyBDs _ _ _ _ = error "impossible"
 
-metaValue :: Int -> Position -> Located Value
-metaValue m pos = case lookupMeta m of
-  (Solved v _ _, _, _, _) -> v :@ pos
-  (Unsolved _ _, _, _, _) -> VMeta m :@ pos
+metaValue :: forall m. MonadElab m => Int -> Position -> m (Located Value)
+metaValue m pos =
+  lookupMeta m >>= \case
+    (Solved v _ _, _, _, _) -> pure $ v :@ pos
+    (Unsolved _ _, _, _, _) -> pure $ VMeta m :@ pos
 
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
-force ctx (VFlexible m sp :@ p) | (Solved t _ _, _, _, _) <- lookupMeta m = do
-  v1 <- applySpine ctx (t :@ p) sp
-  force ctx v1
+force ctx t@(VFlexible m sp :@ p) = do
+  lookupMeta m >>= \case
+    (Solved t _ _, _, _, _) -> do
+      v1 <- applySpine ctx (t :@ p) sp
+      force ctx v1
+    _ -> pure t
 force _ t = pure t
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx

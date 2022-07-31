@@ -170,6 +170,7 @@ data Value
 data MetaEntry
   = Solved Value Multiplicity (Located Value)
   | Unsolved Multiplicity (Located Value)
+  deriving (Show)
 
 pattern VVariable :: Located Text -> DeBruijnLvl -> Value
 pattern VVariable x lvl <-
