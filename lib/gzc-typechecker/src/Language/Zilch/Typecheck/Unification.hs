@@ -82,10 +82,10 @@ solve ctx' gamma m sp val = do
   let ctx = emptyContext
   ren@(Renaming _ _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
-  solution :@ _ <- uncurry eval =<< lams ctx path (reverse $ snd <$> sp) val' p
+  solution :@ _ <- uncurry eval =<< lams ctx' path (reverse $ snd <$> sp) val' p
 
   ty <- quote ctx' (lvl ctx') ty
-  ty' <- uncurry eval =<< mkPi ctx ty path
+  ty' <- uncurry eval =<< mkPi ctx' ty path
 
   modify' $ second (IntMap.insert m (Solved solution mult ty', path, p, loc))
 

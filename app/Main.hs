@@ -38,7 +38,7 @@ main = do
 
   forM_ files \(File path content) -> do
     ast <- runExceptT do
-      (tks, warns) <- liftEither $ lexFile path content
+      (!tks, warns) <- liftEither $ lexFile path content
       liftIO $ doOutputWarnings path content warns
 
       (!cst, warns) <- liftEither $ parseTokens path tks
@@ -47,17 +47,18 @@ main = do
       (!ast, warns) <- liftEither $ desugarCST cst
       liftIO $ doOutputWarnings path content warns
       liftIO $ doDumpAST flags ast
+      liftIO $ putStrLn $ "✅ Module '" <> path <> "' parsed"
 
       (!tast, warns) <- liftEither $ elabProgram ast
       liftIO $ doOutputWarnings path content warns
       liftIO $ doDumpTAST flags tast
+      liftIO $ putStrLn $ "✅ Module '" <> path <> "' passed type-checking"
 
       pure (tks, cst, ast, tast)
 
     case ast of
       Left diag -> printDiagnostic stderr True True 4 defaultStyle (addFile diag path $ Text.unpack content)
-      Right (_, _, _, _) -> do
-        putStrLn "\n✅ Program passed typechecking"
+      Right (_, _, _, _) -> pure ()
 
     pure ()
 
