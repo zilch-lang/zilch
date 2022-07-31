@@ -231,7 +231,7 @@ fromElabError (CannotSolveHole env p loc) =
       AST.SourceHole -> "Cannot infer any term to replace this hole"
 
     genEnv [] = ""
-    genEnv [(x, mult, expr)] = "    " <> showMult mult <> " " <> Text.unpack x <> " : " <> show (pretty expr)
+    genEnv [(x, mult, expr)] = "• " <> showMult mult <> " " <> Text.unpack x <> " : " <> show (pretty expr)
     genEnv (e : env) = genEnv [e] <> "\n" <> genEnv env
 fromElabError (UndefinedValue x p) =
   err
