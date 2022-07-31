@@ -5,8 +5,8 @@
 
 module Language.Zilch.CLI.Parser (getFlags) where
 
-import Language.Zilch.CLI.Flags hiding (hidden)
-import Options.Applicative (Parser, argument, customExecParser, eitherReader, flag, fullDesc, help, helper, hidden, info, long, many, metavar, option, prefs, short, showHelpOnError, str, strOption, value, (<**>))
+import Language.Zilch.CLI.Flags
+import Options.Applicative (Parser, argument, customExecParser, eitherReader, fullDesc, help, helper, hidden, info, long, many, metavar, option, prefs, short, showHelpOnError, str, strOption, value, (<**>))
 
 getFlags :: IO Flags
 getFlags = customExecParser preferences opts
@@ -29,9 +29,19 @@ pDebug :: Parser DebugFlags
 pDebug =
   DebugFlags
     <$> option (eitherReader dumpAST) (short 'd' <> value False <> hidden)
+    <*> option (eitherReader dumpTAST) (short 'd' <> value False <> hidden)
+    <*> option (eitherReader dumpDir) (short 'd' <> value Nothing <> hidden)
   where
     dumpAST "dump-ast" = Right True
     dumpAST _ = Left ""
+
+    dumpTAST "dump-tast" = Right True
+    dumpTAST _ = Left ""
+
+    dumpDir "dump-dir=" = Left "Missing directory"
+    dumpDir ('d' : 'u' : 'm' : 'p' : '-' : 'd' : 'i' : 'r' : '=' : dir) = Right $ Just dir
+    dumpDir "dump-dir" = Right Nothing
+    dumpDir _ = Left ""
 
 pConfig :: Parser ConfigFlags
 pConfig =

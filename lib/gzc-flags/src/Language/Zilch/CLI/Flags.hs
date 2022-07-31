@@ -1,5 +1,7 @@
 module Language.Zilch.CLI.Flags where
 
+import Control.Applicative ((<|>))
+
 data Flags = Flags
   { debug :: DebugFlags,
     config :: ConfigFlags,
@@ -9,19 +11,26 @@ data Flags = Flags
   deriving (Show)
 
 data DebugFlags = DebugFlags
-  { dumpAST :: Bool }
+  { dumpAST :: Bool,
+    dumpTAST :: Bool,
+    dumpDir :: Maybe FilePath
+  }
   deriving (Show)
 
 instance Semigroup DebugFlags where
   f1 <> f2 =
     DebugFlags
-      { dumpAST = dumpAST f1 || dumpAST f2
+      { dumpAST = dumpAST f1 || dumpAST f2,
+        dumpTAST = dumpTAST f1 || dumpTAST f2,
+        dumpDir = dumpDir f1 <|> dumpDir f2
       }
 
 instance Monoid DebugFlags where
   mempty =
     DebugFlags
-      { dumpAST = False
+      { dumpAST = False,
+        dumpTAST = False,
+        dumpDir = Nothing
       }
 
 data ConfigFlags = ConfigFlags
