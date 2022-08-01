@@ -12,7 +12,7 @@ import Control.Monad.State (MonadState, evalStateT, get, modify)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
-import Data.Located (Located ((:@)), Position)
+import Data.Located (Located ((:@)), Position, getPos, spanOf)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
@@ -174,15 +174,15 @@ desugarExpression (CST.ELet def ret :@ p) = do
   ret' <- desugarExpression ret
   pure $ AST.ELet def' ret' :@ p
 desugarExpression (CST.EParens e :@ _) = desugarExpression e
-desugarExpression (CST.EApplication e es :@ p) = do
+desugarExpression (CST.EApplication e es :@ _) = do
   e' <- desugarExpression e
   go e' (reverse es)
   where
     go e' [] = pure e'
-    go e' ((isImp, args) : es) = do
+    go e' (((isImp, args) :@ p) : es) = do
       args' <- traverse desugarExpression args
       f <- go e' es
-      pure $ AST.EApplication f isImp args' :@ p
+      pure $ AST.EApplication f isImp args' :@ spanOf (getPos f) p
 desugarExpression (CST.EPi param ret :@ p) = do
   param' <- desugarParameter param
   ret' <- desugarExpression ret

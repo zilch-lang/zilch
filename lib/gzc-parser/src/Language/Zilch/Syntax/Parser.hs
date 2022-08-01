@@ -220,13 +220,13 @@ parseApplication s = located do
   args <- MP.many (MP.try s *> (implicit s <|> explicit s))
   pure $ EApplication f args
   where
-    implicit s = do
+    implicit s = located do
       lexeme (token TkLeftBrace) *> s
       exprs <- parseExpression s `MP.sepBy1` (token TkComma <* s)
       s <* token TkRightBrace
       pure (True, exprs)
 
-    explicit s = do
+    explicit s = located do
       lexeme (token TkLeftParen) *> s
       exprs <- parseExpression s `MP.sepBy1` (token TkComma <* s)
       s <* token TkRightParen

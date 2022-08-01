@@ -78,7 +78,7 @@ data Expression
   | EStringConcat [Text]
   | EApplication
       (Located Expression)
-      [(Bool, [Located Expression])]
+      [Located (Bool, [Located Expression])]
   | ELam
       [Located Parameter]
       (Located Expression)

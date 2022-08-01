@@ -259,7 +259,7 @@ fromElabError (IncorrectNumberOfArguments actual expected pos) =
   err
     Nothing
     "Type-checking error"
-    [(pos, This $ show expected <> " argument" <> plural expected <> " " <> pluralBe expected <> " expected but only " <> show actual <> " " <> pluralBe actual <> " found")]
+    [(pos, This $ show expected <> " argument" <> plural expected <> " " <> pluralBe expected <> " expected but only " <> show actual <> " " <> pluralBe actual <> " provided")]
     []
   where
     plural 1 = ""
