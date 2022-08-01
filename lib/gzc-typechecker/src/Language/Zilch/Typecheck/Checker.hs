@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Debug.Trace (traceShow)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -492,8 +493,8 @@ synthetize rel ctx (AST.EIdentifier x :@ p) = do
     (TAST.Irrelevant, TAST.W) -> throwError $ RelevantVariableInIrrelevantContext (unLoc x) TAST.W p
     _ -> pure ()
   case ex of
-    TAST.EBuiltin _ :@ _ -> pure (mempty, ex, ty, usage :@ p)
-    _ -> pure (Map.singleton x $ TAST.extend rel, ex, ty, usage :@ p)
+    TAST.EBuiltin _ :@ _ -> pure (mempty, ex, ty, TAST.extend rel :@ p)
+    _ -> pure (Map.singleton x $ TAST.extend rel, ex, ty, TAST.extend rel :@ p)
   where
     go _ [] = checkBuiltin
     go ix ((usage, x', origin, a) : types)

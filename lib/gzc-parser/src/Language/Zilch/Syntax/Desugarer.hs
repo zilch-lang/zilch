@@ -95,24 +95,24 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   params' <- (<>) aParams . fold <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ p2) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ spanOf p2 (maybe p2 getPos retTy)) retTy') params'
   val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
 
   pure . Just $ AST.Let False usage' name ty val :@ p
   where
-    mkPi param expr = AST.EPi param expr :@ p
+    mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   usage' <- desugarMultiplicity usage p2
   (cParams, aParams) <- get
   params' <- (<>) aParams . fold <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
-  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ p2) retTy') params'
+  let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ spanOf p2 (maybe p2 getPos retTy)) retTy') params'
   val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
 
   pure . Just $ AST.Let True usage' name ty val :@ p
   where
-    mkPi param expr = AST.EPi param expr :@ p
+    mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Assume params :@ _) = do
   params' <-
     fold <$> forM params \param -> do
@@ -130,7 +130,7 @@ desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
   let ty'' = foldr mkPi ty' aParams
   pure . Just $ AST.Val usage' name ty'' :@ p
   where
-    mkPi param expr = AST.EPi param expr :@ p
+    mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m [Located AST.Parameter]
 desugarParameter (CST.Implicit args :@ p) = do
@@ -164,7 +164,7 @@ desugarExpression (CST.ELam params expr :@ p) = do
 
   pure $ foldr mkLam expr' params'
   where
-    mkLam param expr = AST.ELam param expr :@ p
+    mkLam param expr = AST.ELam param expr :@ spanOf (getPos param) (getPos expr)
 desugarExpression (CST.EDo expr :@ p) = do
   expr' <- desugarExpression expr
   pure $ AST.EDo expr' :@ p
@@ -190,7 +190,7 @@ desugarExpression (CST.EPi params ret :@ p) = do
   ret' <- desugarExpression ret
   pure $ foldr mkPi ret' param'
   where
-    mkPi param expr = AST.EPi param expr :@ p
+    mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarExpression (CST.ETrue :@ p) = pure $ AST.EBoolean True :@ p
 desugarExpression (CST.EFalse :@ p) = pure $ AST.EBoolean False :@ p
 desugarExpression (CST.EIfThenElse c t e :@ p) = do
