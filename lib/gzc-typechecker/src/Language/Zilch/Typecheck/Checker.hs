@@ -16,13 +16,13 @@ import Data.Bifunctor (first)
 import Data.Functor ((<&>))
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
+import Data.List.Safe (indexed)
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import GHC.Base (Int (..), (+#))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -681,19 +681,3 @@ closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure
 closeVal ctx ty = do
   ty <- quote ctx (lvl ctx + 1) ty
   pure $ Clos (env ctx) ty
-
------------------------------
-
--- |
--- 'indexed' pairs each element with its index.
-
--- >>> indexed "hello"
--- [(0,'h'),(1,'e'),(2,'l'),(3,'l'),(4,'o')]
-
--- /Subject to fusion./
-indexed :: [a] -> [(Int, a)]
-indexed xs = go 0# xs
-  where
-    go i (a : as) = (I# i, a) : go (i +# 1#) as
-    go _ _ = []
-{-# NOINLINE [1] indexed #-}

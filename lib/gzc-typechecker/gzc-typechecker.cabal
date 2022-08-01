@@ -10,6 +10,7 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Data.List.Safe
       Language.Zilch.Typecheck.Checker
       Language.Zilch.Typecheck.Context
       Language.Zilch.Typecheck.Defaults

@@ -9,6 +9,7 @@ module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruij
 
 import Control.Monad (forM)
 import Data.Functor ((<&>))
+import Data.List.Safe (indexed)
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -149,18 +150,18 @@ quote ctx level val = do
     VTrue :@ p -> pure $ TAST.EBoolean True :@ p
     VFalse :@ p -> pure $ TAST.EBoolean False :@ p
     (VLam isExplicit args clos :@ p) -> do
-      x' <- apply ctx clos $ args <&> \(_, y, _) -> VVariable (y :@ p) level :@ p
-      x' <- quote ctx (level + 1) x'
-      args' <- forM args \(usage, name, ty1) -> (usage :@ p,name :@ p,) <$> quote ctx level ty1
+      x' <- apply ctx clos $ indexed args <&> \(i, (_, y, _)) -> VVariable (y :@ p) (level - fromIntegral (length args - i)) :@ p
+      x' <- quote ctx (level + fromIntegral (length args)) x'
+      args' <- forM (indexed args) \(i, (usage, name, ty1)) -> (usage :@ p,name :@ p,) <$> quote ctx (level + fromIntegral i) ty1
       pure $
         TAST.ELam
           (TAST.Parameter (not isExplicit) args' :@ p)
           x'
           :@ p
     (VPi isExplicit args clos :@ p) -> do
-      x' <- apply ctx clos $ args <&> \(_, y, _) -> VVariable (y :@ p) level :@ p
-      x' <- quote ctx (level + 1) x'
-      args' <- forM args \(usage, name, ty) -> (usage :@ p,name :@ p,) <$> quote ctx level ty
+      x' <- apply ctx clos $ indexed args <&> \(i, (_, y, _)) -> VVariable (y :@ p) (level - fromIntegral (length args - i)) :@ p
+      x' <- quote ctx (level + fromIntegral (length args)) x'
+      args' <- forM (indexed args) \(i, (usage, name, ty1)) -> (usage :@ p,name :@ p,) <$> quote ctx (level + fromIntegral i) ty1
       pure $
         TAST.EPi
           (TAST.Parameter (not isExplicit) args' :@ p)
