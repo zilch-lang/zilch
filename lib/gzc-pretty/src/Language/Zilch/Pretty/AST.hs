@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.AST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, concatWith, emptyDoc, enclose, hardline, indent, line, parens, space, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =
@@ -50,15 +50,18 @@ instance Pretty (Located Definition) where
       <> pretty typ
 
 instance Pretty (Located Parameter) where
-  pretty (Parameter isImplicit usage name ty :@ _) =
+  pretty (Parameter isImplicit params :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
-      pretty usage
-        <> space
-        <> pretty (unLoc name)
-        <> space
-        <> ":"
-        <> space
-        <> pretty ty
+      concatWith (surround ", ") $ pretty' <$> params
+    where
+      pretty' (mult, name, ty) =
+        pretty mult
+          <> space
+          <> pretty (unLoc name)
+          <> space
+          <> ":"
+          <> space
+          <> pretty ty
 
 instance Pretty (Located Multiplicity) where
   pretty (Unrestricted :@ _) = "ω"
@@ -88,12 +91,11 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun arg :@ _) =
+  pretty (EApplication fun isImp args :@ _) =
     pretty fun
       <> line
-      <> indent 2 (parens $ pretty arg)
+      <> indent 2 ((if isImp then braces else parens) . concatWith (surround ", ") $ pretty <$> args)
   pretty (EHole _ :@ _) = "_"
-  pretty (EImplicit expr :@ _) = braces $ pretty expr
   pretty (EPi param val :@ _) =
     pretty param
       <> space

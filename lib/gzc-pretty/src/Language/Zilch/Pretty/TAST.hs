@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.TAST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
-import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, concatWith, emptyDoc, enclose, hardline, indent, line, parens, space, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -50,15 +50,18 @@ instance Pretty (Located Definition) where
       <> pretty typ
 
 instance Pretty (Located Parameter) where
-  pretty (Parameter isImplicit usage name ty :@ _) =
+  pretty (Parameter isImplicit args :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
-      pretty usage
-        <> space
-        <> pretty (unLoc name)
-        <> space
-        <> ":"
-        <> space
-        <> pretty ty
+      concatWith (surround ", ") $ pretty' <$> args
+    where
+      pretty' (usage, name, ty) =
+        pretty usage
+          <> space
+          <> pretty (unLoc name)
+          <> space
+          <> ":"
+          <> space
+          <> pretty ty
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
@@ -77,9 +80,9 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun isImplicit arg :@ _) =
+  pretty (EApplication fun isImplicit args :@ _) =
     pretty fun
-      <> (if isImplicit then braces else parens) (pretty arg)
+      <> (if isImplicit then braces else parens) (concatWith (surround ", ") $ pretty <$> args)
   pretty (EPi param val :@ _) =
     pretty param
       <> space

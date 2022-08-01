@@ -1,8 +1,8 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Language.Zilch.Typecheck.Core.Internal (Value (.., VMeta, VVariable), module Language.Zilch.Typecheck.Core.Internal) where
-    
+
 import Data.Located (Located)
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
@@ -29,12 +29,8 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
-      (Located Multiplicity)
-      -- ^ Resource usage
-      (Located Text)
-      -- ^ The name of the parameter
-      (Located Expression)
-      -- ^ Its type
+      [(Located Multiplicity, Located Text, Located Expression)]
+      -- ^ Resource usage, name and type of the parameter
   deriving (Show)
 
 newtype DeBruijnIdx = Idx Int
@@ -58,7 +54,7 @@ data Expression
       (Located Expression)
       Bool
       -- ^ Is it implicit
-      (Located Expression)
+      [Located Expression]
   | EIdentifier
       (Located Text)
       DeBruijnIdx
@@ -103,7 +99,7 @@ data Path
 
 ---------------------------------------------
 
-type Spine = [(Located Value, Implicitness)]
+type Spine = [([Located Value], Implicitness)]
 
 data Value
   = -- | A bound variable
@@ -115,22 +111,14 @@ data Value
       Int
       Spine
   | -- | The application of a value to another one
-    VApplication
-      (Located Value)
-      (Located Value)
-  | -- | An un-applied lambda abstraction with a given closure
     VLam
-      Multiplicity
-      Name
       Implicitness
-      (Located Value)
+      [(Multiplicity, Name, Located Value)]
       Closure
   | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
     VPi
-      Multiplicity
-      Name
       Implicitness
-      (Located Value)
+      [(Multiplicity, Name, Located Value)]
       Closure
   | -- | Universes (of the given level)
     VType
@@ -195,4 +183,3 @@ instance Show Closure where
   show _ = "<<clos>>"
 
 type Implicitness = Bool
-

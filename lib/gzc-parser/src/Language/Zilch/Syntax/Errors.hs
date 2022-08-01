@@ -62,6 +62,11 @@ data DesugarError
       HoleLocation
       Position
       Position
+  | TypeHoleInAssumption
+      Text
+      Position
+      HoleLocation
+      Position
 
 data DesugarWarning
 
@@ -100,12 +105,22 @@ fromDesugarerError (HoleInValType loc p1 p2) =
   err
     Nothing
     "Parse error"
-    messages 
+    messages
     []
   where
     messages = case loc of
       SourceHole -> [(p1, This "Found hole in a 'val' type binding"), (p2, Where "While checking this type declaration")]
       InsertedHole -> [(p1, This "Binding is missing an explicit type signature"), (p2, Where "While checking this type declaration")]
+fromDesugarerError (TypeHoleInAssumption x p1 loc p2) =
+  err
+    Nothing
+    "Parse error"
+    messages
+    ["Types must be fully known inside assumptions in order not to create incoherent assumptions inside different bindings."]
+  where
+    messages = case loc of
+      SourceHole -> [(p1, This $ "Assumption '" <> Text.unpack x <> "' cannot contain a hole in its type"), (p2, Where "Hole was found here")]
+      InsertedHole -> [(p1, This $ "Assumption '" <> Text.unpack x <> "' must have its complete type specified"), (p2, Where "This binding was found without an explicit type")]
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning _ = warn Nothing "sorry" [] []

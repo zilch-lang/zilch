@@ -78,12 +78,11 @@ holes (AST.EInteger _ _ :@ _) = Nothing
 holes (AST.ECharacter _ :@ _) = Nothing
 holes (AST.EIdentifier _ :@ _) = Nothing
 holes (AST.EDo e :@ _) = holes e
-holes (AST.ELam (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.ELam (AST.Parameter _ es :@ _) e2 :@ _) = foldr (\(_, _, ty) acc -> acc <|> holes ty) Nothing es <|> holes e2
 holes (AST.ELet (AST.Let _ _ _ e1 e2 :@ _) e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
-holes (AST.ELet (AST.Val{} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
-holes (AST.EApplication e1 e2 :@ _) = holes e1 <|> holes e2
-holes (AST.EImplicit e1 :@ _) = holes e1
-holes (AST.EPi (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.ELet (AST.Val {} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
+holes (AST.EApplication e1 _ es :@ _) = holes e1 <|> foldr (<|>) Nothing (holes <$> es)
+holes (AST.EPi (AST.Parameter _ es :@ _) e2 :@ _) = foldr (\(_, _, ty) acc -> acc <|> holes ty) Nothing es <|> holes e2
 holes (AST.EBoolean _ :@ _) = Nothing
 holes (AST.EIfThenElse e1 e2 e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
 
@@ -114,12 +113,17 @@ desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
     mkPi param expr = AST.EPi param expr :@ p
 desugarDefinition (CST.Assume params :@ _) = do
   params' <- forM params \param -> do
+    param <- desugarParameter param
     case param of
-      CST.Implicit _ (name :@ _) Nothing :@ p -> throwError $ TypelessAssumption name p
-      CST.Explicit _ (name :@ _) Nothing :@ p -> throwError $ TypelessAssumption name p
-      param -> desugarParameter param
+      AST.Parameter _ ps :@ _ -> checkForHolesInParams ps
+    pure param
   modify $ bimap (<> params) (<> params')
   pure Nothing
+  where
+    checkForHolesInParams [] = pure ()
+    checkForHolesInParams ((_, name :@ p, ty) : ps) = case holes ty of
+      Just (loc, p2) -> throwError $ TypeHoleInAssumption name p loc p2
+      Nothing -> checkForHolesInParams ps
 desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
   usage' <- desugarMultiplicity usage p2
   (_, aParams) <- get
@@ -130,14 +134,18 @@ desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
     mkPi param expr = AST.EPi param expr :@ p
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m (Located AST.Parameter)
-desugarParameter (CST.Implicit usage name@(_ :@ p1) ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
-  usage' <- desugarMultiplicity usage p1
-  pure $ AST.Parameter True usage' name ty' :@ p
-desugarParameter (CST.Explicit usage name@(_ :@ p1) ty :@ p) = do
-  ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
-  usage' <- desugarMultiplicity usage p1
-  pure $ AST.Parameter False usage' name ty' :@ p
+desugarParameter (CST.Implicit binds :@ p) = do
+  binds' <- forM binds \(usage, name@(_ :@ p1), ty) -> do
+    ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
+    usage' <- desugarMultiplicity usage p1
+    pure (usage', name, ty')
+  pure $ AST.Parameter True binds' :@ p
+desugarParameter (CST.Explicit binds :@ p) = do
+  binds' <- forM binds \(usage, name@(_ :@ p1), ty) -> do
+    ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
+    usage' <- desugarMultiplicity usage p1
+    pure (usage', name, ty')
+  pure $ AST.Parameter False binds' :@ p
 
 desugarMultiplicity :: forall m. MonadDesugar m => Maybe (Located Integer) -> Position -> m (Located Multiplicity)
 desugarMultiplicity Nothing p = pure (Unrestricted :@ p)
@@ -151,9 +159,6 @@ desugarExpression (CST.EInt i suffix :@ p) = do
   suffix' <- maybe (pure SuffixU64) (desugarIntegerSuffix p) suffix
   pure $ AST.EInteger (i :@ p) suffix' :@ p
 desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
-desugarExpression (CST.EImplicit expr :@ p) = do
-  expr' <- desugarExpression expr
-  pure $ AST.EImplicit expr' :@ p
 desugarExpression (CST.ELam params expr :@ p) = do
   params' <- traverse desugarParameter params
   expr' <- desugarExpression expr
@@ -168,14 +173,16 @@ desugarExpression (CST.ELet def ret :@ p) = do
   def' <- fromJust <$> desugarDefinition def
   ret' <- desugarExpression ret
   pure $ AST.ELet def' ret' :@ p
-desugarExpression (CST.EApplication [e] :@ _) = desugarExpression e
 desugarExpression (CST.EParens e :@ _) = desugarExpression e
-desugarExpression (CST.EApplication (e : es) :@ p) = do
+desugarExpression (CST.EApplication e es :@ p) = do
   e' <- desugarExpression e
-  es' <- traverse desugarExpression es
-  pure $ foldl' mkApp e' es'
+  go e' (reverse es)
   where
-    mkApp e1 e2 = AST.EApplication e1 e2 :@ p
+    go e' [] = pure e'
+    go e' ((isImp, args) : es) = do
+      args' <- traverse desugarExpression args
+      f <- go e' es
+      pure $ AST.EApplication f isImp args' :@ p
 desugarExpression (CST.EPi param ret :@ p) = do
   param' <- desugarParameter param
   ret' <- desugarExpression ret

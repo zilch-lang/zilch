@@ -2,14 +2,17 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force) where
 
+import Control.Monad (forM)
+import Data.Functor ((<&>))
 import Data.Located (Located ((:@)), Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
+import Language.Zilch.Typecheck.Context (Context (env), bind, emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
@@ -37,7 +40,7 @@ eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ p) =
     val :@ _ -> pure $ val :@ p
 eval ctx (TAST.EApplication e1 isImplicit e2 :@ _) = do
   v1 <- eval ctx e1
-  v2 <- eval ctx e2
+  v2 <- traverse (eval ctx) e2
 
   applyVal ctx v1 v2 (not isImplicit)
 eval ctx (TAST.ELet (TAST.Let True _ _ _ val :@ _) u :@ _) = mdo
@@ -48,17 +51,30 @@ eval ctx (TAST.ELet (TAST.Let False _ _ _ val :@ _) u :@ _) = do
   val' <- eval ctx val
   let env' = Env.extend (env ctx) val'
   eval (ctx {env = env'}) u
-eval ctx (TAST.EPi (TAST.Parameter isImplicit usage name ty1 :@ _) ty2 :@ p) = do
-  ty1' <- eval ctx ty1
-  pure $ VPi (unLoc usage) (unLoc name) (not isImplicit) ty1' (Clos (env ctx) ty2) :@ p
-eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ex :@ p) = do
-  ty1' <- eval ctx ty1
-  pure $ VLam (unLoc usage) x (not isImplicit) ty1' (Clos (env ctx) ex) :@ p
+eval ctx (TAST.EPi (TAST.Parameter isImplicit args :@ _) ty2 :@ p) = do
+  let go _ [] = pure []
+      go ctx ((usage, name, ty) : args) = do
+        ty' <- eval ctx ty
+        (args) <- go (bind (unLoc usage) name ty' ctx) args
+        pure ((unLoc usage, unLoc name, ty') : args)
+
+  args' <- go ctx args
+  pure $ VPi (not isImplicit) args' (Clos (env ctx) ty2) :@ p
+eval ctx (TAST.ELam (TAST.Parameter isImplicit args :@ _) ex :@ p) = do
+  let go _ [] = pure []
+      go ctx ((usage, name, ty) : args) = do
+        ty' <- eval ctx ty
+        (args) <- go (bind (unLoc usage) name ty' ctx) args
+        pure ((unLoc usage, unLoc name, ty') : args)
+
+  args' <- go ctx args
+  pure $ VLam (not isImplicit) args' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ (TAST.EMeta m :@ p) = metaValue m p
-eval ctx (TAST.EInsertedMeta m bds :@ p) = do
+eval ctx (TAST.EInsertedMeta m path :@ p) = do
   meta <- metaValue m p
-  applyBDs ctx (env ctx) meta bds
+
+  applyBDs ctx (env ctx) meta path
 eval _ (TAST.EBuiltin TAST.TyU64 :@ p) = pure $ VBuiltinU64 :@ p
 eval _ (TAST.EBuiltin TAST.TyU32 :@ p) = pure $ VBuiltinU32 :@ p
 eval _ (TAST.EBuiltin TAST.TyU16 :@ p) = pure $ VBuiltinU16 :@ p
@@ -75,13 +91,13 @@ eval ctx (TAST.EIfThenElse c t e :@ p) = do
   pure (VIfThenElse c' t' e' :@ p)
 eval _ e = error $ "unhandled case " <> show e
 
-apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
+apply :: forall m. MonadElab m => Context -> Closure -> [Located Value] -> m (Located Value)
 apply _ (Clos env expr) val =
-  let env' = Env.extend env val
+  let env' = foldl Env.extend env val
    in eval (emptyContext {env = env'}) expr
 
-applyVal :: forall m. MonadElab m => Context -> Located Value -> Located Value -> Implicitness -> m (Located Value)
-applyVal ctx (VLam _ _ _ _ t :@ _) u _ = apply ctx t u
+applyVal :: forall m. MonadElab m => Context -> Located Value -> [Located Value] -> Implicitness -> m (Located Value)
+applyVal ctx (VLam _ _ t :@ _) u _ = apply ctx t u
 applyVal _ (VFlexible x sp :@ p) u i = pure $ VFlexible x ((u, i) : sp) :@ p
 applyVal _ (VRigid x name sp :@ p) u i = pure $ VRigid x name ((u, i) : sp) :@ p
 applyVal _ _ _ _ = undefined
@@ -96,9 +112,9 @@ applyBDs :: forall m. MonadElab m => Context -> Environment -> Located Value -> 
 applyBDs _ [] v TAST.Here = pure v
 applyBDs ctx (t : env) v (TAST.Bind bds _ _ _) = do
   v1 <- applyBDs ctx env v bds
-  applyVal ctx v1 t explicit
+  applyVal ctx v1 [t] explicit
 applyBDs ctx (_ : env) v (TAST.Define bds _ _ _ _) = applyBDs ctx env v bds
-applyBDs _ _ _ _ = error "impossible"
+applyBDs _ env _ path = error $ "impossible: " <> show path <> " | " <> show env
 
 metaValue :: forall m. MonadElab m => Int -> Position -> m (Located Value)
 metaValue m pos =
@@ -132,22 +148,22 @@ quote ctx level val = do
       pure $ TAST.EInteger (Text.pack (show n) :@ p) ty :@ p
     VTrue :@ p -> pure $ TAST.EBoolean True :@ p
     VFalse :@ p -> pure $ TAST.EBoolean False :@ p
-    (VLam usage name isExplicit ty1 clos :@ p) -> do
-      x' <- apply ctx clos (VVariable (name :@ p) level :@ p)
+    (VLam isExplicit args clos :@ p) -> do
+      x' <- apply ctx clos $ args <&> \(_, y, _) -> VVariable (y :@ p) level :@ p
       x' <- quote ctx (level + 1) x'
-      ty1 <- quote ctx level ty1
+      args' <- forM args \(usage, name, ty1) -> (usage :@ p,name :@ p,) <$> quote ctx level ty1
       pure $
         TAST.ELam
-          (TAST.Parameter (not isExplicit) (usage :@ p) (name :@ p) ty1 :@ p)
+          (TAST.Parameter (not isExplicit) args' :@ p)
           x'
           :@ p
-    (VPi usage y isExplicit val clos :@ p) -> do
-      x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
-      val' <- quote ctx level val
+    (VPi isExplicit args clos :@ p) -> do
+      x' <- apply ctx clos $ args <&> \(_, y, _) -> VVariable (y :@ p) level :@ p
       x' <- quote ctx (level + 1) x'
+      args' <- forM args \(usage, name, ty) -> (usage :@ p,name :@ p,) <$> quote ctx level ty
       pure $
         TAST.EPi
-          (TAST.Parameter (not isExplicit) (usage :@ p) (y :@ p) val' :@ p)
+          (TAST.Parameter (not isExplicit) args' :@ p)
           x'
           :@ p
     (VIfThenElse c t e :@ p) -> do
@@ -170,7 +186,7 @@ quote ctx level val = do
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)
 quoteSpine _ _ term [] _ = pure term
 quoteSpine ctx lvl term ((u, i) : sp) pos = do
-  t1 <- quote ctx lvl u
+  t1 <- traverse (quote ctx lvl) u
   t2 <- quoteSpine ctx lvl term sp pos
   pure $ TAST.EApplication t2 (not i) t1 :@ pos
 

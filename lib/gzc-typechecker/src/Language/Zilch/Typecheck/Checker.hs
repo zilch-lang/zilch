@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -7,11 +8,12 @@
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (forM, unless, when)
+import Control.Monad (forM, unless, void, when)
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad.State (gets)
 import Control.Monad.Writer (tell)
 import Data.Bifunctor (first)
+import Data.Functor ((<&>))
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
@@ -20,6 +22,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import GHC.Base (Int (..), (+#))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -81,8 +84,7 @@ checkProgram ctx mod = do
     checkRecursivity ctx stack x usages = do
       usageX <- removeFunctionals ctx (usages Map.! x)
       let (_, _ :@ pos, _) = indexContext ctx x
-      flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx ((unLoc x :@ pos) : stack) k usages
-      pure ()
+      void $ flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx ((unLoc x :@ pos) : stack) k usages
 
     removeFunctionals ctx usage = flip Map.traverseWithKey usage \k mult ->
       case indexContext ctx k of
@@ -166,16 +168,16 @@ insert' :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, 
 insert' ctx (qs, expr, ty, usage) = do
   ty <- force ctx ty
   case ty of
-    VPi mult _ imp a b :@ p | imp == implicit -> do
-      m <- (:@ p) <$> freshMeta ctx mult a p AST.InsertedHole
-      mv <- eval ctx m
+    VPi imp args b :@ p | imp == implicit -> do
+      ms <- flip traverse args \(mult, _, a) -> (:@ p) <$> freshMeta ctx mult a p AST.InsertedHole
+      mv <- traverse (eval ctx) ms
       ty <- apply ctx b mv
-      insert' ctx (qs, TAST.EApplication expr True m :@ p, ty, usage)
+      insert' ctx (qs, TAST.EApplication expr True ms :@ p, ty, usage)
     va -> pure (qs, expr, va, usage)
 
 insert :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity) -> m (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity)
 insert ctx (qs, expr, ty, usage) = case (expr, ty) of
-  (t@(TAST.ELam (TAST.Parameter True _ _ _ :@ _) _ :@ _), va) -> pure (qs, t, va, usage)
+  (t@(TAST.ELam (TAST.Parameter True _ :@ _) _ :@ _), va) -> pure (qs, t, va, usage)
   (t, va) -> insert' ctx (qs, t, va, usage)
 
 -- | Check that the context and the usage information gathered are compatible.
@@ -258,34 +260,50 @@ check :: forall m. MonadElab m => TAST.Relevance -> Context -> Located AST.Expre
 check rel ctx expr ty = do
   ty <- force ctx ty
   case (expr, ty) of
-    (AST.ELam (AST.Parameter isImplicit m1 x ty :@ p1) expr :@ p3, VPi m2 _ imp ty2 ty3 :@ p2) | isImplicit == not imp -> do
-      when (unLoc m1 /= m2) do
-        throwError $ MultiplicityMismatch (m2 :@ p2) m1
+    (AST.ELam (AST.Parameter isImplicit args1 :@ p1) expr :@ p3, VPi imp args2 ty3 :@ p2) | isImplicit == not imp -> do
+      -- m1 x ty | m2 _ ty2
+      -- when (unLoc m1 /= m2) do
+      --   throwError $ MultiplicityMismatch (m2 :@ p2) m1
       {-
-         0Γ ⊢ A :⁰ type ℓ        Γ, x :ⁱᵖ A ⊢ e ⇐ⁱ B
-        ───────────────────────────────────────────── [⇐ λ-I]
-          Γ ⊢ (λ(x :ᵖ A) ⇒ e) ⇐ⁱ (x :ᵖ A) → B
+         0Γ ⊢ Aₑ :⁰ type ℓ        Γ, xₑ :ⁱᵖ Aₑ ⊢ e ⇐ⁱ B
+                 Γ, xₑ :ⁱᵖ Aₑ ⊢ xₑ₊₁ ⇐ᵖ Aₑ₊₁
+        ──────────────────────────────────────────────── [⇐ λ-I]
+            Γ ⊢ (λ(xₑ :ᵖ Aₑ) ⇒ e) ⇐ⁱ (xₑ :ᵖ Aₑ) → B
       -}
-      (qs1, ty) <- check TAST.Irrelevant ctx ty (VType :@ p1)
-      ty3' <- apply ctx ty3 (VVariable x (lvl ctx) :@ p2)
+      when (length args1 /= length args2) do
+        throwError $ IncorrectNumberOfArguments (length args1) (length args2) p3
 
-      let xMultiplicity = TAST.extend rel * unLoc m1
+      let go ctx [] [] = do
+            ty3' <- apply ctx ty3 (indexed args1 <&> \(i, (_, x, _)) -> VVariable x (lvl ctx - fromIntegral (length args1 - i)) :@ p2)
+            (qs, e) <- check rel ctx expr ty3'
+            pure (qs, getPos e, ([], e))
+          go ctx ((m1, x, ty) : args1) ((m2, _, ty2) : args2) = do
+            when (unLoc m1 /= m2) do
+              throwError $ MultiplicityMismatch (m2 :@ getPos ty2) (unLoc m1 :@ getPos ty)
 
-      (qs2, u) <- withLocalVar x xMultiplicity ty2 ctx \ctx -> do
-        (qs, e) <- check rel ctx expr ty3'
-        pure (qs, getPos e, e)
+            (qs1, ty) <- check TAST.Irrelevant ctx ty (VType :@ p1)
+            let xMultiplicity = TAST.extend rel * unLoc m1
 
-      ty' <- eval ctx ty
-      unify ctx ty' ty2
-      pure (Usage.concat qs1 qs2, TAST.ELam (TAST.Parameter isImplicit m1 x ty :@ p1) u :@ p3)
-    (expr@(_ :@ p1), VPi m2 x imp ty2 ty3 :@ p2) | imp == implicit -> do
-      ty' <- apply ctx ty3 (VVariable ("x?" :@ p2) (lvl ctx) :@ p2)
-      (qs, u) <- check TAST.Present (insertBinder m2 (x :@ p2) ty2 ctx) expr ty'
+            ty' <- eval ctx ty
+            unify ctx ty' ty2
+
+            (qs2, (args1', e)) <- withLocalVar x xMultiplicity ty2 ctx \ctx -> go ctx args1 args2
+
+            pure (Usage.merge qs1 qs2, p3, ((m1, x, ty) : args1', e))
+          go _ _ _ = error "impossible"
+
+      (qs, _, (args, u)) <- go ctx args1 args2
+
+      pure (qs, TAST.ELam (TAST.Parameter isImplicit args :@ p1) u :@ p3)
+    (expr@(_ :@ p1), VPi imp args ty3 :@ p2) | imp == implicit -> do
+      ty' <- apply ctx ty3 (indexed args <&> \(i, (_, x, _)) -> VVariable (x :@ p2) (lvl ctx - fromIntegral (length args - i)) :@ p2)
+      let ctx' = foldl (\ctx (m2, x, ty2) -> insertBinder m2 (x :@ p2) ty2 ctx) ctx args
+      (qs, u) <- check TAST.Present ctx' expr ty'
       -- TODO: is @ω@ the correct multiplicity to be infered for the parameter here?
 
-      ty2 <- quote ctx (lvl ctx) ty2
+      args' <- flip traverse (indexed args) \(i, (m2, x, ty)) -> (m2 :@ p2,x :@ p2,) <$> quote ctx (lvl ctx - fromIntegral (length args - i)) ty
 
-      pure (qs, TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) u :@ p1)
+      pure (qs, TAST.ELam (TAST.Parameter True args' :@ p1) u :@ p1)
     (AST.ELet (AST.Let False m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
          0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ ⊢ e ⇐⁰ A          ip = 0
@@ -369,20 +387,26 @@ check rel ctx expr ty = do
           let qs1' = qs1 `Usage.merge` qs3
 
           pure (qs1' `Usage.concat` Usage.scale xMultiplicity qs2, TAST.ELet (TAST.Let True m1 x ty ex :@ p1) u :@ p2)
-    (AST.EPi (AST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
+    (AST.EPi (AST.Parameter isImplicit args :@ p1) ty2 :@ p2, VType :@ p3) -> do
       when (rel /= TAST.Irrelevant) do
         throwError $ MultiplicityMismatch (TAST.extend rel :@ p3) (TAST.O :@ p3)
       {-
-         0Γ ⊢ S ⇐⁰ type ℓ₁          0Γ, x :⁰ A ⊢ B ⇐⁰ type ℓ₂
-        ────────────────────────────────────────────────────── [⇐ Π-F]
-                 0Γ ⊢ (x :ᵖ S) → T ⇐⁰ type (ℓ₁ ⊔ ℓ₂)
+         0Γ, xₑ :⁰ Sₑ ⊢ Sₑ₊₁ ⇐⁰ type ℓₑ₊₁          0Γ, xₑ :⁰ Aₑ ⊢ B ⇐⁰ type ℓ₂
+        ─────────────────────────────────────────────────────────────────────── [⇐ Π-F]
+                 0Γ ⊢ (xₑ :ᵖ Sₑ) → B ⇐⁰ type (ℓₑ ⊔ ℓ₂)
       -}
-      (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p1)
-      ty' <- eval ctx ty
-      (_, ty2) <- withLocalVar x TAST.O ty' ctx \ctx -> do
-        (qs, e) <- check TAST.Irrelevant ctx ty2 (VType :@ p2)
-        pure (qs, getPos e, e)
-      pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
+      let go ctx [] = do
+            (qs, e) <- check TAST.Irrelevant ctx ty2 (VType :@ p2)
+            pure (qs, getPos e, ([], e))
+          go ctx ((m1, x, ty) : args) = do
+            (qs1, ty) <- check TAST.Irrelevant ctx ty (VType :@ p1)
+            ty' <- eval ctx ty
+            (qs2, (args, ty2)) <- withLocalVar x TAST.O ty' ctx \ctx -> go ctx args
+
+            pure (Usage.concat qs1 qs2, p2, ((m1, x, ty) : args, ty2))
+
+      (_, _, (args', ty2)) <- go ctx args
+      pure (mempty, TAST.EPi (TAST.Parameter isImplicit args' :@ p1) ty2 :@ p2)
     (AST.EHole loc :@ p1, ty) -> do
       meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
       pure (mempty, meta :@ p1)
@@ -435,53 +459,79 @@ synthetize rel _ (AST.EBoolean bool :@ p) =
          Γ ⊢ b ⇒^ω bool
   -}
   pure (mempty, TAST.EBoolean bool :@ p, VBuiltinBool :@ p, TAST.extend rel :@ p)
-synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
+synthetize rel ctx (AST.EApplication e1 isImp es :@ p) = do
   {-
-     Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
-    ──────────────────────────────────────────────────────────── [⇐ λ-E₀]
-                        Γ ⊢ f x ⇐ᵖ B[y\x]
+     Γ ⊢ f ⇒ⁱ (yₑ :ᵖ Aₑ) → B          0Γ ⊢ xₑ ⇐⁰ Aₑ          ip = 0
+    ──────────────────────────────────────────────────────────────── [⇐ λ-E₀]
+                         Γ ⊢ f(xₑ) ⇐ᵖ B[y\x]
 
-     Γ₁ ⊢ f ⇒ⁱ (y :ᵖ A) → B          Γ₂ ⊢ x ⇐¹ A
-    ───────────────────────────────────────────── [⇐ λ-E₁]
-              Γ₁ + ipΓ₂ ⊢ f x ⇒ⁱ B[y\x]
+     Γ₁ ⊢ f ⇒ⁱ (yₑ :ᵖ Aₑ) → B          Γ₂ ⊢ xₑ ⇐¹ Aₑ
+    ───────────────────────────────────────────────── [⇐ λ-E₁]
+               Γ₁ + ipΓ₂ ⊢ f(xₑ) ⇒ⁱ B[y\x]
     -}
-  (icit, e1, qs1, t1, m1) <- case e2 of
-    AST.EImplicit _ :@ _ -> do
+  (icit, e1, qs1, t1, m1) <- case isImp of
+    True -> do
       (qs, e1, t1, m1) <- synthetize rel ctx e1
       pure (implicit, e1, qs, t1, m1)
-    _ -> do
+    False -> do
       (qs, e1, t1, m1) <- insert' ctx =<< synthetize rel ctx e1
       pure (explicit, e1, qs, t1, m1)
 
   t1 <- force ctx t1
-  (m2, a, b) <- case t1 of
-    VPi u _ i a b :@ p2
-      | i == icit -> pure (u :@ p2, a, b)
+  (args, b) <- case t1 of
+    VPi i args b :@ p2 -- u _ a
+      | i == icit -> pure (args, b)
       | otherwise -> throwError $ ImplicitMismatch icit i p2
     t1@(_ :@ p2) -> do
       -- try η-expanding
-      let usage = TAST.Unrestricted
-      a <- eval ctx . (:@ p) =<< freshMeta ctx usage (VType :@ p) p AST.InsertedHole
-      meta <- freshMeta (bind usage ("x?" :@ p) a ctx) usage (VType :@ p) p AST.InsertedHole
-      let b = Clos (env ctx) $ meta :@ p
-      unify ctx t1 (VPi usage "x?" explicit a b :@ p)
-      pure (usage :@ p2, a, b)
+      let usage = TAST.lub (TAST.extend rel) TAST.O
+      args <- forM (indexed es) \(i, _) -> do
+        a <- eval ctx . (:@ p) =<< freshMeta ctx usage (VType :@ p) p AST.InsertedHole
+        pure (TAST.W, Text.pack ("$" <> show i), a)
+      let ctx' = foldr (\(m, x, a) ctx -> bind m (x :@ p) a ctx) ctx args
 
-  case unLoc m1 * unLoc m2 of
-    TAST.O -> do
-      (qs2, e2) <- check TAST.Irrelevant ctx e2 a
+      meta <- freshMeta ctx' usage (VType :@ p) p AST.InsertedHole
+      let b = Clos (env ctx) $ meta :@ p2
 
-      e2' <- eval ctx e2
-      b <- apply ctx b e2'
-      pure (qs1 `Usage.merge` qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
-    xMultiplicity -> do
-      (qs2, e2) <- check TAST.Present ctx e2 a
+      unify ctx t1 (VPi explicit args b :@ p2)
+      pure (args, b)
 
-      e2' <- eval ctx e2
-      b <- apply ctx b e2'
+  when (length args /= length es) do
+    throwError $ IncorrectNumberOfArguments (length es) (length args) p
 
-      pure (qs1 `Usage.concat` Usage.scale xMultiplicity qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
-synthetize rel ctx (AST.EImplicit e2 :@ _) = synthetize rel ctx e2
+  case any (\(m2, _, _) -> unLoc m1 * m2 == TAST.O) args of
+    True -> do
+      let go :: forall m. MonadElab m => [Located AST.Expression] -> [(TAST.Multiplicity, Text, Located Value)] -> m (Usage, ([Located TAST.Expression], [Located Value]))
+          go [e2] [(_, _, a)] = do
+            (qs2, e2) <- check TAST.Irrelevant ctx e2 a
+            e2' <- eval ctx e2
+            pure (qs2, ([e2], [e2']))
+          go (e2 : args) (a2 : args') = do
+            (qs2, (args1, args1')) <- go [e2] [a2]
+            (qs2', (args2, args2')) <- go args args'
+            pure (qs2 `Usage.merge` qs2', (args1 <> args2, args1' <> args2'))
+          go _ _ = error "impossible"
+
+      (qs2, (args, args')) <- go es args
+      b <- apply ctx b args'
+
+      pure (qs1 `Usage.merge` qs2, TAST.EApplication e1 (not icit) args :@ p, b, m1)
+    False -> do
+      let go :: forall m. MonadElab m => [Located AST.Expression] -> [(TAST.Multiplicity, Text, Located Value)] -> m (Usage, ([Located TAST.Expression], [Located Value]))
+          go [e2] [(m2, _, a)] = do
+            (qs2, e2) <- check TAST.Present ctx e2 a
+            e2' <- eval ctx e2
+            pure (Usage.scale (unLoc m1 * m2) qs2, ([e2], [e2']))
+          go (e2 : args) (a2 : args') = do
+            (qs2, (args1, args1')) <- go [e2] [a2]
+            (qs2', (args2, args2')) <- go args args'
+            pure (qs2 `Usage.merge` qs2', (args1 <> args2, args1' <> args2'))
+          go _ _ = error "impossible"
+
+      (qs2, (args, args')) <- go es args
+      b <- apply ctx b args'
+
+      pure (qs1 `Usage.concat` qs2, TAST.EApplication e1 (not icit) args :@ p, b, m1)
 synthetize rel ctx (AST.EIdentifier x :@ p) = do
   {-
     ──────────────────── [⇒ var-I]
@@ -520,35 +570,62 @@ synthetize rel _ (AST.EType :@ p) = do
      Γ ⊢ type ⇒⁰ type
   -}
   pure (mempty, TAST.EType :@ p, VType :@ p, TAST.O :@ p)
-synthetize rel ctx (AST.EPi (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ p) = do
+synthetize rel ctx (AST.EPi (AST.Parameter isImplicit args :@ p2) expr :@ p) = do
   when (rel /= TAST.Irrelevant) do
     throwError $ ErasedInRelevantContext p
   {-
-     0Γ ⊢ A ⇐⁰ type       0Γ, x :⁰ A ⊢ B ⇐⁰ type
-    ───────────────────────────────────────────── [⇒ Π-F]
-              0Γ ⊢ (x :ᵖ A) → B ⇒⁰ type
+     0Γ ⊢ A ⇐⁰ type       0Γ, xᵢ :⁰ Aᵢ ⊢ B ⇐⁰ type
+              0Γ, xᵢ :⁰ Aᵢ ⊢ xᵢ₊₁ ⇐⁰ Aᵢ₊₁
+    ─────────────────────────────────────────────── [⇒ Π-F]
+              0Γ ⊢ (xᵢ :ᵖ Aᵢ) → B ⇒⁰ type
   -}
-  (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
-  ty' <- eval ctx ty
-  (_, b) <- withLocalVar name TAST.O ty' ctx \ctx -> do
-    (qs, e) <- check TAST.Irrelevant ctx expr (VType :@ p)
-    pure (qs, getPos e, e)
-  pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 name ty :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
-synthetize rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) ex :@ p) = do
+  (_, _, (args, b)) <- go ctx expr args
+  -- (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
+  -- ty' <- eval ctx ty
+  -- (_, b) <- withLocalVar name TAST.O ty' ctx \ctx -> do
+  --   (qs, e) <- check TAST.Irrelevant ctx expr (VType :@ p)
+  --   pure (qs, getPos e, e)
+  pure (mempty, TAST.EPi (TAST.Parameter isImplicit args :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
+  where
+    go ctx expr [] = do
+      (qs, e) <- check TAST.Irrelevant ctx expr (VType :@ p)
+      pure (qs, getPos e, ([], e))
+    go ctx expr ((m1, name, ty) : args) = do
+      (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
+      ty' <- eval ctx ty
+
+      (qs, (args, b)) <- withLocalVar name TAST.O ty' ctx \ctx -> do
+        go ctx expr args
+      pure (qs, getPos name, ((m1, name, ty) : args, b))
+synthetize rel ctx (AST.ELam (AST.Parameter isImplicit args :@ p2) ex :@ p) = do
+  -- m1 name ty
   {-
-     0Γ ⊢ A ⇐⁰ type ℓ       Γ, x :ⁱᵖ A ⊢ e ⇒ᵖ B
-    ──────────────────────────────────────────── [⇒ λ-I]
-       ipΓ ⊢ (λ(x :ⁱ A) ⇒ e) ⇒ᵖ (x :ⁱ A) → B
+     0Γ ⊢ A ⇐⁰ type ℓ       Γ, xₑ :ⁱᵖ Aₑ ⊢ e ⇒ᵖ B
+    ────────────────────────────────────────────── [⇒ λ-I]
+      ipΓ ⊢ (λ(xₑ :ⁱ Aₑ) ⇒ e) ⇒ᵖ (xₑ :ⁱ Aₑ) → B
   -}
-  (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
-  ty' <- eval ctx ty
-  let ip = unLoc m1 * TAST.extend rel
-  (qs1, (ex, b, u2)) <- withLocalVar name ip ty' ctx \ctx -> do
-    (u, ex, b, u2) <- synthetize rel ctx ex
-    pure (u, getPos ex, (ex, b, u2))
+  let ip = sum [TAST.extend rel * unLoc m | (m, _, _) <- args]
+  (qs1, _, (args, args', ex, b, u2)) <- go ctx ex args
+  -- (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
+  -- ty' <- eval ctx ty
+  -- let ip = unLoc m1 * TAST.extend rel
+  -- (qs1, (ex, b, u2)) <- withLocalVar name ip ty' ctx \ctx -> do
+  --   (u, ex, b, u2) <- synthetize rel ctx ex
+  --   pure (u, getPos ex, (ex, b, u2))
 
   clos <- closeVal ctx b
-  pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
+  pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit args :@ p2) ex :@ p, VPi (not isImplicit) args' clos :@ p, u2)
+  where
+    go ctx ex [] = do
+      (u, ex, b, u2) <- synthetize rel ctx ex
+      pure (u, getPos ex, ([], [], ex, b, u2))
+    go ctx ex ((m1, name, ty) : args) = do
+      (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p)
+      ty' <- eval ctx ty
+      let ip = unLoc m1 * TAST.extend rel
+      (qs1, (args, args', ex, b, u2)) <- withLocalVar name ip ty' ctx \ctx -> do
+        go ctx ex args
+      pure (qs1, getPos name, ((m1, name, ty) : args, (unLoc m1, unLoc name, ty') : args', ex, b, u2))
 synthetize rel ctx (AST.EHole loc :@ p1) = do
   meta1 <- freshMeta ctx (TAST.extend rel) (VType :@ p1) p1 loc
   a <- eval ctx (meta1 :@ p1)
@@ -604,3 +681,19 @@ closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure
 closeVal ctx ty = do
   ty <- quote ctx (lvl ctx + 1) ty
   pure $ Clos (env ctx) ty
+
+-----------------------------
+
+-- |
+-- 'indexed' pairs each element with its index.
+
+-- >>> indexed "hello"
+-- [(0,'h'),(1,'e'),(2,'l'),(3,'l'),(4,'o')]
+
+-- /Subject to fusion./
+indexed :: [a] -> [(Int, a)]
+indexed xs = go 0# xs
+  where
+    go i (a : as) = (I# i, a) : go (i +# 1#) as
+    go _ _ = []
+{-# NOINLINE [1] indexed #-}

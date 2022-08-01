@@ -46,12 +46,8 @@ data Parameter
   = Parameter
       Bool
       -- ^ Is it implicit?
-      (Located Multiplicity)
-      -- ^ Resource usage
-      (Located Text)
-      -- ^ The name of the parameter
-      (Located Expression)
-      -- ^ Explicit type
+      [(Located Multiplicity, Located Text, Located Expression)]
+      -- ^ Multiplicities, names and types of parameters
   deriving (Show)
 
 data Expression
@@ -76,11 +72,10 @@ data Expression
   | EApplication
       (Located Expression)
       -- ^ The expression which has arguments applied to it
-      (Located Expression)
+      Bool
+      -- ^ Is the application implicit?
+      [Located Expression]
       -- ^ The first parameter
-  | -- | An implicit parameter
-    EImplicit
-      (Located Expression)
   | -- | The @type@ builtin type
     EType
   | EHole

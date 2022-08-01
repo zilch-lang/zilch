@@ -88,6 +88,11 @@ data ElabError
       Position
       Position
       [Located Text]
+  | -- | There are missing or superfluous arguments given in a lambda or application.
+    IncorrectNumberOfArguments
+      Int
+      Int
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -250,6 +255,18 @@ fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
       [(p, This $ "Binding '" <> Text.unpack x <> "' will end up evaluating itself when evaluating its value")]
         <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
         <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
+fromElabError (IncorrectNumberOfArguments actual expected pos) =
+  err
+    Nothing
+    "Type-checking error"
+    [(pos, This $ show expected <> " argument" <> plural expected <> " " <> pluralBe expected <> " expected but only " <> show actual <> " " <> pluralBe actual <> " found")]
+    []
+  where
+    plural 1 = ""
+    plural _ = "s"
+
+    pluralBe 1 = "was"
+    pluralBe _ = "were"
 
 showMult :: Multiplicity -> String
 showMult O = "0"
