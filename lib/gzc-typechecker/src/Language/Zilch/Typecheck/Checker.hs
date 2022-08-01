@@ -435,7 +435,7 @@ synthetize rel _ (AST.EBoolean bool :@ p) =
          Γ ⊢ b ⇒^ω bool
   -}
   pure (mempty, TAST.EBoolean bool :@ p, VBuiltinBool :@ p, TAST.extend rel :@ p)
-synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
+synthetize rel ctx (AST.EApplication e1 isImp e2 :@ p) = do
   {-
      Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
     ──────────────────────────────────────────────────────────── [⇐ λ-E₀]
@@ -445,11 +445,11 @@ synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
     ───────────────────────────────────────────── [⇐ λ-E₁]
               Γ₁ + ipΓ₂ ⊢ f x ⇒ⁱ B[y\x]
     -}
-  (icit, e1, qs1, t1, m1) <- case e2 of
-    AST.EImplicit _ :@ _ -> do
+  (icit, e1, qs1, t1, m1) <- case isImp of
+    True -> do
       (qs, e1, t1, m1) <- synthetize rel ctx e1
       pure (implicit, e1, qs, t1, m1)
-    _ -> do
+    False -> do
       (qs, e1, t1, m1) <- insert' ctx =<< synthetize rel ctx e1
       pure (explicit, e1, qs, t1, m1)
 
@@ -481,7 +481,6 @@ synthetize rel ctx (AST.EApplication e1 e2 :@ p) = do
       b <- apply ctx b e2'
 
       pure (qs1 `Usage.concat` Usage.scale xMultiplicity qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
-synthetize rel ctx (AST.EImplicit e2 :@ _) = synthetize rel ctx e2
 synthetize rel ctx (AST.EIdentifier x :@ p) = do
   {-
     ──────────────────── [⇒ var-I]

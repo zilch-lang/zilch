@@ -76,11 +76,10 @@ data Expression
   | EApplication
       (Located Expression)
       -- ^ The expression which has arguments applied to it
+      Bool
+      -- ^ Is the application implicit?
       (Located Expression)
       -- ^ The first parameter
-  | -- | An implicit parameter
-    EImplicit
-      (Located Expression)
   | -- | The @type@ builtin type
     EType
   | EHole

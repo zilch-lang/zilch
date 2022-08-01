@@ -15,9 +15,11 @@ import Data.Bifunctor (second)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Located (Located ((:@)), Position)
+import Data.Text (Text)
 import Language.Zilch.Typecheck.Context (Context, bind, emptyContext, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Implicitness, MetaEntry (Solved, Unsolved), Spine, Value (..), explicit)
+import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
 import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
@@ -79,47 +81,44 @@ solve ctx' gamma m sp val = do
       Just (Unsolved m ty, path, p, loc) -> pure (m, ty, path, p, loc)
       Just (Solved _ m ty, path, p, loc) -> pure (m, ty, path, p, loc)
 
+  let path' = pathToList path
+
   let ctx = emptyContext
   ren@(Renaming _ _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
-  solution :@ _ <- uncurry eval =<< lams ctx' path (reverse $ snd <$> sp) val' p
+  solution :@ _ <- uncurry eval =<< lams ctx' path' (reverse $ snd <$> sp) val' p
 
   ty <- quote ctx' (lvl ctx') ty
-  ty' <- uncurry eval =<< mkPi ctx' ty path
+  ty' <- uncurry eval =<< mkPi ctx' ty path'
 
   modify' $ second (IntMap.insert m (Solved solution mult ty', path, p, loc))
 
   pure ()
   where
-    mkPi :: forall m. MonadElab m => Context -> Located TAST.Expression -> TAST.Path -> m (Context, Located TAST.Expression)
-    mkPi ctx ty TAST.Here = pure (ctx, ty)
-    mkPi ctx ty@(_ :@ p) (TAST.Bind path m n a) = do
-      let ctx' = bind m n a ctx
-      (ctx', ret) <- mkPi ctx' ty path
-      a <- quote ctx' (lvl ctx') a
+    pathToList :: TAST.Path -> [(TAST.Multiplicity, Located Text, Located Value)]
+    pathToList TAST.Here = []
+    pathToList (TAST.Define path _ _ _ _) = pathToList path
+    pathToList (TAST.Bind path m n a) = pathToList path <> [(m, n, a)]
 
-      pure . (ctx',) $ case ret of
-        TAST.EPi (TAST.Parameter exp mult name x :@ p1) y :@ p2 ->
-          TAST.EPi (TAST.Parameter exp mult name x :@ p1) (TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p) :@ p2
-        y ->
-          TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p
-    mkPi ctx ty (TAST.Define path _ _ _ _) = mkPi ctx ty path
+    mkPi :: forall m. MonadElab m => Context -> Located TAST.Expression -> [(TAST.Multiplicity, Located Text, Located Value)] -> m (Context, Located TAST.Expression)
+    mkPi ctx ty [] = pure (ctx, ty)
+    mkPi ctx ty@(_ :@ p) ((m, n, a) : path) = do
+      let ctx' = bind m n a ctx
+      a <- quote ctx (lvl ctx) a
+      (ctx', ret) <- mkPi ctx' ty path
+
+      pure (ctx', TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) ret :@ p)
 
     lams = go 0
 
-    go :: forall m. MonadElab m => Integer -> Context -> TAST.Path -> [Implicitness] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
-    go _ ctx TAST.Here [] t _ = pure (ctx, t)
-    go x ctx (TAST.Define path _ _ _ _) is t p = go x ctx path is t p
-    go x ctx (TAST.Bind path m n a) (_ : is) t p = do
+    go :: forall m. MonadElab m => Integer -> Context -> [(TAST.Multiplicity, Located Text, Located Value)] -> [Implicitness] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
+    go _ ctx [] [] t _ = pure (ctx, t)
+    go x ctx ((m, n, a) : path) (_ : is) t p = do
       let ctx' = bind m n a ctx
+      a <- quote ctx (lvl ctx) a
       (ctx', lam) <- go x ctx' path is t p
-      a <- quote ctx' (lvl ctx') a
 
-      pure . (ctx',) $ case lam of
-        TAST.ELam (TAST.Parameter exp mult name x :@ p1) y :@ p2 ->
-          TAST.ELam (TAST.Parameter exp mult name x :@ p1) (TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p) :@ p2
-        y ->
-          TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) y :@ p
+      pure (ctx', TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) lam :@ p)
     go _ _ _ _ _ _ = error "insertLambdas: incoherent context"
 
 unifySpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Spine -> Spine -> m ()

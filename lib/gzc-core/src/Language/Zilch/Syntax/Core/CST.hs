@@ -59,15 +59,9 @@ data Definition
 
 data Parameter
   = Implicit
-      (Maybe (Located Integer))
-      -- ^ Optional usage
-      (Located Text)
-      (Maybe (Located Expression))
+      [(Maybe (Located Integer), Located Text, Maybe (Located Expression))]
   | Explicit
-      (Maybe (Located Integer))
-      -- ^ Optional usage
-      (Located Text)
-      (Maybe (Located Expression))
+      [(Maybe (Located Integer), Located Text, Maybe (Located Expression))]
   deriving (Show)
 
 data Expression
@@ -83,9 +77,8 @@ data Expression
     EString Text
   | EStringConcat [Text]
   | EApplication
-      [Located Expression]
-  | EImplicit
       (Located Expression)
+      [Located (Bool, [Located Expression])]
   | ELam
       [Located Parameter]
       (Located Expression)

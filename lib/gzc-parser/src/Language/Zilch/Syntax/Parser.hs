@@ -168,24 +168,34 @@ parseVal s = lexeme $ located do
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =
-  located $
-    MP.choice
-      ( [ lexeme (token TkLeftParen) *> s *> lexeme explicit <* s <* token TkRightParen,
-          lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace
-        ] ::
-          [m Parameter]
-      )
+  located $ explicit s <|> implicit s
   where
-    explicit =
-      Explicit
-        <$> (MP.optional (lexeme parseResourceUsage) <* s)
-        <*> (lexeme idOrIgnore <* s)
-        <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
-    implicit =
-      Implicit
-        <$> (MP.optional (lexeme parseResourceUsage) <* s)
-        <*> (lexeme idOrIgnore <* s)
-        <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+    -- MP.choice
+    --   ( [  lexeme (token TkLeftParen) *> s *> lexeme explicit <* s <* token TkRightParen,
+    --       lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace
+    --     ] ::
+    --       [m Parameter]
+    --   )
+
+    explicit s = do
+      lexeme (token TkLeftParen) *> s
+      args <- flip MP.sepBy1 (token TkComma <* s) do
+        (,,)
+          <$> (MP.optional (lexeme parseResourceUsage) <* s)
+          <*> (lexeme idOrIgnore <* s)
+          <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+      s <* token TkRightParen
+      pure $ Explicit args
+
+    implicit s = do
+      lexeme (token TkLeftBrace) *> s
+      args <- flip MP.sepBy1 (token TkComma <* s) do
+        (,,)
+          <$> (MP.optional (lexeme parseResourceUsage) <* s)
+          <*> (lexeme idOrIgnore <* s)
+          <*> MP.optional (lexeme (token TkColon) *> s *> parseExpression s)
+      s <* token TkRightBrace
+      pure $ Implicit args
 
     idOrIgnore = parseIdentifier <|> fmap ("_" <$) (token TkUnderscore)
 
@@ -208,10 +218,19 @@ parseApplication :: forall m. MonadParser m => m () -> m (Located Expression)
 parseApplication s = located do
   f <- parseAtom s
   args <- MP.many (MP.try s *> (implicit s <|> explicit s))
-  pure $ EApplication (f : args)
+  pure $ EApplication f args
   where
-    implicit s = located do EImplicit <$> (lexeme (token TkLeftBrace) *> s *> parseExpression s <* s <* token TkRightBrace)
-    explicit s = lexeme (token TkLeftParen) *> s *> parseExpression s <* s <* token TkRightParen
+    implicit s = located do
+      lexeme (token TkLeftBrace) *> s
+      exprs <- parseExpression s `MP.sepBy1` (token TkComma <* s)
+      s <* token TkRightBrace
+      pure (True, exprs)
+
+    explicit s = located do
+      lexeme (token TkLeftParen) *> s
+      exprs <- parseExpression s `MP.sepBy1` (token TkComma <* s)
+      s <* token TkRightParen
+      pure (False, exprs)
 
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
@@ -230,7 +249,6 @@ parseAtom s = located do
         EType <$ token TkType,
         MP.try $ parsePi s,
         EId <$> parseIdentifier,
-        EImplicit <$> (lexeme (token TkLeftBrace) *> lexeme (parseExpression s) <* token TkRightBrace),
         EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
       ] ::
         [m Expression]
