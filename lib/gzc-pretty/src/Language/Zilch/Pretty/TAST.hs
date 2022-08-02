@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.TAST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
-import Prettyprinter (Pretty (pretty), align, braces, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -86,6 +86,18 @@ instance Pretty (Located Expression) where
       <> "→"
       <> space
       <> pretty val
+  pretty (EMultiplicativeProduct param val :@ _) =
+    pretty param
+      <> space
+      <> "⊗"
+      <> space
+      <> pretty val
+  pretty (EAdditiveProduct param val :@ _) =
+    pretty param
+      <> space
+      <> "&"
+      <> space
+      <> pretty val
   pretty (EInsertedMeta m path :@ _) =
     "?"
       <> pretty m
@@ -113,6 +125,18 @@ instance Pretty (Located Expression) where
         <> "else"
         <> space
         <> pretty e
+  pretty (EMultiplicativePair e1 e2 :@ _) =
+    enclose "(" ")" $
+      pretty e1
+        <> comma
+        <> space
+        <> pretty e2
+  pretty (EAdditivePair e1 e2 :@ _) =
+    enclose "⟨" "⟩" $
+      pretty e1
+        <> comma
+        <> space
+        <> pretty e2
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

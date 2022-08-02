@@ -12,6 +12,7 @@ import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
+import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Environment (lookup)
 import qualified Language.Zilch.Typecheck.Environment as Env
@@ -51,6 +52,12 @@ eval ctx (TAST.ELet (TAST.Let False _ _ _ val :@ _) u :@ _) = do
 eval ctx (TAST.EPi (TAST.Parameter isImplicit usage name ty1 :@ _) ty2 :@ p) = do
   ty1' <- eval ctx ty1
   pure $ VPi (unLoc usage) (unLoc name) (not isImplicit) ty1' (Clos (env ctx) ty2) :@ p
+eval ctx (TAST.EMultiplicativeProduct (TAST.Parameter _ usage name ty1 :@ _) ty2 :@ p) = do
+  ty1' <- eval ctx ty1
+  pure $ VMultiplicativeProduct (unLoc usage) (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
+eval ctx (TAST.EAdditiveProduct (TAST.Parameter _ _ name ty1 :@ _) ty2 :@ p) = do
+  ty1' <- eval ctx ty1
+  pure $ VAdditiveProduct (unLoc name) ty1' (Clos (env ctx) ty2) :@ p
 eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ex :@ p) = do
   ty1' <- eval ctx ty1
   pure $ VLam (unLoc usage) x (not isImplicit) ty1' (Clos (env ctx) ex) :@ p
@@ -73,6 +80,14 @@ eval ctx (TAST.EIfThenElse c t e :@ p) = do
   t' <- eval ctx t
   e' <- eval ctx e
   pure (VIfThenElse c' t' e' :@ p)
+eval ctx (TAST.EMultiplicativePair e1 e2 :@ p) = do
+  e1' <- eval ctx e1
+  e2' <- eval ctx e2
+  pure $ VMultiplicativePair e1' e2' :@ p
+eval ctx (TAST.EAdditivePair e1 e2 :@ p) = do
+  e1' <- eval ctx e1
+  e2' <- eval ctx e2
+  pure $ VAdditivePair e1' e2' :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -136,20 +151,30 @@ quote ctx level val = do
       x' <- apply ctx clos (VVariable (name :@ p) level :@ p)
       x' <- quote ctx (level + 1) x'
       ty1 <- quote ctx level ty1
-      pure $
-        TAST.ELam
-          (TAST.Parameter (not isExplicit) (usage :@ p) (name :@ p) ty1 :@ p)
-          x'
-          :@ p
+      pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (name :@ p) ty1 :@ p) x' :@ p
     (VPi usage y isExplicit val clos :@ p) -> do
       x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
       val' <- quote ctx level val
       x' <- quote ctx (level + 1) x'
-      pure $
-        TAST.EPi
-          (TAST.Parameter (not isExplicit) (usage :@ p) (y :@ p) val' :@ p)
-          x'
-          :@ p
+      pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (y :@ p) val' :@ p) x' :@ p
+    (VMultiplicativeProduct usage y val clos :@ p) -> do
+      x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
+      val' <- quote ctx level val
+      x' <- quote ctx (level + 1) x'
+      pure $ TAST.EMultiplicativeProduct (TAST.Parameter explicit (usage :@ p) (y :@ p) val' :@ p) x' :@ p
+    (VAdditiveProduct y val clos :@ p) -> do
+      x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
+      val' <- quote ctx level val
+      x' <- quote ctx (level + 1) x'
+      pure $ TAST.EAdditiveProduct (TAST.Parameter explicit (TAST.W :@ p) (y :@ p) val' :@ p) x' :@ p
+    (VMultiplicativePair e1 e2 :@ p) -> do
+      e1' <- quote ctx level e1
+      e2' <- quote ctx level e2
+      pure $ TAST.EMultiplicativePair e1' e2' :@ p
+    (VAdditivePair e1 e2 :@ p) -> do
+      e1' <- quote ctx level e1
+      e2' <- quote ctx level e2
+      pure $ TAST.EAdditivePair e1' e2' :@ p
     (VIfThenElse c t e :@ p) -> do
       c' <- quote ctx level c
       t' <- quote ctx level t

@@ -94,6 +94,16 @@ data Expression
   | EPi
       (Located Parameter)
       (Located Expression)
+  | EMultiplicativeProduct
+      (Located Parameter)
+      (Located Expression)
+  | EAdditiveProduct
+      (Located Parameter)
+      (Located Expression)
+  | EMultiplicativeTuple
+      [Located Expression]
+  | EAdditiveTuple
+      [Located Expression]
   | ETrue
   | EFalse
   | EIfThenElse

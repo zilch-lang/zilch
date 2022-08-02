@@ -170,13 +170,6 @@ parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =
   located $ explicit s <|> implicit s
   where
-    -- MP.choice
-    --   ( [  lexeme (token TkLeftParen) *> s *> lexeme explicit <* s <* token TkRightParen,
-    --       lexeme (token TkLeftBrace) *> s *> lexeme implicit <* s <* token TkRightBrace
-    --     ] ::
-    --       [m Parameter]
-    --   )
-
     explicit s = do
       lexeme (token TkLeftParen) *> s
       args <- flip MP.sepBy1 (token TkComma <* s) do
@@ -247,9 +240,9 @@ parseAtom s = located do
         parseLambda s,
         parseDo s,
         EType <$ token TkType,
-        MP.try $ parsePi s,
+        MP.try $ parseDependentType s,
         EId <$> parseIdentifier,
-        EParens <$> (lexeme (token TkLeftParen) *> lexeme (parseExpression s) <* token TkRightParen)
+        parseTuple s
       ] ::
         [m Expression]
     )
@@ -276,12 +269,38 @@ parseDo s = do
   expr <- parseExpression s
   pure $ EDo expr
 
-parsePi :: forall m. MonadParser m => m () -> m Expression
-parsePi s = do
+parseTuple :: forall m. MonadParser m => m () -> m Expression
+parseTuple s = multiplicative s <|> additive s
+  where
+    multiplicative s = do
+      lexeme (token TkLeftParen) *> s
+      exprs <- lexeme (parseExpression s) `MP.sepBy1` lexeme (token TkComma)
+      s <* token TkRightParen
+
+      case exprs of
+        [x] -> pure $ EParens x
+        xs -> pure $ EMultiplicativeTuple xs
+
+    additive s = do
+      lexeme (token TkLeftAngle) *> s
+      exprs <- lexeme (parseExpression s) `MP.sepBy1` lexeme (token TkComma)
+      s <* token TkRightAngle
+
+      pure $ EAdditiveTuple exprs
+
+parseDependentType :: forall m. MonadParser m => m () -> m Expression
+parseDependentType s = do
   param <- lexeme (parseParameter s) <* s
-  _ <- lexeme (token TkRightArrow <|> token TkUniRightArrow) <* s
+  tk :@ _ <- lexeme (token TkTimes <|> token TkUniTensor <|> token TkAmpersand <|> token TkRightArrow <|> token TkUniRightArrow) <* s
   ret <- parseExpression s
-  pure $ EPi param ret
+
+  pure $ flip uncurry (param, ret) case tk of
+    TkTimes -> EMultiplicativeProduct
+    TkUniTensor -> EMultiplicativeProduct
+    TkAmpersand -> EAdditiveProduct
+    TkRightArrow -> EPi
+    TkUniRightArrow -> EPi
+    _ -> undefined
 
 parseIf :: forall m. MonadParser m => m () -> m Expression
 parseIf s = do

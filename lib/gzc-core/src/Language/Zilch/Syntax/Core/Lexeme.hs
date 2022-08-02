@@ -62,6 +62,10 @@ data Token
     TkLeftBrace
   | -- | @}@: right/closing curly bracket
     TkRightBrace
+  | -- | @⟨@: left/opening angle
+    TkLeftAngle
+  | -- | @⟩@: right/closing angle
+    TkRightAngle
   | -- | @::@: module/record access
     TkDoubleColon
   | -- | @∷@: @::@ but Unicode
@@ -74,6 +78,12 @@ data Token
     TkDoubleRightArrow
   | -- | @⇒@: @=>@ but Unicode
     TkUniDoubleRightArrow
+  | -- | @×@: multiplicative pair separator
+    TkTimes
+  | -- | @⊗@: @×@ but Unicode
+    TkUniTensor
+  | -- | @&@: additive pair separator
+    TkAmpersand
   | -- | @true@
     TkTrue
   | -- | @false@

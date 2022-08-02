@@ -57,12 +57,20 @@ rename ctx m ren v = go ren v
           Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') :@ p) sp
         VLam usage x isExplicit a t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
           pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
         VPi usage x isExplicit a t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable ("?" :@ p) cod :@ p)
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
           pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
+        VMultiplicativeProduct usage x a t :@ p -> do
+          a' <- go ren a
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
+          pure $ TAST.EMultiplicativeProduct (TAST.Parameter explicit (usage :@ p) (x :@ p) a' :@ p) t' :@ p
+        VAdditiveProduct x a t :@ p -> do
+          a' <- go ren a
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
+          pure $ TAST.EAdditiveProduct (TAST.Parameter explicit (TAST.W :@ p) (x :@ p) a' :@ p) t' :@ p
         -- maybe we have a better way of handling all base terms?
         -- this is merely to avoid duplicated code
         val -> quote ctx cod val
@@ -161,6 +169,22 @@ unify' ctx lvl t u = do
           <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
           <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
       unify' ctx (lvl + 1) v1 v2
+    (VMultiplicativeProduct _ _ a1 t1 :@ p1, VMultiplicativeProduct _ _ a2 t2 :@ p2) -> do
+      -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
+      unify' ctx lvl a1 a2
+      (v1, v2) <-
+        (,)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+      unify' ctx (lvl + 1) v1 v2
+    (VAdditiveProduct _ a1 t1 :@ p1, VAdditiveProduct _ a2 t2 :@ p2) -> do
+      -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
+      unify' ctx lvl a1 a2
+      (v1, v2) <-
+        (,)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+      unify' ctx (lvl + 1) v1 v2
     (VIfThenElse c1 t1 e1 :@ _, VIfThenElse c2 t2 e2 :@ _) -> do
       unify' ctx lvl c1 c2
       unify' ctx lvl t1 t2
@@ -183,6 +207,12 @@ unify' ctx lvl t u = do
     (VBuiltinU32 :@ _, VBuiltinU32 :@ _) -> pure ()
     (VBuiltinU64 :@ _, VBuiltinU64 :@ _) -> pure ()
     (VBuiltinBool :@ _, VBuiltinBool :@ _) -> pure ()
+    (VMultiplicativePair e1 e2 :@ _, VMultiplicativePair e3 e4 :@ _) -> do
+      unify' ctx lvl e1 e3
+      unify' ctx lvl e2 e4
+    (VAdditivePair e1 e2 :@ _, VAdditivePair e3 e4 :@ _) -> do
+      unify' ctx lvl e1 e3
+      unify' ctx lvl e2 e4
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()

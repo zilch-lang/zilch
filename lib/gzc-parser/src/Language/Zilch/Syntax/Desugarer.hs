@@ -10,9 +10,9 @@ import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT, get, modify)
-import Control.Monad.Writer (MonadWriter, runWriterT)
+import Control.Monad.Writer (MonadWriter, runWriterT, tell)
 import Data.Bifunctor (bimap, second)
-import Data.Foldable (fold)
+import Data.Foldable (fold, foldrM)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
 import Data.Maybe (fromJust, fromMaybe)
@@ -87,6 +87,10 @@ holes (AST.EApplication e1 _ e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EPi (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EBoolean _ :@ _) = Nothing
 holes (AST.EIfThenElse e1 e2 e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
+holes (AST.EAdditivePair e1 e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EMultiplicativePair e1 e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EMultiplicativeProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EAdditiveProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -158,7 +162,7 @@ desugarExpression (CST.EInt i suffix :@ p) = do
   suffix' <- maybe (pure SuffixU64) (desugarIntegerSuffix p) suffix
   pure $ AST.EInteger (i :@ p) suffix' :@ p
 desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
-desugarExpression (CST.ELam params expr :@ p) = do
+desugarExpression (CST.ELam params expr :@ _) = do
   params' <- fold <$> traverse desugarParameter params
   expr' <- desugarExpression expr
 
@@ -185,7 +189,7 @@ desugarExpression (CST.EApplication e es :@ _) = do
       es1 <- traverse (fmap (isImp,) . desugarExpression) es
       es2 <- go es'
       pure $ es1 <> es2
-desugarExpression (CST.EPi params ret :@ p) = do
+desugarExpression (CST.EPi params ret :@ _) = do
   param' <- desugarParameter params
   ret' <- desugarExpression ret
   pure $ foldr mkPi ret' param'
@@ -198,6 +202,35 @@ desugarExpression (CST.EIfThenElse c t e :@ p) = do
   t' <- desugarExpression t
   e' <- desugarExpression e
   pure $ AST.EIfThenElse c' t' e' :@ p
+desugarExpression (CST.EMultiplicativeProduct params ty :@ _) = do
+  params' <- desugarParameter params
+  ty' <- desugarExpression ty
+  foldrM mkProd ty' params'
+  where
+    mkProd (AST.Parameter True _ _ _ :@ p) _ = throwError $ ImplicitProductType p
+    mkProd param ret = pure $ AST.EMultiplicativeProduct param ret :@ spanOf (getPos param) (getPos ret)
+desugarExpression (CST.EAdditiveProduct params ty :@ _) = do
+  params' <- desugarParameter params
+  ty' <- desugarExpression ty
+  foldrM mkProd ty' params'
+  where
+    mkProd (AST.Parameter True _ _ _ :@ p) _ = throwError $ ImplicitProductType p
+    mkProd (AST.Parameter _ (mult :@ _) (x :@ _) _ :@ p) _
+      | mult /= Unrestricted = throwError $ AdditiveProductWithMultiplicity x p
+    mkProd param ret = pure $ AST.EAdditiveProduct param ret :@ spanOf (getPos param) (getPos ret)
+desugarExpression (CST.EMultiplicativeTuple es :@ _) = do
+  es' <- traverse desugarExpression es
+  pure $ foldr1 mkPair es'
+  where
+    mkPair e1 e2 = AST.EMultiplicativePair e1 e2 :@ spanOf (getPos e1) (getPos e2)
+desugarExpression (CST.EAdditiveTuple [e] :@ p) = do
+  tell [SingletonAdditivePair p]
+  desugarExpression e
+desugarExpression (CST.EAdditiveTuple es :@ _) = do
+  es' <- traverse desugarExpression es
+  pure $ foldr1 mkPair es'
+  where
+    mkPair e1 e2 = AST.EAdditivePair e1 e2 :@ spanOf (getPos e1) (getPos e2)
 desugarExpression _ = error "todo"
 
 desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix

@@ -111,13 +111,15 @@ identifierOrReserved =
             TkRightBrace <$ MPC.string "}",
             TkColon <$ MPC.string ":",
             TkComma <$ MPC.string ",",
+            TkLeftAngle <$ MPC.string "⟨",
+            TkRightAngle <$ MPC.string "⟩",
             anySymbol
           ] ::
             [m Token]
         )
 
 anySymbol :: forall m. MonadLexer m => m Token
-anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
+anySymbol = toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v" :: String))
   where
     toToken "forall" = TkForall
     toToken "∀" = TkUniForall
@@ -127,6 +129,9 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}() \t\n\r\v" :: String))
     toToken "→" = TkUniRightArrow
     toToken "=>" = TkDoubleRightArrow
     toToken "⇒" = TkUniDoubleRightArrow
+    toToken "×" = TkTimes
+    toToken "⊗" = TkUniTensor
+    toToken "&" = TkAmpersand
     toToken "let" = TkLet
     toToken "rec" = TkRec
     toToken "val" = TkVal

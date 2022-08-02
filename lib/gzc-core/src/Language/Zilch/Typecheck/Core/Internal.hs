@@ -51,6 +51,14 @@ data Expression
     EPi
       (Located Parameter)
       (Located Expression)
+  | -- | The dependent additive product type @(_ x : A) & B@
+    EAdditiveProduct
+      (Located Parameter)
+      (Located Expression)
+  | -- | The dependent multiplicative product type @(_ x : A) ⊗ B@
+    EMultiplicativeProduct
+      (Located Parameter)
+      (Located Expression)
   | ELet
       (Located Definition)
       (Located Expression)
@@ -77,6 +85,12 @@ data Expression
   | EBoolean Bool
   | EIfThenElse
       (Located Expression)
+      (Located Expression)
+      (Located Expression)
+  | EAdditivePair
+      (Located Expression)
+      (Located Expression)
+  | EMultiplicativePair
       (Located Expression)
       (Located Expression)
   deriving (Show)
@@ -125,11 +139,22 @@ data Value
       Implicitness
       (Located Value)
       Closure
-  | -- | A pi-type with an explicit argument (denoted @(x : A) → B@)
+  | -- | A pi-type with an explicit argument (denoted @(p x : A) → B@)
     VPi
       Multiplicity
       Name
       Implicitness
+      (Located Value)
+      Closure
+  | -- | A ⊗-type with an explicit argument (denoted @(p x : A) ⊗ B@)
+    VMultiplicativeProduct
+      Multiplicity
+      Name
+      (Located Value)
+      Closure
+  | -- | A &-type with an explicit argument (denoted @(x : A) & B@)
+    VAdditiveProduct
+      Name
       (Located Value)
       Closure
   | -- | Universes (of the given level)
@@ -152,6 +177,12 @@ data Value
       (Located Value)
   | VTrue
   | VFalse
+  | VMultiplicativePair
+      (Located Value)
+      (Located Value)
+  | VAdditivePair
+      (Located Value)
+      (Located Value)
   | -- builtin types
     VBuiltinU64
   | VBuiltinU32

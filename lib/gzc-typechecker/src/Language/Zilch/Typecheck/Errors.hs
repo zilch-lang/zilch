@@ -88,6 +88,9 @@ data ElabError
       Position
       Position
       [Located Text]
+  | -- | Cannot infer type of term.
+    CannotInferType
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -250,6 +253,12 @@ fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
       [(p, This $ "Binding '" <> Text.unpack x <> "' will end up evaluating itself when evaluating its value")]
         <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
         <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
+fromElabError (CannotInferType p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This "Cannot infer the type of this term")]
+    []
 
 showMult :: Multiplicity -> String
 showMult O = "0"

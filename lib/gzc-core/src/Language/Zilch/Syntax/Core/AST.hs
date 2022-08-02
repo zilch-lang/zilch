@@ -88,6 +88,20 @@ data Expression
     EPi
       (Located Parameter)
       (Located Expression)
+  | -- | The dependent multiplicative product type
+    EMultiplicativeProduct
+      (Located Parameter)
+      (Located Expression)
+  | -- | The dependent additive product type
+    EAdditiveProduct
+      (Located Parameter)
+      (Located Expression)
+  | EMultiplicativePair
+      (Located Expression)
+      (Located Expression)
+  | EAdditivePair
+      (Located Expression)
+      (Located Expression)
   | EBoolean
       Bool
   | EIfThenElse

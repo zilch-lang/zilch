@@ -7,7 +7,7 @@ module Language.Zilch.Syntax.Errors where
 import Data.Located (Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Note (Hint), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (Hint, Note), Report, err, warn)
 import Error.Diagnose.Compat.Megaparsec
 import Language.Zilch.Syntax.Core.AST (HoleLocation (..))
 import qualified Text.Megaparsec as MP
@@ -45,25 +45,40 @@ instance HasHints ParsingError String where
 -------------------------------------------------
 
 data DesugarError
-  = InvalidIntegerSuffix
+  = -- | An integer literal has an unidentified suffix.
+    InvalidIntegerSuffix
       Text
       Position
-  | LinearTopLevelBinding
+  | -- | A top-level binding is bound with a 1 multiplicity.
+    LinearTopLevelBinding
       Text
       Position
-  | PublicAssumptions
+  | -- | Assumptions bound publicly.
+    PublicAssumptions
       Position
-  | TypelessAssumption
+  | -- | An assumption has at least one hole inside its type.
+    TypelessAssumption
       Text
       Position
-  | AssumptionsInMutualBlock
+  | -- | Cannot bind assumptions inside @mutual@ blocks.
+    AssumptionsInMutualBlock
       Position
-  | HoleInValType
+  | -- | There is at least one hole inside a @val@.
+    HoleInValType
       HoleLocation
       Position
       Position
+  | -- | The dependent parameter of the product cannot be implicit.
+    ImplicitProductType
+      Position
+  | -- | An additive product has a multiplicity attached on its dependent argument.
+    AdditiveProductWithMultiplicity
+      Text
+      Position
 
 data DesugarWarning
+  = SingletonAdditivePair
+      Position
 
 fromDesugarerError :: DesugarError -> Report String
 fromDesugarerError (InvalidIntegerSuffix suffix pos) =
@@ -106,6 +121,24 @@ fromDesugarerError (HoleInValType loc p1 p2) =
     messages = case loc of
       SourceHole -> [(p1, This "Found hole in a 'val' type binding"), (p2, Where "While checking this type declaration")]
       InsertedHole -> [(p1, This "Binding is missing an explicit type signature"), (p2, Where "While checking this type declaration")]
+fromDesugarerError (ImplicitProductType p) =
+  err
+    Nothing
+    "Parse error"
+    [(p, This $ "Product dependent parameter cannot be made implicit")]
+    []
+fromDesugarerError (AdditiveProductWithMultiplicity x p) =
+  err
+    Nothing
+    "Parse error"
+    [(p, This $ "Binding named '" <> Text.unpack x <> "' cannot have a multiplicity attached")]
+    [Note "The dependent parameter of an additive product cannot have a multiplicity."]
 
 fromDesugarerWarning :: DesugarWarning -> Report String
+fromDesugarerWarning (SingletonAdditivePair p) =
+  warn
+    Nothing
+    "Parse warning"
+    [(p, This "Additive dependent tuple only contains a single element")]
+    [Note "This is equivalent to removing the tuple completely."]
 fromDesugarerWarning _ = warn Nothing "sorry" [] []
