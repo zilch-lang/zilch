@@ -749,7 +749,9 @@ synthetize rel ctx (AST.EAdditivePair e1 e2 :@ p) = do
   -}
   (qs1, e1, a, _) <- synthetize rel ctx e1
   (qs2, e2, b, _) <- synthetize rel ctx e2
-  pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p, VAdditivePair a b :@ p, TAST.extend rel :@ p)
+
+  b <- closeVal ctx b
+  pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p, VAdditiveProduct "_" a b :@ p, TAST.extend rel :@ p)
 synthetize _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

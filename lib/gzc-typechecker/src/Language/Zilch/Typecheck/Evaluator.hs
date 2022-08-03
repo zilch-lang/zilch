@@ -165,12 +165,12 @@ quote ctx level val = do
       x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
       val' <- quote ctx level val
       x' <- quote ctx (level + 1) x'
-      pure $ TAST.EMultiplicativeProduct (TAST.Parameter explicit (usage :@ p) (y :@ p) val' :@ p) x' :@ p
+      pure $ TAST.EMultiplicativeProduct (TAST.Parameter (not explicit) (usage :@ p) (y :@ p) val' :@ p) x' :@ p
     (VAdditiveProduct y val clos :@ p) -> do
       x' <- apply ctx clos (VVariable (y :@ p) level :@ p)
       val' <- quote ctx level val
       x' <- quote ctx (level + 1) x'
-      pure $ TAST.EAdditiveProduct (TAST.Parameter explicit (TAST.W :@ p) (y :@ p) val' :@ p) x' :@ p
+      pure $ TAST.EAdditiveProduct (TAST.Parameter (not explicit) (TAST.W :@ p) (y :@ p) val' :@ p) x' :@ p
     (VMultiplicativePair e1 e2 :@ p) -> do
       e1' <- quote ctx level e1
       e2' <- quote ctx level e2
