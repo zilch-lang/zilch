@@ -111,6 +111,13 @@ data Expression
       (Located Expression)
   | EOne
   | ETop
+  | EFst
+      (Located Expression)
+  | ESnd
+      (Located Expression)
+  | EAdditiveTupleAccess
+      (Located Expression)
+      Integer
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

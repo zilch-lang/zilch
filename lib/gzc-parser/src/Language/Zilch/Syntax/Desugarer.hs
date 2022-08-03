@@ -12,11 +12,12 @@ import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT, get, modify)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
 import Data.Bifunctor (bimap, second)
-import Data.Foldable (fold, foldrM)
+import Data.Foldable (fold, foldrM, foldlM)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -92,6 +93,11 @@ holes (AST.EMultiplicativeProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes
 holes (AST.EAdditiveProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EAdditiveUnit :@ _) = Nothing
 holes (AST.EMultiplicativeUnit :@ _) = Nothing
+holes (AST.EOne :@ _) = Nothing
+holes (AST.ETop :@ _) = Nothing
+holes (AST.EFst e :@ _) = holes e
+holes (AST.ESnd e :@ _) = holes e
+holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -241,6 +247,15 @@ desugarExpression (CST.EAdditiveUnit :@ p) = pure $ AST.EAdditiveUnit :@ p
 desugarExpression (CST.EMultiplicativeUnit :@ p) = pure $ AST.EMultiplicativeUnit :@ p
 desugarExpression (CST.EOne :@ p) = pure $ AST.EOne :@ p
 desugarExpression (CST.ETop :@ p) = pure $ AST.ETop :@ p
+desugarExpression (CST.EAccess e args :@ p) = do
+  e' <- desugarExpression e
+  foldlM mkAccess e' args
+  where
+    mkAccess _ (CST.EInt _ (Just _) :@ p) = throwError $ NumberSuffixInAccess p
+    mkAccess e1 (CST.EInt x Nothing :@ p) =
+      pure $ AST.EAdditiveTupleAccess e1 (Language.Zilch.Syntax.Desugarer.read x) :@ spanOf (getPos e1) p
+    mkAccess _ (CST.EId _ :@ _) = error "unsupported identifier access"
+    mkAccess _ _ = undefined
 desugarExpression _ = error "todo"
 
 desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix
@@ -253,3 +268,8 @@ desugarIntegerSuffix _ "s16" = pure SuffixS16
 desugarIntegerSuffix _ "s32" = pure SuffixS32
 desugarIntegerSuffix _ "s64" = pure SuffixS64
 desugarIntegerSuffix p suffix = throwError $ InvalidIntegerSuffix suffix p
+
+---------------------------------
+
+read :: Read a => Text -> a
+read = Prelude.read . Text.unpack

@@ -114,4 +114,7 @@ data Expression
       (Located Expression)
   | EOne
   | ETop
+  | EAccess
+      (Located Expression)
+      [Located Expression]
   deriving (Show)

@@ -11,7 +11,7 @@ import Control.Applicative ((<|>))
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
-import Data.Located (Located ((:@)), Position (..), getPos, unLoc)
+import Data.Located (Located ((:@)), Position (..), getPos, spanOf, unLoc)
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
@@ -209,7 +209,21 @@ parseResourceUsage = do
     isUsageNumber _ = False
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
-parseExpression s = parseApplication s
+parseExpression s = parseAccess s
+
+parseAccess :: forall m. MonadParser m => m () -> m (Located Expression)
+parseAccess s = do
+  x <- parseApplication s
+  ls <- MP.many (MP.try s *> doubleColon *> s *> located field)
+
+  case ls of
+    [] -> pure x
+    args -> pure $ EAccess x args :@ spanOf (getPos x) (getPos $ last args)
+  where
+    doubleColon = lexeme (token TkDoubleColon <|> token TkUniDoubleColon)
+    field = (check =<< parseNumber) <|> (EId <$> parseIdentifier)
+
+    check ((x, suf) :@ _) = pure $ EInt x suf
 
 parseApplication :: forall m. MonadParser m => m () -> m (Located Expression)
 parseApplication s = located do

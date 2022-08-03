@@ -752,6 +752,50 @@ synthetize rel ctx (AST.EAdditivePair e1 e2 :@ p) = do
 
   b <- closeVal ctx b
   pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p, VAdditiveProduct "_" a b :@ p, TAST.extend rel :@ p)
+synthetize rel ctx (AST.EAdditiveTupleAccess e n :@ _) = do
+  (_, _, ty, _) <- synthetize rel ctx e
+  ty' <- quote ctx (lvl ctx) ty
+  fns <- reverse <$> mkFstSnd ty' n
+  let expr = foldr mkApp e fns
+  synthetize rel ctx expr
+  where
+    mkFstSnd (TAST.EAdditiveProduct _ _ :@ p) 1 = pure [(AST.EFst, p)]
+    mkFstSnd _ 1 = pure []
+    mkFstSnd (TAST.EAdditiveProduct _ e@(TAST.EAdditiveProduct _ _ :@ _) :@ p) n =
+      ((AST.ESnd, p) :) <$> mkFstSnd e (n - 1)
+    mkFstSnd (TAST.EAdditiveProduct _ _ :@ p) 2 = pure [(AST.ESnd, p)]
+    mkFstSnd (TAST.EAdditiveProduct _ _ :@ _) _ = throwError $ CannotAccessNthElementOfAdditiveTuple n (getPos e)
+    mkFstSnd e n = throwError $ CannotAccessNthElementOfNonAdditiveTuple n (getPos e)
+
+    mkApp (f, p) e1 = f e1 :@ p
+synthetize rel ctx (AST.EFst e :@ p) = do
+  {-
+     Γ ⊢ M ⇒ᵖ (x : S) & T
+    ───────────────────── [⇒ &-Efst]
+        Γ ⊢ fst M ⇒ᵖ S
+  -}
+  (qs1, e, ty, _) <- synthetize rel ctx e
+
+  case ty of
+    VAdditiveProduct _ s _ :@ _ -> pure (qs1, TAST.EFst e :@ p, s, TAST.extend rel :@ p)
+    ty -> do
+      ty@(_ :@ p) <- quote ctx (lvl ctx) ty
+      throwError $ ExpectedAdditiveProduct ty p
+synthetize rel ctx (AST.ESnd e :@ p) = do
+  {-
+     Γ ⊢ M ⇒ᵖ (x : S) & T
+    ───────────────────── [⇒ &-Esnd]
+        Γ ⊢ snd M ⇒ᵖ T
+  -}
+  (qs1, e, ty, _) <- synthetize rel ctx e
+
+  case ty of
+    VAdditiveProduct x _ t :@ p1 -> do
+      t <- apply ctx t (VVariable (x :@ p1) (lvl ctx) :@ p1)
+      pure (qs1, TAST.ESnd e :@ p, t, TAST.extend rel :@ p)
+    ty -> do
+      ty@(_ :@ p) <- quote ctx (lvl ctx) ty
+      throwError $ ExpectedAdditiveProduct ty p
 synthetize _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

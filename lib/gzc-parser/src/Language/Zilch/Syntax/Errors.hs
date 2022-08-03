@@ -75,6 +75,9 @@ data DesugarError
     AdditiveProductWithMultiplicity
       Text
       Position
+  | -- | Access number for additive pair has a suffix.
+    NumberSuffixInAccess
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -133,6 +136,12 @@ fromDesugarerError (AdditiveProductWithMultiplicity x p) =
     "Parse error"
     [(p, This $ "Binding named '" <> Text.unpack x <> "' cannot have a multiplicity attached")]
     [Note "The dependent parameter of an additive product cannot have a multiplicity."]
+fromDesugarerError (NumberSuffixInAccess p) =
+  err
+    Nothing
+    "Parse error"
+    [(p, This "The accessor of an additive tuple cannot have a type suffix.")]
+    []
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =

@@ -137,6 +137,16 @@ instance Pretty (Located Expression) where
   pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
   pretty (EOne :@ _) = "𝟏"
   pretty (ETop :@ _) = "⊤"
+  pretty (EFst e :@ _) =
+    "FST"
+      <> parens (pretty e)
+  pretty (ESnd e :@ _) =
+    "SND"
+      <> parens (pretty e)
+  pretty (EAdditiveTupleAccess e n :@ _) =
+    pretty e
+      <> "∷"
+      <> pretty n
 
 instance Pretty IntegerSuffix where
   pretty SuffixS8 = "s8"

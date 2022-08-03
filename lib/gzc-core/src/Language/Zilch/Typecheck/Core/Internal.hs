@@ -97,6 +97,10 @@ data Expression
   | EAdditiveUnit
   | EOne
   | ETop
+  | EFst
+      (Located Expression)
+  | ESnd
+      (Located Expression)
   deriving (Show)
 
 data BuiltinType

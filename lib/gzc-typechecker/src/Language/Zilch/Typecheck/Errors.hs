@@ -1,3 +1,4 @@
+{-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Errors where
@@ -90,6 +91,18 @@ data ElabError
       [Located Text]
   | -- | Cannot infer type of term.
     CannotInferType
+      Position
+  | -- | Cannot access the N-th element inside a dependent additive tuple.
+    CannotAccessNthElementOfAdditiveTuple
+      Integer
+      Position
+  | -- | Cannot access N-th element of a non dependent additive tuple.
+    CannotAccessNthElementOfNonAdditiveTuple
+      Integer
+      Position
+  | -- | An additive product was expected at this position.
+    ExpectedAdditiveProduct
+      (Located Expression)
       Position
 
 data ElabWarning
@@ -259,6 +272,35 @@ fromElabError (CannotInferType p) =
     "Type-checking error"
     [(p, This "Cannot infer the type of this term")]
     []
+fromElabError (CannotAccessNthElementOfAdditiveTuple n p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Cannot access the " <> show n <> ordinal n <> " element of the given additive tuple")]
+    []
+fromElabError (CannotAccessNthElementOfNonAdditiveTuple n p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "Cannot access the " <> show n <> ordinal n <> " element of a non-additive dependent tuple")]
+    []
+fromElabError (ExpectedAdditiveProduct ty p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "An additive dependent pair (&-type) was expected here but a term of type '" <> show (pretty ty) <> "' was found")]
+    []
+
+ordinal :: Integral a => a -> String
+ordinal number
+        | remainder100 `elem` [11..13] = "th"
+        | remainder10 == 1             = "st"
+        | remainder10 == 2             = "nd"
+        | remainder10 == 3             = "rd"
+        | otherwise                    = "th"
+  where abs_number   = abs number
+        remainder10  = abs_number `mod` 10
+        remainder100 = abs_number `mod` 100
 
 showMult :: Multiplicity -> String
 showMult O = "0"
