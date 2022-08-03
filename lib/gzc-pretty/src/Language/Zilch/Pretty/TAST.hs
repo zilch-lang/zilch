@@ -143,10 +143,12 @@ instance Pretty (Located Expression) where
   pretty (ETop :@ _) = "⊤"
   pretty (EFst e :@ _) =
     "FST"
-      <> parens (pretty e)
+      <> space
+      <> pretty e
   pretty (ESnd e :@ _) =
     "SND"
-      <> parens (pretty e)
+      <> space
+      <> pretty e
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

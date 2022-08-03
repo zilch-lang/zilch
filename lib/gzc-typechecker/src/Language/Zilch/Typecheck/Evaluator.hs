@@ -92,6 +92,14 @@ eval _ (TAST.EMultiplicativeUnit :@ p) = pure $ VMultiplicativeUnit :@ p
 eval _ (TAST.EAdditiveUnit :@ p) = pure $ VAdditiveUnit :@ p
 eval _ (TAST.EOne :@ p) = pure $ VOne :@ p
 eval _ (TAST.ETop :@ p) = pure $ VTop :@ p
+eval ctx (TAST.EFst e :@ _) = do
+  eval ctx e >>= \case
+    VAdditivePair a _ :@ _ -> pure a
+    _ -> error "FST on non-additive pair"
+eval ctx (TAST.ESnd e :@ _) = do
+  eval ctx e >>= \case
+    VAdditivePair _ b :@ _ -> pure b
+    _ -> error "SND on non-additive pair"
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
