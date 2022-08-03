@@ -7,7 +7,8 @@ module Language.Zilch.Pretty.TAST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
-import Prettyprinter (Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Language.Zilch.Typecheck.Core.Multiplicity
+import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -50,6 +51,8 @@ instance Pretty (Located Definition) where
       <> pretty typ
 
 instance Pretty (Located Parameter) where
+  pretty (Parameter False (W :@ _) ("_" :@ _) ty :@ _) =
+    pretty ty
   pretty (Parameter isImplicit usage name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
       pretty usage
@@ -80,24 +83,9 @@ instance Pretty (Located Expression) where
   pretty (EApplication fun isImplicit arg :@ _) =
     pretty fun
       <> (if isImplicit then braces else parens) (pretty arg)
-  pretty (EPi param val :@ _) =
-    pretty param
-      <> space
-      <> "→"
-      <> space
-      <> pretty val
-  pretty (EMultiplicativeProduct param val :@ _) =
-    pretty param
-      <> space
-      <> "⊗"
-      <> space
-      <> pretty val
-  pretty (EAdditiveProduct param val :@ _) =
-    pretty param
-      <> space
-      <> "&"
-      <> space
-      <> pretty val
+  pretty (EPi param val :@ _) = prettyDependent param "→" val
+  pretty (EMultiplicativeProduct param val :@ _) = prettyDependent param "⊗" val
+  pretty (EAdditiveProduct param val :@ _) = prettyDependent param "&" val
   pretty (EInsertedMeta m path :@ _) =
     "?"
       <> pretty m
@@ -149,6 +137,14 @@ instance Pretty (Located Expression) where
     "SND"
       <> space
       <> pretty e
+
+prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
+prettyDependent param op val =
+  pretty param
+    <> space
+    <> op
+    <> space
+    <> pretty val
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

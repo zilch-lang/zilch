@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.AST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod _ defs :@ _) =
@@ -50,6 +50,8 @@ instance Pretty (Located Definition) where
       <> pretty typ
 
 instance Pretty (Located Parameter) where
+  pretty (Parameter False (W :@ _) ("_" :@ _) ty :@ _) =
+    pretty ty
   pretty (Parameter isImplicit mult name ty :@ _) =
     (if isImplicit then enclose "{" "}" else enclose "(" ")") $
       pretty mult
@@ -88,24 +90,9 @@ instance Pretty (Located Expression) where
     pretty fun
       <> (if isImp then braces else parens) (pretty arg)
   pretty (EHole _ :@ _) = "_"
-  pretty (EPi param val :@ _) =
-    pretty param
-      <> space
-      <> "→"
-      <> space
-      <> pretty val
-  pretty (EMultiplicativeProduct param val :@ _) =
-    pretty param
-      <> space
-      <> "⊗"
-      <> space
-      <> pretty val
-  pretty (EAdditiveProduct param val :@ _) =
-    pretty param
-      <> space
-      <> "&"
-      <> space
-      <> pretty val
+  pretty (EPi param val :@ _) = prettyDependent param "→" val
+  pretty (EMultiplicativeProduct param val :@ _) = prettyDependent param "⊗" val
+  pretty (EAdditiveProduct param val :@ _) = prettyDependent param "&" val
   pretty (EMultiplicativePair e1 e2 :@ _) =
     enclose "(" ")" $
       pretty e1
@@ -149,6 +136,14 @@ instance Pretty (Located Expression) where
     pretty e
       <> "∷"
       <> pretty n
+
+prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
+prettyDependent param op val =
+  pretty param
+    <> space
+    <> op
+    <> space
+    <> pretty val
 
 instance Pretty IntegerSuffix where
   pretty SuffixS8 = "s8"
