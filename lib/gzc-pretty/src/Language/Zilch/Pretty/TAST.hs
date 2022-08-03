@@ -137,6 +137,10 @@ instance Pretty (Located Expression) where
         <> comma
         <> space
         <> pretty e2
+  pretty (EAdditiveUnit :@ _) = "⟨" <> "⟩"
+  pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
+  pretty (EOne :@ _) = "𝟏"
+  pretty (ETop :@ _) = "⊤"
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

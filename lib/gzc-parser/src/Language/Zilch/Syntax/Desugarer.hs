@@ -79,7 +79,6 @@ holes (AST.EType :@ _) = Nothing
 holes (AST.EInteger _ _ :@ _) = Nothing
 holes (AST.ECharacter _ :@ _) = Nothing
 holes (AST.EIdentifier _ :@ _) = Nothing
-holes (AST.EDo e :@ _) = holes e
 holes (AST.ELam (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 holes (AST.ELet (AST.Let _ _ _ e1 e2 :@ _) e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
 holes (AST.ELet (AST.Val {} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
@@ -91,6 +90,8 @@ holes (AST.EAdditivePair e1 e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EMultiplicativePair e1 e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EMultiplicativeProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EAdditiveProduct (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
+holes (AST.EAdditiveUnit :@ _) = Nothing
+holes (AST.EMultiplicativeUnit :@ _) = Nothing
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -100,7 +101,8 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   retTy' <- traverse desugarExpression retTy
 
   let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ spanOf p2 (maybe p2 getPos retTy)) retTy') params'
-  val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
+  let par = cParams <> params
+  val <- if null par then desugarExpression ret else desugarExpression (CST.ELam par ret :@ p1)
 
   pure . Just $ AST.Let False usage' name ty val :@ p
   where
@@ -112,7 +114,8 @@ desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   retTy' <- traverse desugarExpression retTy
 
   let ty = foldr mkPi (fromMaybe (AST.EHole AST.InsertedHole :@ spanOf p2 (maybe p2 getPos retTy)) retTy') params'
-  val <- desugarExpression (CST.ELam (cParams <> params) ret :@ p1)
+  let par = cParams <> params
+  val <- if null par then desugarExpression ret else desugarExpression (CST.ELam par ret :@ p1)
 
   pure . Just $ AST.Let True usage' name ty val :@ p
   where
@@ -143,6 +146,7 @@ desugarParameter (CST.Implicit args :@ p) = do
     usage' <- desugarMultiplicity usage p1
     pure $ AST.Parameter True usage' name ty' :@ p
   pure args'
+desugarParameter (CST.Explicit [] :@ p) = pure [AST.Parameter False (Unrestricted :@ p) ("_" :@ p) (AST.EOne :@ p) :@ p]
 desugarParameter (CST.Explicit args :@ p) = do
   args' <- flip traverse args \(usage, name@(_ :@ p1), ty) -> do
     ty' <- maybe (pure $ AST.EHole AST.InsertedHole :@ p1) desugarExpression ty
@@ -162,6 +166,10 @@ desugarExpression (CST.EInt i suffix :@ p) = do
   suffix' <- maybe (pure SuffixU64) (desugarIntegerSuffix p) suffix
   pure $ AST.EInteger (i :@ p) suffix' :@ p
 desugarExpression (CST.EChar c :@ p) = pure $ AST.ECharacter (c :@ p) :@ p
+desugarExpression (CST.ELam [] expr :@ p) = do
+  expr' <- desugarExpression expr
+
+  pure $ AST.ELam (AST.Parameter False (Unrestricted :@ p) ("_" :@ p) (AST.EOne :@ p) :@ p) expr' :@ p
 desugarExpression (CST.ELam params expr :@ _) = do
   params' <- fold <$> traverse desugarParameter params
   expr' <- desugarExpression expr
@@ -169,9 +177,7 @@ desugarExpression (CST.ELam params expr :@ _) = do
   pure $ foldr mkLam expr' params'
   where
     mkLam param expr = AST.ELam param expr :@ spanOf (getPos param) (getPos expr)
-desugarExpression (CST.EDo expr :@ p) = do
-  expr' <- desugarExpression expr
-  pure $ AST.EDo expr' :@ p
+desugarExpression (CST.EDo expr :@ p) = desugarExpression (CST.ELam [] expr :@ p)
 desugarExpression (CST.ELet def ret :@ p) = do
   def' <- fromJust <$> desugarDefinition def
   ret' <- desugarExpression ret
@@ -231,6 +237,10 @@ desugarExpression (CST.EAdditiveTuple es :@ _) = do
   pure $ foldr1 mkPair es'
   where
     mkPair e1 e2 = AST.EAdditivePair e1 e2 :@ spanOf (getPos e1) (getPos e2)
+desugarExpression (CST.EAdditiveUnit :@ p) = pure $ AST.EAdditiveUnit :@ p
+desugarExpression (CST.EMultiplicativeUnit :@ p) = pure $ AST.EMultiplicativeUnit :@ p
+desugarExpression (CST.EOne :@ p) = pure $ AST.EOne :@ p
+desugarExpression (CST.ETop :@ p) = pure $ AST.ETop :@ p
 desugarExpression _ = error "todo"
 
 desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix

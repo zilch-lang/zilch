@@ -62,7 +62,6 @@ data Expression
       (Located Text)
   | EIdentifier
       (Located Text)
-  | EDo (Located Expression)
   | ELam
       (Located Parameter)
       -- ^ Explicit or implicit parameters
@@ -102,12 +101,16 @@ data Expression
   | EAdditivePair
       (Located Expression)
       (Located Expression)
+  | EMultiplicativeUnit
+  | EAdditiveUnit
   | EBoolean
       Bool
   | EIfThenElse
       (Located Expression)
       (Located Expression)
       (Located Expression)
+  | EOne
+  | ETop
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

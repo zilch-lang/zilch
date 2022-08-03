@@ -104,10 +104,14 @@ data Expression
       [Located Expression]
   | EAdditiveTuple
       [Located Expression]
+  | EMultiplicativeUnit
+  | EAdditiveUnit
   | ETrue
   | EFalse
   | EIfThenElse
       (Located Expression)
       (Located Expression)
       (Located Expression)
+  | EOne
+  | ETop
   deriving (Show)

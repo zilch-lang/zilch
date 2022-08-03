@@ -213,6 +213,10 @@ unify' ctx lvl t u = do
     (VAdditivePair e1 e2 :@ _, VAdditivePair e3 e4 :@ _) -> do
       unify' ctx lvl e1 e3
       unify' ctx lvl e2 e4
+    (VOne :@ _, VOne :@ _) -> pure ()
+    (VTop :@ _, VTop :@ _) -> pure ()
+    (VAdditiveUnit :@ _, VAdditiveUnit :@ _) -> pure ()
+    (VMultiplicativeUnit :@ _, VMultiplicativeUnit :@ _) -> pure ()
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()

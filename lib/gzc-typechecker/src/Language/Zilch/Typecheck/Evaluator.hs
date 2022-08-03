@@ -88,6 +88,10 @@ eval ctx (TAST.EAdditivePair e1 e2 :@ p) = do
   e1' <- eval ctx e1
   e2' <- eval ctx e2
   pure $ VAdditivePair e1' e2' :@ p
+eval _ (TAST.EMultiplicativeUnit :@ p) = pure $ VMultiplicativeUnit :@ p
+eval _ (TAST.EAdditiveUnit :@ p) = pure $ VAdditiveUnit :@ p
+eval _ (TAST.EOne :@ p) = pure $ VOne :@ p
+eval _ (TAST.ETop :@ p) = pure $ VTop :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -190,6 +194,10 @@ quote ctx level val = do
     VBuiltinS16 :@ p -> pure $ TAST.EBuiltin TAST.TyS16 :@ p
     VBuiltinS8 :@ p -> pure $ TAST.EBuiltin TAST.TyS8 :@ p
     VBuiltinBool :@ p -> pure $ TAST.EBuiltin TAST.TyBool :@ p
+    VOne :@ p -> pure $ TAST.EOne :@ p
+    VTop :@ p -> pure $ TAST.ETop :@ p
+    VAdditiveUnit :@ p -> pure $ TAST.EAdditiveUnit :@ p
+    VMultiplicativeUnit :@ p -> pure $ TAST.EMultiplicativeUnit :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

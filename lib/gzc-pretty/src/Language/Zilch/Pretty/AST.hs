@@ -72,10 +72,6 @@ instance Pretty (Located Expression) where
       <> pretty suffix
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
   pretty (EIdentifier id :@ _) = pretty $ unLoc id
-  pretty (EDo expr :@ _) =
-    "do"
-      <> line
-      <> indent 2 (pretty expr)
   pretty (ELam param ret :@ _) =
     "λ"
       <> space
@@ -137,6 +133,10 @@ instance Pretty (Located Expression) where
         <> "else"
         <> space
         <> pretty e
+  pretty (EAdditiveUnit :@ _) = "⟨" <> "⟩"
+  pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
+  pretty (EOne :@ _) = "𝟏"
+  pretty (ETop :@ _) = "⊤"
 
 instance Pretty IntegerSuffix where
   pretty SuffixS8 = "s8"

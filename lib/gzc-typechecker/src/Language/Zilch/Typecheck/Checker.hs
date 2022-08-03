@@ -445,6 +445,30 @@ check rel ctx expr ty = do
       (qs2, e2) <- check rel ctx e2 ty2'
 
       pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p)
+    (AST.EOne :@ p, VType :@ _) -> do
+      {-
+         ─────────────── [⇐ 𝟏-F]
+          Γ ⊢ 𝟏 ⇐⁰ type
+      -}
+      pure (mempty, TAST.EOne :@ p)
+    (AST.ETop :@ p, VType :@ _) -> do
+      {-
+         ─────────────── [⇐ ⊤-F]
+          Γ ⊢ ⊤ ⇐⁰ type
+      -}
+      pure (mempty, TAST.ETop :@ p)
+    (AST.EMultiplicativeUnit :@ p, VOne :@ _) -> do
+      {-
+        ───────────── [⇒ 𝟏-I]
+         Γ ⊢ () ⇐ᵖ 𝟏
+      -}
+      pure (mempty, TAST.EMultiplicativeUnit :@ p)
+    (AST.EAdditiveUnit :@ p, VTop :@ _) -> do
+      {-
+        ───────────── [⇒ ⊤-I]
+         Γ ⊢ ⟨⟩ ⇐ᵖ ⊤
+      -}
+      pure (mempty, TAST.EAdditiveUnit :@ p)
     (AST.EHole loc :@ p1, ty) -> do
       meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
       pure (mempty, meta :@ p1)
@@ -469,8 +493,8 @@ synthetize :: forall m. MonadElab m => TAST.Relevance -> Context -> Located AST.
 synthetize rel ctx (AST.EInteger i suffix :@ p) = do
   {-
      n is a literal number
-    ─────────────────────── [⇒ integer-E]
-         Γ ⊢ n ⇒^ω uN
+    ─────────────────────── [⇒ integer-I]
+          Γ ⊢ n ⇒ᵖ uN
   -}
   let ty = typeForSuffix suffix :@ p
   tmp <- quote ctx (lvl ctx) ty
@@ -488,17 +512,29 @@ synthetize rel ctx (AST.EInteger i suffix :@ p) = do
 synthetize rel _ (AST.ECharacter c :@ p) =
   {-
      c is a literal character
-    ────────────────────────── [⇒ char-E]
-          Γ ⊢ c ⇒^ω char
+    ────────────────────────── [⇒ char-I]
+           Γ ⊢ c ⇒ᵖ char
   -}
   pure (mempty, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.extend rel :@ p)
 synthetize rel _ (AST.EBoolean bool :@ p) =
   {-
      b is a boolean literal
-    ──────────────────────── [⇒ bool-E]
-         Γ ⊢ b ⇒^ω bool
+    ──────────────────────── [⇒ bool-I]
+          Γ ⊢ b ⇒ᵖ bool
   -}
   pure (mempty, TAST.EBoolean bool :@ p, VBuiltinBool :@ p, TAST.extend rel :@ p)
+synthetize rel _ (AST.EMultiplicativeUnit :@ p) =
+  {-
+    ───────────── [⇒ 𝟏-I]
+     Γ ⊢ () ⇒ᵖ 𝟏
+  -}
+  pure (mempty, TAST.EMultiplicativeUnit :@ p, VOne :@ p, TAST.extend rel :@ p)
+synthetize rel _ (AST.EAdditiveUnit :@ p) =
+  {-
+    ───────────── [⇒ ⊤-I]
+     Γ ⊢ ⟨⟩ ⇒ᵖ ⊤
+  -}
+  pure (mempty, TAST.EAdditiveUnit :@ p, VTop :@ p, TAST.extend rel :@ p)
 synthetize rel ctx (AST.EApplication e1 isImp e2 :@ p) = do
   {-
      Γ ⊢ f ⇒ⁱ (y :ᵖ A) → B          0Γ ⊢ x ⇐⁰ A          ip = 0
@@ -583,6 +619,22 @@ synthetize rel _ (AST.EType :@ p) = do
      Γ ⊢ type ⇒⁰ type
   -}
   pure (mempty, TAST.EType :@ p, VType :@ p, TAST.O :@ p)
+synthetize rel _ (AST.ETop :@ p) = do
+  when (rel /= TAST.Irrelevant) do
+    throwError $ ErasedInRelevantContext p
+  {-
+    ─────────────── [⇒ ⊤-F]
+     Γ ⊢ ⊤ ⇒⁰ type
+  -}
+  pure (mempty, TAST.ETop :@ p, VType :@ p, TAST.O :@ p)
+synthetize rel _ (AST.EOne :@ p) = do
+  when (rel /= TAST.Irrelevant) do
+    throwError $ ErasedInRelevantContext p
+  {-
+    ─────────────── [⇒ 𝟏-F]
+     Γ ⊢ 𝟏 ⇒⁰ type
+  -}
+  pure (mempty, TAST.EOne :@ p, VType :@ p, TAST.O :@ p)
 synthetize rel ctx (AST.EPi (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ p) = do
   when (rel /= TAST.Irrelevant) do
     throwError $ ErasedInRelevantContext p

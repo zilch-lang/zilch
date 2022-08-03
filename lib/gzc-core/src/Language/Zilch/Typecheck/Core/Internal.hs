@@ -93,6 +93,10 @@ data Expression
   | EMultiplicativePair
       (Located Expression)
       (Located Expression)
+  | EMultiplicativeUnit
+  | EAdditiveUnit
+  | EOne
+  | ETop
   deriving (Show)
 
 data BuiltinType
@@ -183,6 +187,10 @@ data Value
   | VAdditivePair
       (Located Value)
       (Located Value)
+  | VMultiplicativeUnit
+  | VAdditiveUnit
+  | VOne
+  | VTop
   | -- builtin types
     VBuiltinU64
   | VBuiltinU32

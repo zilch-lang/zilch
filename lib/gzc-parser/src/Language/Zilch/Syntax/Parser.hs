@@ -168,8 +168,12 @@ parseVal s = lexeme $ located do
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =
-  located $ explicit s <|> implicit s
+  located $ MP.try (unit s) <|> explicit s <|> implicit s
   where
+    unit s = do
+      lexeme (token TkLeftParen) *> s <* token TkRightParen
+      pure $ Explicit []
+    
     explicit s = do
       lexeme (token TkLeftParen) *> s
       args <- flip MP.sepBy1 (token TkComma <* s) do
@@ -240,7 +244,11 @@ parseAtom s = located do
         parseLambda s,
         parseDo s,
         EType <$ token TkType,
+        MP.try $ parseMultiplicativeUnit s,
+        MP.try $ parseAdditiveUnit s,
         MP.try $ parseDependentType s,
+        parseOne,
+        parseTop,
         EId <$> parseIdentifier,
         parseTuple s
       ] ::
@@ -311,3 +319,15 @@ parseIf s = do
   s *> lexeme (token TkElse) <* s
   e <- parseExpression s
   pure (EIfThenElse cond t e)
+
+parseMultiplicativeUnit :: forall m. MonadParser m => m () -> m Expression
+parseMultiplicativeUnit s = EMultiplicativeUnit <$ (lexeme (token TkLeftParen) <* s <* token TkRightParen)
+
+parseAdditiveUnit :: forall m. MonadParser m => m () -> m Expression
+parseAdditiveUnit s = EAdditiveUnit <$ (lexeme (token TkLeftAngle) <* s <* token TkRightAngle)
+
+parseOne :: forall m. MonadParser m => m Expression
+parseOne = EOne <$ (token (TkSymbol "𝟏") <|> token (TkSymbol "𝟭") <|> token (TkSymbol "unit"))
+
+parseTop :: forall m. MonadParser m => m Expression
+parseTop = ETop <$ (token (TkSymbol "⊤"))
