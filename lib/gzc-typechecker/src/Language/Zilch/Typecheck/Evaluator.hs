@@ -106,6 +106,9 @@ eval ctx (TAST.EMultiplicativePairElim _ _ _ _ m n :@ _) = do
   m' <- eval ctx m
   let env' = Env.extend (Env.extend (env ctx) (VFst m' :@ getPos m')) (VSnd m' :@ getPos m')
   eval (ctx{env = env'}) n
+eval ctx (TAST.EMultiplicativeUnitElim _ _ m n :@ _) = do
+  eval ctx m -- << this will not be evaluated
+  eval ctx n
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)

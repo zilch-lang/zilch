@@ -353,12 +353,10 @@ parseMultiplicativePairDestructor s' s = do
     m <- MP.optional (parseResourceUsage <* s)
     lexeme (token TkLeftParen)
     pure m
-  ids <- parseIdentifier `sepBy2` (lexeme (token TkComma) *> s)
+  ids <- parseIdentifier `MP.sepBy` (lexeme (token TkComma) *> s)
   lexeme (token TkRightParen)
   bind <- MP.optional $ s *> lexeme (token TkAs) *> parseIdentifier <* s
   lexeme (token TkColonEquals <|> token TkUniColonEquals) <* s
   val1 <- parseExpression s <* s'
   val2 <- parseExpression s'
   pure $ EMultiplicativeTupleElim bind mult ids val1 val2
-  where
-    sepBy2 p sep = (:) <$> (p <* sep) <*> MP.sepBy1 p sep

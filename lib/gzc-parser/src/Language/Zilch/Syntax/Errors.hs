@@ -84,6 +84,9 @@ data DesugarError
       Text
       Position
       [Position]
+  | -- | Multiplicative tuple eliminator with a single element.
+    SingletonMultiplicativeTupleElim
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -156,6 +159,12 @@ fromDesugarerError (DuplicateBindingInMultiplicativeTuplesEliminator x p ps) =
     []
   where
     poss = (, Where "Found here") <$> ps
+fromDesugarerError (SingletonMultiplicativeTupleElim p) =
+  err
+    Nothing
+    "Parse error"
+    [(p, This "Invalid singleton pattern in eliminator")]
+    []
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =

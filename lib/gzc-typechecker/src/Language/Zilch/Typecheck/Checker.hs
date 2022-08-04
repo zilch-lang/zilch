@@ -480,7 +480,7 @@ check rel ctx expr ty = do
          0Γ₁, z :⁰ (_ :ⁱ S) ⊗ T ⊢ U ⇐⁰ type              Γ₁ ⊢ M ⇒ᵖ (_ :ⁱ S) ⊗ T
                              Γ₂, x :ⁱᵖ S, y :ᵖ T ⊢ N ⇐ᵖ U
         ──────────────────────────────────────────────────────────────────────── [⇐ ⊗-E]
-                        Γ₁ + Γ₂ ⊢ let (x, y) as z = M in N ⇐ᵖ U
+                        Γ₁ + Γ₂ ⊢ let r (x, y) as z = M in N ⇐ᵖ U
       -}
       (qs1, m, ty, _) <- synthetize rel ctx m
       case ty of
@@ -506,6 +506,19 @@ check rel ctx expr ty = do
         ty -> do
           ty@(_ :@ p) <- quote ctx (lvl ctx) ty
           throwError $ ExpectedMultiplicativeProduct ty p
+    (AST.EMultiplicativeUnitElim z mult m n :@ p, t) -> do
+      {-
+          Γ₁ ⊢ M ⇐ᵖ 𝟏         Γ₁, z :⁰ 𝟏 ⊢ T ⇐⁰ type          Γ₂ ⊢ N ⇐ᵖ T
+        ────────────────────────────────────────────────────────────────── [⇐ 𝟏-E]
+                        Γ₁ + Γ₂ ⊢ let r () as z := M; N ⇐ᵖ T
+      -}
+      (qs1, m) <- check rel ctx m (VOne :@ p)
+      (qs2, n) <- case z of
+        Nothing -> check rel ctx n t
+        Just z -> defineLocal z TAST.O (VMultiplicativeUnit :@ p) (VOne :@ p) ctx \ctx -> do
+          (qs, n) <- check rel ctx n t
+          pure (qs, getPos n, n)
+      pure (qs1 `Usage.concat` qs2, TAST.EMultiplicativeUnitElim z mult m n :@ p)
     (AST.EHole loc :@ p1, ty) -> do
       meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
       pure (mempty, meta :@ p1)
@@ -859,6 +872,15 @@ synthetize rel ctx (AST.EMultiplicativePairElim z mult x y m n :@ p) = do
     ty -> do
       ty@(_ :@ p) <- quote ctx (lvl ctx) ty
       throwError $ ExpectedMultiplicativeProduct ty p
+synthetize rel ctx (AST.EMultiplicativeUnitElim z mult m n :@ p) = do
+  {-
+      Γ₁ ⊢ M ⇐ᵖ 𝟏          Γ₂ ⊢ N ⇒ᵖ T
+    ──────────────────────────────────── [⇒ 𝟏-E]
+     Γ₁ + Γ₂ ⊢ let () as z := M; N ⇒ᵖ T
+  -}
+  (qs1, m) <- check rel ctx m (VOne :@ p)
+  (qs2, n, t, _) <- synthetize rel ctx n
+  pure (qs1 `Usage.concat` qs2, TAST.EMultiplicativeUnitElim z mult m n :@ p, t, TAST.extend rel :@ p)
 synthetize _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

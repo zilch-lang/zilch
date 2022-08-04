@@ -132,6 +132,11 @@ data Expression
       -- ^ @M@
       (Located Expression)
       -- ^ @N@
+  | EMultiplicativeUnitElim
+      (Maybe (Located Text))
+      (Located Multiplicity)
+      (Located Expression)
+      (Located Expression)
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

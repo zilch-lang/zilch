@@ -99,6 +99,7 @@ holes (AST.EFst e :@ _) = holes e
 holes (AST.ESnd e :@ _) = holes e
 holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
+holes (AST.EMultiplicativeUnitElim _ _ m n :@ _) = holes m <|> holes n
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -257,6 +258,14 @@ desugarExpression (CST.EAccess e args :@ _) = do
       pure $ AST.EAdditiveTupleAccess e1 (Language.Zilch.Syntax.Desugarer.read x) :@ spanOf (getPos e1) p
     mkAccess _ (CST.EId _ :@ _) = error "unsupported identifier access"
     mkAccess _ _ = undefined
+desugarExpression (CST.EMultiplicativeTupleElim bind mult [] m n :@ p) = do
+  mult' <- desugarMultiplicity mult p
+  m' <- desugarExpression m
+  n' <- desugarExpression n
+
+  pure $ AST.EMultiplicativeUnitElim bind mult' m' n' :@ p
+desugarExpression (CST.EMultiplicativeTupleElim _ _ [_ :@ p] _ _ :@ _) =
+  throwError $ SingletonMultiplicativeTupleElim p
 desugarExpression (CST.EMultiplicativeTupleElim bind mult ids m n :@ p) = do
   mult' <- desugarMultiplicity mult p
   m' <- desugarExpression m

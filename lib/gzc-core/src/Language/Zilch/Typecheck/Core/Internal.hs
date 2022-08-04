@@ -115,6 +115,16 @@ data Expression
       -- ^ @M@
       (Located Expression)
       -- ^ @N@
+  | -- | @let p () as z := M; N@
+    EMultiplicativeUnitElim
+      (Maybe (Located Text))
+      -- ^ @z@
+      (Located Multiplicity)
+      -- ^ @p@
+      (Located Expression)
+      -- ^ @M@
+      (Located Expression)
+      -- ^ @N@
   deriving (Show)
 
 data BuiltinType
