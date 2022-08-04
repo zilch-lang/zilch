@@ -6,7 +6,7 @@
 
 module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force) where
 
-import Data.Located (Located ((:@)), Position, unLoc)
+import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
@@ -95,11 +95,17 @@ eval _ (TAST.ETop :@ p) = pure $ VTop :@ p
 eval ctx (TAST.EFst e :@ _) = do
   eval ctx e >>= \case
     VAdditivePair a _ :@ _ -> pure a
-    _ -> error "FST on non-additive pair"
+    VMultiplicativePair a _ :@ _ -> pure a
+    e -> pure $ VFst e :@ getPos e
 eval ctx (TAST.ESnd e :@ _) = do
   eval ctx e >>= \case
     VAdditivePair _ b :@ _ -> pure b
-    _ -> error "SND on non-additive pair"
+    VMultiplicativePair _ b :@ _ -> pure b
+    e -> pure $ VSnd e :@ getPos e
+eval ctx (TAST.EMultiplicativePairElim _ _ _ _ m n :@ _) = do
+  m' <- eval ctx m
+  let env' = Env.extend (Env.extend (env ctx) (VFst m' :@ getPos m')) (VSnd m' :@ getPos m')
+  eval (ctx{env = env'}) n
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -206,6 +212,12 @@ quote ctx level val = do
     VTop :@ p -> pure $ TAST.ETop :@ p
     VAdditiveUnit :@ p -> pure $ TAST.EAdditiveUnit :@ p
     VMultiplicativeUnit :@ p -> pure $ TAST.EMultiplicativeUnit :@ p
+    VFst e :@ p -> do
+      e' <- quote ctx level e
+      pure $ TAST.EFst e' :@ p
+    VSnd e :@ p -> do
+      e' <- quote ctx level e
+      pure $ TAST.ESnd e' :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

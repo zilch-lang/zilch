@@ -137,6 +137,19 @@ instance Pretty (Located Expression) where
     "SND"
       <> space
       <> pretty e
+  pretty (EMultiplicativePairElim z mult x y m n :@ _) =
+    "let"
+      <> space
+      <> pretty mult
+      <> space
+      <> parens (pretty (unLoc x) <> comma <> space <> pretty (unLoc y))
+      <> maybe emptyDoc (\z -> space <> "as" <> space <> pretty (unLoc z)) z
+      <> space
+      <> "≔"
+      <> space
+      <> pretty m
+      <> hardline
+      <> pretty n
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

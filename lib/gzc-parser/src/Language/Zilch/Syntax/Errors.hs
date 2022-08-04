@@ -1,6 +1,7 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Zilch.Syntax.Errors where
 
@@ -78,6 +79,11 @@ data DesugarError
   | -- | Access number for additive pair has a suffix.
     NumberSuffixInAccess
       Position
+  | -- | There are multiple of the same binding in the same eliminator.
+    DuplicateBindingInMultiplicativeTuplesEliminator
+      Text
+      Position
+      [Position]
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -142,6 +148,14 @@ fromDesugarerError (NumberSuffixInAccess p) =
     "Parse error"
     [(p, This "The accessor of an additive tuple cannot have a type suffix.")]
     []
+fromDesugarerError (DuplicateBindingInMultiplicativeTuplesEliminator x p ps) =
+  err
+    Nothing
+    "Parse error"
+    ([(p, This $ "Binding '" <> Text.unpack x <> "' is present multiple times in this eliminator pattern")] <> poss)
+    []
+  where
+    poss = (, Where "Found here") <$> ps
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =

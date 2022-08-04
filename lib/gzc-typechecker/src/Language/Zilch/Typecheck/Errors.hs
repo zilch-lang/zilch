@@ -104,6 +104,10 @@ data ElabError
     ExpectedAdditiveProduct
       (Located Expression)
       Position
+  | -- | A multiplicative product was expected at this position.
+    ExpectedMultiplicativeProduct
+      (Located Expression)
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -288,7 +292,13 @@ fromElabError (ExpectedAdditiveProduct ty p) =
   err
     Nothing
     "Type-checking error"
-    [(p, This $ "An additive dependent pair (&-type) was expected here but a term of type '" <> show (pretty ty) <> "' was found")]
+    [(p, This $ "An additive dependent pair (&-type) was expected here\nbut a term of type '" <> show (pretty ty) <> "' was found")]
+    []
+fromElabError (ExpectedMultiplicativeProduct ty p) =
+  err
+    Nothing
+    "Type-checking error"
+    [(p, This $ "A multiplicative dependent pair (⊗-type) was expected here\nbut a term of type '" <> show (pretty ty) <> "' was found")]
     []
 
 ordinal :: Integral a => a -> String

@@ -210,7 +210,12 @@ parseResourceUsage = do
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
 parseExpression s = located $ MP.choice
-  [ MP.try $ parseMultiplicativeUnit s,
+  [ lineFold \s' -> parseMultiplicativePairDestructor s s',
+    ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
+    parseIf s,
+    parseLambda s,
+    parseDo s,
+    MP.try $ parseMultiplicativeUnit s,
     MP.try $ parseAdditiveUnit s,
     MP.try $ parseDependentType s,
     unLoc <$> parseAccess s
@@ -251,17 +256,12 @@ parseApplication s = located do
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
-    [ ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
-      ETrue <$ token TkTrue,
+    [ ETrue <$ token TkTrue,
       EFalse <$ token TkFalse,
       do
         (nb, suf) :@ _ <- parseNumber
         pure $ EInt nb suf,
-      ETypedHole <$ token TkQuestionMark,
       EHole <$ token TkUnderscore,
-      parseIf s,
-      parseLambda s,
-      parseDo s,
       EType <$ token TkType,
       parseOne,
       parseTop,
@@ -345,3 +345,20 @@ parseOne = EOne <$ (token (TkSymbol "𝟏") <|> token (TkSymbol "𝟭") <|> toke
 
 parseTop :: forall m. MonadParser m => m Expression
 parseTop = ETop <$ (token (TkSymbol "⊤"))
+
+parseMultiplicativePairDestructor :: forall m. MonadParser m => m () -> m () -> m Expression
+parseMultiplicativePairDestructor s' s = do
+  mult <- MP.try do
+    lexeme (token TkLet) *> s
+    m <- MP.optional (parseResourceUsage <* s)
+    lexeme (token TkLeftParen)
+    pure m
+  ids <- parseIdentifier `sepBy2` (lexeme (token TkComma) *> s)
+  lexeme (token TkRightParen)
+  bind <- MP.optional $ s *> lexeme (token TkAs) *> parseIdentifier <* s
+  lexeme (token TkColonEquals <|> token TkUniColonEquals) <* s
+  val1 <- parseExpression s <* s'
+  val2 <- parseExpression s'
+  pure $ EMultiplicativeTupleElim bind mult ids val1 val2
+  where
+    sepBy2 p sep = (:) <$> (p <* sep) <*> MP.sepBy1 p sep

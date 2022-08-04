@@ -101,6 +101,20 @@ data Expression
       (Located Expression)
   | ESnd
       (Located Expression)
+  | -- | @let p (x, y) as z := M; N@
+    EMultiplicativePairElim
+      (Maybe (Located Text))
+      -- ^ @z@
+      (Located Multiplicity)
+      -- ^ @p@
+      (Located Text)
+      -- ^ @x@
+      (Located Text)
+      -- ^ @y@
+      (Located Expression)
+      -- ^ @M@
+      (Located Expression)
+      -- ^ @N@
   deriving (Show)
 
 data BuiltinType
@@ -195,6 +209,10 @@ data Value
   | VAdditiveUnit
   | VOne
   | VTop
+  | VFst
+      (Located Value)
+  | VSnd
+      (Located Value)
   | -- builtin types
     VBuiltinU64
   | VBuiltinU32

@@ -117,4 +117,10 @@ data Expression
   | EAccess
       (Located Expression)
       [Located Expression]
+  | EMultiplicativeTupleElim
+      (Maybe (Located Text))
+      (Maybe (Located Integer))
+      [Located Text]
+      (Located Expression)
+      (Located Expression)
   deriving (Show)

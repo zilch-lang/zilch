@@ -231,12 +231,12 @@ withLocalVar x mult ty ctx f = do
             Just m -> pure m
 
 -- | Locally define a variable for use in a typechecking computation, and check afterwards that its usage matches the one expected.
-defineLocal :: forall m. MonadElab m => Located Text -> TAST.Multiplicity -> Located Value -> Located Value -> Context -> (Context -> m (Usage, Located TAST.Expression)) -> m (Usage, Located TAST.Expression)
+defineLocal :: forall m a. MonadElab m => Located Text -> TAST.Multiplicity -> Located Value -> Located Value -> Context -> (Context -> m (Usage, Position, a)) -> m (Usage, a)
 defineLocal x mult ex ty ctx f = do
   let ctx' = define mult x ex ty ctx
-  (qs, exp) <- f ctx'
-  qs' <- checkVar ctx' x qs (getPos exp)
-  pure (qs', exp)
+  (qs, pos, res) <- f ctx'
+  qs' <- checkVar ctx' x qs pos
+  pure (qs', res)
   where
     checkVar ctx x qs pos = do
       (q, qs') <- splitUsage x qs
@@ -306,8 +306,9 @@ check rel ctx expr ty = do
           (_, ex) <- check TAST.Irrelevant ctx ex ty'
           ex' <- eval ctx ex
 
-          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
-            check rel ctx expr ty2
+          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx -> do
+            (qs, e) <- check rel ctx expr ty2
+            pure (qs, getPos e, e)
 
           pure (mempty, TAST.ELet (TAST.Let False m1 x ty ex :@ p1) u :@ p2)
         xMultiplicity -> do
@@ -316,8 +317,9 @@ check rel ctx expr ty = do
           (qs2, ex) <- check TAST.Present ctx ex ty'
           ex' <- eval ctx ex
 
-          (qs3, u) <- defineLocal x xMultiplicity ex' ty' ctx \ctx ->
-            check rel ctx expr ty2
+          (qs3, u) <- defineLocal x xMultiplicity ex' ty' ctx \ctx -> do
+            (qs, e) <- check rel ctx expr ty2
+            pure (qs, getPos e, e)
 
           let qs1' = qs1 `Usage.merge` qs3
 
@@ -340,26 +342,30 @@ check rel ctx expr ty = do
           -- apply [⇐ rec-I₀]
 
           (_, ex) <- do
-            rec (qs2, ex') <- defineLocal x TAST.O (VThunk ex' :@ p1) ty' ctx \ctx ->
-                  check TAST.Irrelevant ctx ex ty'
+            rec (qs2, ex') <- defineLocal x TAST.O (VThunk ex' :@ p1) ty' ctx \ctx -> do
+                  (qs, e) <- check TAST.Irrelevant ctx ex ty'
+                  pure (qs, getPos e, e)
             pure (qs2, ex')
 
           ex' <- eval ctx ex
-          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx ->
-            check rel ctx expr ty2
+          (_, u) <- defineLocal x TAST.O ex' ty' ctx \ctx -> do
+            (qs, e) <- check rel ctx expr ty2
+            pure (qs, getPos e, e)
 
           pure (mempty, TAST.ELet (TAST.Let False m1 x ty ex :@ p1) u :@ p2)
         xMultiplicity -> do
           -- apply [⇐ rec-I₁]
 
           (qs2, ex) <- mdo
-            rec (qs2, ex') <- defineLocal x TAST.W (VThunk ex' :@ p1) ty' ctx \ctx ->
-                  check TAST.Present ctx ex ty'
+            rec (qs2, ex') <- defineLocal x TAST.W (VThunk ex' :@ p1) ty' ctx \ctx -> do
+                  (qs, e) <- check TAST.Present ctx ex ty'
+                  pure (qs, getPos e, e)
             pure (qs2, ex')
 
           ex' <- eval ctx ex
-          (qs3, u) <- defineLocal x xMultiplicity ex' ty' ctx \ctx ->
-            check TAST.Present ctx expr ty2
+          (qs3, u) <- defineLocal x xMultiplicity ex' ty' ctx \ctx -> do
+            (qs, e) <- check TAST.Present ctx expr ty2
+            pure (qs, getPos e, e)
 
           let qs1' = qs1 `Usage.merge` qs3
 
@@ -469,6 +475,37 @@ check rel ctx expr ty = do
          Γ ⊢ ⟨⟩ ⇐ᵖ ⊤
       -}
       pure (mempty, TAST.EAdditiveUnit :@ p)
+    (AST.EMultiplicativePairElim z mult x y m n :@ p, u) -> do
+      {-
+         0Γ₁, z :⁰ (_ :ⁱ S) ⊗ T ⊢ U ⇐⁰ type              Γ₁ ⊢ M ⇒ᵖ (_ :ⁱ S) ⊗ T
+                             Γ₂, x :ⁱᵖ S, y :ᵖ T ⊢ N ⇐ᵖ U
+        ──────────────────────────────────────────────────────────────────────── [⇐ ⊗-E]
+                        Γ₁ + Γ₂ ⊢ let (x, y) as z = M in N ⇐ᵖ U
+      -}
+      (qs1, m, ty, _) <- synthetize rel ctx m
+      case ty of
+        VMultiplicativeProduct i _ s t :@ _ -> do
+          xVal <- eval ctx (TAST.EFst m :@ getPos m)
+          yVal <- eval ctx (TAST.ESnd m :@ getPos m)
+
+          let ipMult = pMult * i
+              pMult = TAST.extend rel * unLoc mult
+              
+          (qs2, n) <- defineLocal x ipMult xVal s ctx \ctx -> do
+            t <- apply ctx t xVal
+            (qs, n) <- defineLocal y pMult yVal t ctx \ctx -> do
+              (qs, n) <- case z of
+                Nothing -> check rel ctx n u
+                Just z -> withLocalVar z TAST.O ty ctx \ctx -> do
+                  (qs, n) <- check rel ctx n u
+                  pure (qs, getPos n, n)
+              pure (qs, getPos n, n)
+            pure (qs, getPos n, n)
+          
+          pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x y m n :@ p)
+        ty -> do
+          ty@(_ :@ p) <- quote ctx (lvl ctx) ty
+          throwError $ ExpectedMultiplicativeProduct ty p
     (AST.EHole loc :@ p1, ty) -> do
       meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
       pure (mempty, meta :@ p1)
@@ -796,6 +833,32 @@ synthetize rel ctx (AST.ESnd e :@ p) = do
     ty -> do
       ty@(_ :@ p) <- quote ctx (lvl ctx) ty
       throwError $ ExpectedAdditiveProduct ty p
+synthetize rel ctx (AST.EMultiplicativePairElim z mult x y m n :@ p) = do
+  {-
+     Γ₁ ⊢ M ⇒ᵖ (_ :ⁱ S) ⊗ T             Γ₂, x :ⁱᵖ S, y :ᵖ T ⊢ N ⇒ᵖ U
+    ───────────────────────────────────────────────────────────────── [⇒ ⊗-E]
+                Γ₁ + Γ₂ ⊢ let (x, y) as z := M; N ⇒ᵖ U
+  -}
+  (qs1, m, ty, _) <- synthetize rel ctx m
+  case ty of
+    VMultiplicativeProduct i _ s t :@ _ -> do
+      xVal <- eval ctx (TAST.EFst m :@ getPos m)
+      yVal <- eval ctx (TAST.ESnd m :@ getPos m)
+  
+      let ipMult = pMult * i
+          pMult = TAST.extend rel * unLoc mult
+
+      (qs2, (n, u)) <- defineLocal x ipMult xVal s ctx \ctx -> do
+        t <- apply ctx t xVal
+        (qs, (n, u)) <- defineLocal y pMult yVal t ctx \ctx -> do
+          (qs, n, ty2, _) <- synthetize rel ctx n
+          pure (qs, getPos n, (n, ty2))
+        pure (qs, getPos n, (n, u))
+
+      pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x y m n :@ p, u, TAST.extend rel :@ p)
+    ty -> do
+      ty@(_ :@ p) <- quote ctx (lvl ctx) ty
+      throwError $ ExpectedMultiplicativeProduct ty p
 synthetize _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

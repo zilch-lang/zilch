@@ -118,6 +118,20 @@ data Expression
   | EAdditiveTupleAccess
       (Located Expression)
       Integer
+  | -- | @let p (x, y) as z := M; N@
+    EMultiplicativePairElim
+      (Maybe (Located Text))
+      -- ^ @z@
+      (Located Multiplicity)
+      -- ^ @p@
+      (Located Text)
+      -- ^ @x@
+      (Located Text)
+      -- ^ @y@
+      (Located Expression)
+      -- ^ @M@
+      (Located Expression)
+      -- ^ @N@
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

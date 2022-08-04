@@ -98,6 +98,7 @@ holes (AST.ETop :@ _) = Nothing
 holes (AST.EFst e :@ _) = holes e
 holes (AST.ESnd e :@ _) = holes e
 holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
+holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -247,7 +248,7 @@ desugarExpression (CST.EAdditiveUnit :@ p) = pure $ AST.EAdditiveUnit :@ p
 desugarExpression (CST.EMultiplicativeUnit :@ p) = pure $ AST.EMultiplicativeUnit :@ p
 desugarExpression (CST.EOne :@ p) = pure $ AST.EOne :@ p
 desugarExpression (CST.ETop :@ p) = pure $ AST.ETop :@ p
-desugarExpression (CST.EAccess e args :@ p) = do
+desugarExpression (CST.EAccess e args :@ _) = do
   e' <- desugarExpression e
   foldlM mkAccess e' args
   where
@@ -256,6 +257,34 @@ desugarExpression (CST.EAccess e args :@ p) = do
       pure $ AST.EAdditiveTupleAccess e1 (Language.Zilch.Syntax.Desugarer.read x) :@ spanOf (getPos e1) p
     mkAccess _ (CST.EId _ :@ _) = error "unsupported identifier access"
     mkAccess _ _ = undefined
+desugarExpression (CST.EMultiplicativeTupleElim bind mult ids m n :@ p) = do
+  mult' <- desugarMultiplicity mult p
+  m' <- desugarExpression m
+  n' <- desugarExpression n
+
+  checkBindings $ (maybe [] pure bind) <> ids
+  let ((_, mult, x, y, m) : tuples) = go mult' ids m' 0
+
+  pure $ foldr mkLet n' ((bind, mult, x, y, m) : tuples)
+  where
+    go mult [x, y] m _ = [(Nothing, mult, x, y, m)]
+    go mult (x : xs) m n =
+      let tmp = (Text.pack $ "?" <> show n) :@ p
+       in (Nothing, mult, x, tmp, m) : go mult xs (AST.EIdentifier tmp :@ p) (n + 1)
+
+    -- highly inefficient but we'll do better later
+    dups [] = []
+    dups (x : xs) = if x `elem` xs then x : dups xs else dups xs
+
+    checkBindings l = case dups l of
+      [] -> pure ()
+      y@(x :@ p) : _ ->
+        let ps = getPos <$> filter (== y) l
+         in throwError $ DuplicateBindingInMultiplicativeTuplesEliminator x (spans p l) ps
+
+    spans p = foldr spanOf p . fmap getPos
+
+    mkLet (z, m, x, y, e) f = AST.EMultiplicativePairElim z m x y e f :@ p
 desugarExpression _ = error "todo"
 
 desugarIntegerSuffix :: forall m. MonadDesugar m => Position -> Text -> m IntegerSuffix
