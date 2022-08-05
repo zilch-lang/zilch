@@ -123,13 +123,13 @@ data ElabWarning
 fromElabWarning :: ElabWarning -> Report String
 fromElabWarning (NonRecursiveRecursiveBinding x p) =
   warn
-    Nothing
+    (Just "-Wrec-non-rec")
     "Type-checking warning"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is defined recursively but isn't used in its own definition.")]
     ["Consider transforming this 'rec' binding into a 'let' binding."]
 fromElabWarning (UnusedBinding x p) =
   warn
-    Nothing
+    (Just "-Wunused-binding")
     "Type-checking warning"
     [(p, This $ "Binding '" <> Text.unpack x <> "' has not been used")]
     []

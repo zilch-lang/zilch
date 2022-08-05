@@ -14,13 +14,14 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec
+import Language.Zilch.CLI.Flags (WarningFlags)
 import Language.Zilch.Syntax.Core (Token (..))
 import Language.Zilch.Syntax.Errors (LexicalError, LexicalWarning, fromLexicalWarning)
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
-type MonadLexer m = (MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m, MonadFail m)
+type MonadLexer m = (?warnings :: WarningFlags, MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m, MonadFail m)
 
 -- | Transforms a simple parser into a parser returning a located value.
 located :: forall m a. MonadLexer m => m a -> m (Located a)
@@ -48,7 +49,7 @@ symbol = MPL.symbol space
 
 -------------------------------------------------------------------
 
-lexFile :: FilePath -> Text -> Either (Diagnostic String) ([Located Token], Diagnostic String)
+lexFile :: (?warnings :: WarningFlags) => FilePath -> Text -> Either (Diagnostic String) ([Located Token], Diagnostic String)
 lexFile fileName content =
   bimap
     (errorDiagnosticFromBundle Nothing "Lexical error on input" Nothing)

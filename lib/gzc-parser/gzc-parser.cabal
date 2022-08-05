@@ -30,6 +30,7 @@ library
       base >=4.7 && <5
     , diagnose >=2
     , gzc-core
+    , gzc-flags
     , megaparsec >=9.0 && <10
     , mtl ==2.2.2
     , text ==1.2.4.1

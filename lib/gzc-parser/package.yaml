@@ -16,6 +16,7 @@ dependencies:
 - megaparsec >=9.0 && <10
 - mtl ==2.2.2
 - diagnose >=2
+- gzc-flags
 
 ghc-options:
 - -Wall

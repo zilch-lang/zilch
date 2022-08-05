@@ -1,17 +1,19 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ImplicitParams #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Main (main) where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, when)
 import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Located (Located)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Error.Diagnose (Diagnostic, addFile, defaultStyle, printDiagnostic)
-import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..))
+import Error.Diagnose (Diagnostic, addFile, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
+import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), WarningFlags)
+import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.CLI.Parser (getFlags)
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
@@ -23,6 +25,7 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Elaborator (elabProgram)
 import Prettyprinter (pretty)
 import System.Directory (createDirectoryIfMissing)
+import System.Exit (exitFailure)
 import System.FilePath.Posix (joinPath, splitPath)
 import System.IO
 
@@ -30,11 +33,13 @@ data File = File FilePath Text
 
 main :: IO ()
 main = do
-  flags <- getFlags
+  !flags <- getFlags
 
   files <- case files (input flags) of
     [] -> pure . File "stdin" <$> Text.getContents
     fs -> forM fs \f -> File f <$> Text.readFile f
+
+  let ?warnings = warnings flags
 
   forM_ files \(File path content) -> do
     ast <- runExceptT do
@@ -57,13 +62,21 @@ main = do
       pure (tks, cst, ast, tast)
 
     case ast of
-      Left diag -> printDiagnostic stderr True True 4 defaultStyle (addFile diag path $ Text.unpack content)
+      Left diag -> do
+        printDiagnostic stderr True True 4 defaultStyle (addFile diag path $ Text.unpack content)
+        exitFailure
       Right (_, _, _, _) -> pure ()
 
     pure ()
 
-doOutputWarnings :: FilePath -> Text -> Diagnostic String -> IO ()
-doOutputWarnings path content diag = printDiagnostic stderr True True 4 defaultStyle (addFile diag path $ Text.unpack content)
+doOutputWarnings :: (?warnings :: WarningFlags) => FilePath -> Text -> Diagnostic String -> IO ()
+doOutputWarnings path content diag = do
+  let erroneous = W.areErrors ?warnings
+  let diag' = if erroneous then warningsToErrors diag else diag
+      
+  printDiagnostic stderr True True 4 defaultStyle (addFile diag' path $ Text.unpack content)
+  when (erroneous && hasReports diag') do
+    exitFailure
 
 doDumpAST :: Flags -> Located AST.Module -> IO ()
 doDumpAST flags mod

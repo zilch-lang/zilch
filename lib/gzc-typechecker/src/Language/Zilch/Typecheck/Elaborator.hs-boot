@@ -12,14 +12,15 @@ import Data.IntMap (IntMap)
 import Data.Located (Located, Position)
 import Error.Diagnose (Diagnostic)
 import GHC.Stack (HasCallStack)
+import Language.Zilch.CLI.Flags (WarningFlags)
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Errors
 
 type MetaContext = (Int, IntMap (MetaEntry, TAST.Path, Position, AST.HoleLocation))
-type MonadElab m = (HasCallStack, MonadError ElabError m, MonadFix m, MonadWriter [ElabWarning] m, MonadState MetaContext m)
+type MonadElab m = (?warnings :: WarningFlags, HasCallStack, MonadError ElabError m, MonadFix m, MonadWriter [ElabWarning] m, MonadState MetaContext m)
 
 -------------
 
-elabProgram :: Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, Diagnostic String)
+elabProgram :: (?warnings :: WarningFlags) => Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, Diagnostic String)

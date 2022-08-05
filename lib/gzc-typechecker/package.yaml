@@ -19,3 +19,4 @@ dependencies:
 - prettyprinter ==1.7.0
 - gzc-pretty
 - containers ==0.6.*
+- gzc-flags

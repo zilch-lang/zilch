@@ -17,13 +17,14 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
+import Language.Zilch.CLI.Flags (WarningFlags)
 import Language.Zilch.Syntax.Core
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Syntax.Internal ()
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char.Lexer as MPL
 
-type MonadParser m = (MonadWriter [ParsingWarning] m, MP.MonadParsec ParsingError [Located Token] m, MonadFail m)
+type MonadParser m = (?warnings :: WarningFlags, MonadWriter [ParsingWarning] m, MP.MonadParsec ParsingError [Located Token] m, MonadFail m)
 
 -- | Transforms a simple parser into a parser returning a located value.
 located :: forall m a. MonadParser m => m a -> m (Located a)
@@ -111,7 +112,7 @@ indentGuard = MPL.indentGuard whitespace
 
 --------------------------------------------------
 
-parseTokens :: FilePath -> [Located Token] -> Either (Diagnostic String) (Located Module, Diagnostic String)
+parseTokens :: (?warnings :: WarningFlags) => FilePath -> [Located Token] -> Either (Diagnostic String) (Located Module, Diagnostic String)
 parseTokens filename content =
   bimap
     (errorDiagnosticFromBundle Nothing "Parse error on input" Nothing)
@@ -320,7 +321,10 @@ parseDependentType s = do
     TkUniRightArrow -> EPi
     _ -> undefined
   where
-    param s = lexeme $ MP.choice [ MP.try $ parseParameter s, located (toParam <$> parseAccess s) ]
+    param s = lexeme $ MP.choice
+      [ MP.try $ parseParameter s,
+        located (toParam <$> parseAccess s)
+      ]
 
     toParam expr = Explicit [(Nothing, "_" :@ getPos expr, Just expr)]
 

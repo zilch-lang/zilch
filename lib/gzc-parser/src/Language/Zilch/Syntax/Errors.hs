@@ -169,7 +169,7 @@ fromDesugarerError (SingletonMultiplicativeTupleElim p) =
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =
   warn
-    Nothing
+    (Just "-Wadditive-singleton")
     "Parse warning"
     [(p, This "Additive dependent tuple only contains a single element")]
     [Note "This is equivalent to removing the tuple completely."]

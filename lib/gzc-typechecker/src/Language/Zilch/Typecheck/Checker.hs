@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
@@ -135,7 +136,8 @@ checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty e
 
     when isRec do
       case (Map.lookup name usage, ty') of
-        (Nothing, _) -> tell [NonRecursiveRecursiveBinding (unLoc name) p5]
+        (Nothing, _) -> when (W.recNonRec ?warnings) do
+          tell [NonRecursiveRecursiveBinding (unLoc name) p5]
         (_, VPi {} :@ _) -> pure ()
         _ -> throwError $ RecursiveValueBinding (unLoc name) p5
 
@@ -217,7 +219,8 @@ withLocalVar x mult ty ctx f = do
       let m' = Map.delete x m
        in (,m') <$> case Map.lookup x m of
             Nothing -> do
-              -- tell [UnusedBinding (unLoc x) (getPos x)]
+              -- when (W.unusedBinding ?warnings) do
+              --   tell [UnusedBinding (unLoc x) (getPos x)]
 
               -- FIXME: `let f(x) := x` reports `x` as unused
               -- This is because of how it is desugared:
@@ -248,7 +251,8 @@ defineLocal x mult ex ty ctx f = do
       let m' = Map.delete x m
        in (,m') <$> case Map.lookup x m of
             Nothing -> do
-              tell [UnusedBinding (unLoc x) (getPos x)]
+              when (W.unusedBinding ?warnings) do
+                tell [UnusedBinding (unLoc x) (getPos x)]
               pure TAST.O
             Just m -> pure m
 

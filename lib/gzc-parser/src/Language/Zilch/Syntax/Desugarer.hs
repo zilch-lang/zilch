@@ -7,7 +7,7 @@
 module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
 import Control.Applicative ((<|>))
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, when)
 import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT, get, modify)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
@@ -19,15 +19,17 @@ import Data.Maybe (fromJust, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
+import Language.Zilch.CLI.Flags (WarningFlags)
+import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 
-type MonadDesugar m = (MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter]) m)
+type MonadDesugar m = (?warnings :: WarningFlags, MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter]) m)
 
-desugarCST :: Located CST.Module -> Either (Diagnostic String) (Located AST.Module, Diagnostic String)
+desugarCST :: (?warnings :: WarningFlags) => Located CST.Module -> Either (Diagnostic String) (Located AST.Module, Diagnostic String)
 desugarCST mod =
   bimap toErrorDiagnostic (second toWarningDiagnostic) $
     runExcept $
@@ -238,7 +240,8 @@ desugarExpression (CST.EMultiplicativeTuple es :@ _) = do
   where
     mkPair e1 e2 = AST.EMultiplicativePair e1 e2 :@ spanOf (getPos e1) (getPos e2)
 desugarExpression (CST.EAdditiveTuple [e] :@ p) = do
-  tell [SingletonAdditivePair p]
+  when (W.additiveSingleton ?warnings) do
+    tell [SingletonAdditivePair p]
   desugarExpression e
 desugarExpression (CST.EAdditiveTuple es :@ _) = do
   es' <- traverse desugarExpression es
