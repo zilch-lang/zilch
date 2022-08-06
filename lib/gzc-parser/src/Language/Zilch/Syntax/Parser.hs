@@ -1,8 +1,8 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoOverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
@@ -174,7 +174,7 @@ parseParameter s =
     unit s = do
       lexeme (token TkLeftParen) *> s <* token TkRightParen
       pure $ Explicit []
-    
+
     explicit s = do
       lexeme (token TkLeftParen) *> s
       args <- flip MP.sepBy1 (token TkComma <* s) do
@@ -210,17 +210,19 @@ parseResourceUsage = do
     isUsageNumber _ = False
 
 parseExpression :: forall m. MonadParser m => m () -> m (Located Expression)
-parseExpression s = located $ MP.choice
-  [ lineFold \s' -> parseMultiplicativePairDestructor s s',
-    ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
-    parseIf s,
-    parseLambda s,
-    parseDo s,
-    MP.try $ parseMultiplicativeUnit s,
-    MP.try $ parseAdditiveUnit s,
-    MP.try $ parseDependentType s,
-    unLoc <$> parseAccess s
-  ]
+parseExpression s =
+  located $
+    MP.choice
+      [ lineFold \s' -> parseMultiplicativePairDestructor s s',
+        ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
+        parseIf s,
+        parseLambda s,
+        parseDo s,
+        MP.try $ parseMultiplicativeUnit s,
+        MP.try $ parseAdditiveUnit s,
+        MP.try $ parseDependentType s,
+        unLoc <$> parseAccess s
+      ]
 
 parseAccess :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAccess s = do
@@ -268,7 +270,7 @@ parseAtom s = located do
       parseTop,
       EId <$> parseIdentifier,
       parseTuple s
-    ] 
+    ]
 
 parseLambda :: forall m. MonadParser m => m () -> m Expression
 parseLambda s = do
@@ -277,7 +279,7 @@ parseLambda s = do
     MP.choice
       [ MP.try $ [] <$ (lexeme (token TkLeftParen) *> token TkRightParen),
         MP.some $ lexeme $ parseParameter s <* s
-      ] 
+      ]
   _ <- lexeme (token TkDoubleRightArrow <|> token TkUniDoubleRightArrow) <* s
   expr <- parseExpression s
   pure $ ELam params expr
@@ -321,10 +323,12 @@ parseDependentType s = do
     TkUniRightArrow -> EPi
     _ -> undefined
   where
-    param s = lexeme $ MP.choice
-      [ MP.try $ parseParameter s,
-        located (toParam <$> parseAccess s)
-      ]
+    param s =
+      lexeme $
+        MP.choice
+          [ MP.try $ parseParameter s,
+            located (toParam <$> parseAccess s)
+          ]
 
     toParam expr = Explicit [(Nothing, "_" :@ getPos expr, Just expr)]
 
@@ -345,7 +349,7 @@ parseAdditiveUnit :: forall m. MonadParser m => m () -> m Expression
 parseAdditiveUnit s = EAdditiveUnit <$ (lexeme (token TkLeftAngle) <* s <* token TkRightAngle)
 
 parseOne :: forall m. MonadParser m => m Expression
-parseOne = EOne <$ (token (TkSymbol "𝟏") <|> token (TkSymbol "𝟭") <|> token (TkSymbol "unit"))
+parseOne = EOne <$ (token (TkSymbol "𝟏") <|> token (TkSymbol "𝟭"))
 
 parseTop :: forall m. MonadParser m => m Expression
 parseTop = ETop <$ (token (TkSymbol "⊤"))
