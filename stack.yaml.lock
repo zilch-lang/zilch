@@ -19,11 +19,11 @@ packages:
     git: https://github.com/zilch-lang/nstar.git
 - completed:
     pantry-tree:
-      sha256: 5836d87d8b9501c2bceb254045b4ebf6ef0ad1a260a94c0593c03f0a0522ec39
+      sha256: 60de1c15ada5dd82f9ac70065ed52eb36da733111962a692f0a66db2c7313d78
       size: 1402
-    hackage: diagnose-2.3.1@sha256:a8b00422303ec4762a21a8469f54f82c3a7c54342872d9fc85e2a2255f4e02a7,5941
+    hackage: diagnose-2.4.0@sha256:c594a0b512a8d3aa58b240070467d6f337ef0769e367a0e74f2081307b1b13d7,5941
   original:
-    hackage: diagnose-2.3.1
+    hackage: diagnose-2.4.0
 - completed:
     pantry-tree:
       sha256: d22f820a1f63497f7fd7e1f04b7d356d92de35582258f6ad55428c88b09e63ff

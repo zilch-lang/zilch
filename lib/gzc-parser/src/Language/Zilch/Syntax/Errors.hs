@@ -8,7 +8,7 @@ module Language.Zilch.Syntax.Errors where
 import Data.Located (Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Note (Hint, Note), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (Hint, Note), Report (Err, Warn))
 import Error.Diagnose.Compat.Megaparsec
 import Language.Zilch.Syntax.Core.AST (HoleLocation (..))
 import qualified Text.Megaparsec as MP
@@ -16,7 +16,7 @@ import qualified Text.Megaparsec as MP
 data LexicalWarning
 
 fromLexicalWarning :: LexicalWarning -> Report String
-fromLexicalWarning _ = warn Nothing "sorry" [] []
+fromLexicalWarning _ = Warn Nothing "sorry" [] []
 
 data LexicalError
   deriving (Show, Eq, Ord)
@@ -32,7 +32,7 @@ instance HasHints LexicalError String where
 data ParsingWarning
 
 fromParsingWarning :: ParsingWarning -> Report String
-fromParsingWarning _ = warn Nothing "sorry" [] []
+fromParsingWarning _ = Warn Nothing "sorry" [] []
 
 data ParsingError
   deriving (Show, Eq, Ord)
@@ -94,73 +94,73 @@ data DesugarWarning
 
 fromDesugarerError :: DesugarError -> Report String
 fromDesugarerError (InvalidIntegerSuffix suffix pos) =
-  err
+  Err
     Nothing
     "Parse error"
     [(pos, This $ "Integral constant contains the suffix '" <> Text.unpack suffix <> "', which is invalid")]
     ["Numeric prefixes are only available for builtin integer and floating point types."]
 fromDesugarerError (LinearTopLevelBinding name pos) =
-  err
+  Err
     Nothing
     "Parse error"
     [(pos, This $ "Top-level binding '" <> Text.unpack name <> "' cannot be made linear")]
     ["Top-level bindings may only be either erased (usage 0) or unrestricted (usage ω)."]
 fromDesugarerError (PublicAssumptions pos) =
-  err
+  Err
     Nothing
     "Parse error"
     [(pos, This "Cannot bind assumptions publicly")]
     [Hint "Remove the 'public' modifier from this declaration."]
 fromDesugarerError (TypelessAssumption name pos) =
-  err
+  Err
     Nothing
     "Parse error"
     [(pos, This $ "Assumption '" <> Text.unpack name <> "' is missing a type")]
     ["Every top-level assumption must have a type to be complete."]
 fromDesugarerError (AssumptionsInMutualBlock pos) =
-  err
+  Err
     Nothing
     "Parse error"
     [(pos, This "Cannot bind assumptions inside a 'mutual' block")]
     []
 fromDesugarerError (HoleInValType loc p1 p2) =
-  err
+  Err
     Nothing
     "Parse error"
-    messages 
+    messages
     []
   where
     messages = case loc of
       SourceHole -> [(p1, This "Found hole in a 'val' type binding"), (p2, Where "While checking this type declaration")]
       InsertedHole -> [(p1, This "Binding is missing an explicit type signature"), (p2, Where "While checking this type declaration")]
 fromDesugarerError (ImplicitProductType p) =
-  err
+  Err
     Nothing
     "Parse error"
     [(p, This $ "Product dependent parameter cannot be made implicit")]
     []
 fromDesugarerError (AdditiveProductWithMultiplicity x p) =
-  err
+  Err
     Nothing
     "Parse error"
     [(p, This $ "Binding named '" <> Text.unpack x <> "' cannot have a multiplicity attached")]
     [Note "The dependent parameter of an additive product cannot have a multiplicity."]
 fromDesugarerError (NumberSuffixInAccess p) =
-  err
+  Err
     Nothing
     "Parse error"
     [(p, This "The accessor of an additive tuple cannot have a type suffix.")]
     []
 fromDesugarerError (DuplicateBindingInMultiplicativeTuplesEliminator x p ps) =
-  err
+  Err
     Nothing
     "Parse error"
     ([(p, This $ "Binding '" <> Text.unpack x <> "' is present multiple times in this eliminator pattern")] <> poss)
     []
   where
-    poss = (, Where "Found here") <$> ps
+    poss = (,Where "Found here") <$> ps
 fromDesugarerError (SingletonMultiplicativeTupleElim p) =
-  err
+  Err
     Nothing
     "Parse error"
     [(p, This "Invalid singleton pattern in eliminator")]
@@ -168,9 +168,9 @@ fromDesugarerError (SingletonMultiplicativeTupleElim p) =
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =
-  warn
+  Warn
     (Just "-Wadditive-singleton")
     "Parse warning"
     [(p, This "Additive dependent tuple only contains a single element")]
     [Note "This is equivalent to removing the tuple completely."]
-fromDesugarerWarning _ = warn Nothing "sorry" [] []
+fromDesugarerWarning _ = Warn Nothing "sorry" [] []

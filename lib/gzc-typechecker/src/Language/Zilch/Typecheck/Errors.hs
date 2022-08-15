@@ -6,7 +6,7 @@ module Language.Zilch.Typecheck.Errors where
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Note (..), Report, err, warn)
+import Error.Diagnose (Marker (This, Where), Note (..), Report (Err, Warn))
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -122,13 +122,13 @@ data ElabWarning
 
 fromElabWarning :: ElabWarning -> Report String
 fromElabWarning (NonRecursiveRecursiveBinding x p) =
-  warn
+  Warn
     (Just "-Wrec-non-rec")
     "Type-checking warning"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is defined recursively but isn't used in its own definition.")]
     ["Consider transforming this 'rec' binding into a 'let' binding."]
 fromElabWarning (UnusedBinding x p) =
-  warn
+  Warn
     (Just "-Wunused-binding")
     "Type-checking warning"
     [(p, This $ "Binding '" <> Text.unpack x <> "' has not been used")]
@@ -136,14 +136,14 @@ fromElabWarning (UnusedBinding x p) =
 
 fromElabError :: ElabError -> Report String
 fromElabError (BindingNotFound name pos) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(pos, This $ "Binding named `" <> Text.unpack name <> "` not found in current environment")]
     []
 fromElabError (PiTypeExpected (ty :@ p1) pos) =
   let ty' = show (group $ pretty $ ty :@ p1)
-   in err
+   in Err
         Nothing
         "Type-checking error"
         [ (pos, This $ "Types do not match: expected a function type, but got type `" <> ty' <> "`"),
@@ -153,7 +153,7 @@ fromElabError (PiTypeExpected (ty :@ p1) pos) =
 fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
   let ty1' = show (group $ pretty $ ty1 :@ p1)
       ty2' = show (group $ pretty $ ty2 :@ p2)
-   in err
+   in Err
         Nothing
         "Type-checking error"
         [ (pos, This $ "While checking this expression,\ntypes do not match: expected type `" <> ty1' <> "` but got type `" <> ty2' <> "`"),
@@ -163,7 +163,7 @@ fromElabError (TypesAreNotEqual (ty1 :@ p1) (ty2 :@ p2) pos) =
         []
 fromElabError UnificationError = undefined
 fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [ (p1, This $ "Cannot unify term `" <> show (pretty $ t1 :@ p1) <> "`..."),
@@ -171,7 +171,7 @@ fromElabError (CannotUnify (t1 :@ p1) (t2 :@ p2)) =
     ]
     []
 fromElabError (MultiplicityMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [ (p1, This $ "Expected value with usage " <> show (pretty u1) <> "..."),
@@ -179,7 +179,7 @@ fromElabError (MultiplicityMismatch u1@(_ :@ p1) u2@(_ :@ p2)) =
     ]
     []
 fromElabError (UnusedLinearVariable (x :@ p) p2) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [ (p, This $ "Variable named `" <> Text.unpack x <> "` was marked linear but has not been used"),
@@ -187,7 +187,7 @@ fromElabError (UnusedLinearVariable (x :@ p) p2) =
     ]
     ["If the variable is intended not to be used, it must have an unrestricted usage."]
 fromElabError (ImplicitMismatch expected got pos) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(pos, This $ "Function application was expected on an " <> showImp expected <> " argument, but an " <> showImp got <> " argument was found")]
@@ -198,13 +198,13 @@ fromElabError (ImplicitMismatch expected got pos) =
       | b == explicit = "explicit"
       | otherwise = undefined
 fromElabError (NonLinearUseOfVariable x pos) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(pos, This $ "Variable " <> Text.unpack x <> " has been used non linearly")]
     []
 fromElabError (UsageMismatches matches pos) =
-  err
+  Err
     Nothing
     "Type-checking error"
     messages
@@ -214,19 +214,19 @@ fromElabError (UsageMismatches matches pos) =
       [(getPos x, This $ "Variable " <> Text.unpack (unLoc x) <> " of type " <> show (pretty ty) <> " was expected to be used " <> showMult q <> " times\nbut has been used " <> showMult p <> " times") | (p, q, x, ty) <- matches]
         <> [(pos, Where $ "...while type-checking this expression")]
 fromElabError (ErasedInRelevantContext pos) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(pos, This $ "This term was meant to be used in an irrelevant position\nbut was found in a relevant context")]
     []
 fromElabError (RelevantVariableInIrrelevantContext x m p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "Cannot used relevant variable " <> Text.unpack x <> " (usage " <> showMult m <> ") inside\nan irrelevant context.")]
     []
 fromElabError (IdentifierAlreadyBound x p1 p2) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [ (p1, This $ "Identifier '" <> Text.unpack x <> "' is already bound at the top-level"),
@@ -234,13 +234,13 @@ fromElabError (IdentifierAlreadyBound x p1 p2) =
     ]
     []
 fromElabError (RecursiveValueBinding x p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "Identifier '" <> Text.unpack x <> "' is recursively bound to a value which is not a function")]
     [Hint "Potential fixes include transforming this binding into a function"]
 fromElabError (CannotSolveHole env p loc) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This msg)]
@@ -254,13 +254,13 @@ fromElabError (CannotSolveHole env p loc) =
     genEnv [(x, mult, expr)] = "• " <> showMult mult <> " " <> Text.unpack x <> " : " <> show (pretty expr)
     genEnv (e : env) = genEnv [e] <> "\n" <> genEnv env
 fromElabError (UndefinedValue x p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "Binding '" <> Text.unpack x <> "' has a type declared but has no value associated with it.")]
     []
 fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
-  err
+  Err
     Nothing
     "Type-checking error"
     messages
@@ -271,31 +271,31 @@ fromElabError (BindingWillEndUpCallingItself x p p1 stack) =
         <> [(p, Where $ "After evaluating binding '" <> Text.unpack x <> "'...") | x :@ p <- stack]
         <> [(p1, Where $ "'" <> Text.unpack x <> "' ends up being evaluated here")]
 fromElabError (CannotInferType p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This "Cannot infer the type of this term")]
     []
 fromElabError (CannotAccessNthElementOfAdditiveTuple n p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "Cannot access the " <> show n <> ordinal n <> " element of the given additive tuple")]
     []
 fromElabError (CannotAccessNthElementOfNonAdditiveTuple n p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "Cannot access the " <> show n <> ordinal n <> " element of a non-additive dependent tuple")]
     []
 fromElabError (ExpectedAdditiveProduct ty p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "An additive dependent pair (&-type) was expected here\nbut a term of type '" <> show (pretty ty) <> "' was found")]
     []
 fromElabError (ExpectedMultiplicativeProduct ty p) =
-  err
+  Err
     Nothing
     "Type-checking error"
     [(p, This $ "A multiplicative dependent pair (⊗-type) was expected here\nbut a term of type '" <> show (pretty ty) <> "' was found")]
@@ -303,14 +303,15 @@ fromElabError (ExpectedMultiplicativeProduct ty p) =
 
 ordinal :: Integral a => a -> String
 ordinal number
-        | remainder100 `elem` [11..13] = "th"
-        | remainder10 == 1             = "st"
-        | remainder10 == 2             = "nd"
-        | remainder10 == 3             = "rd"
-        | otherwise                    = "th"
-  where abs_number   = abs number
-        remainder10  = abs_number `mod` 10
-        remainder100 = abs_number `mod` 100
+  | remainder100 `elem` [11 .. 13] = "th"
+  | remainder10 == 1 = "st"
+  | remainder10 == 2 = "nd"
+  | remainder10 == 3 = "rd"
+  | otherwise = "th"
+  where
+    abs_number = abs number
+    remainder10 = abs_number `mod` 10
+    remainder100 = abs_number `mod` 100
 
 showMult :: Multiplicity -> String
 showMult O = "0"
