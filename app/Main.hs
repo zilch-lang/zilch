@@ -35,7 +35,7 @@ main :: IO ()
 main = do
   !flags <- getFlags
 
-  files <- case files (input flags) of
+  files <- case modules (input flags) of
     [] -> pure . File "stdin" <$> Text.getContents
     fs -> forM fs \f -> File f <$> Text.readFile f
 
@@ -73,7 +73,7 @@ doOutputWarnings :: (?warnings :: WarningFlags) => FilePath -> Text -> Diagnosti
 doOutputWarnings path content diag = do
   let erroneous = W.areErrors ?warnings
   let diag' = if erroneous then warningsToErrors diag else diag
-      
+
   printDiagnostic stderr True True 4 defaultStyle (addFile diag' path $ Text.unpack content)
   when (erroneous && hasReports diag') do
     exitFailure

@@ -27,13 +27,21 @@ data ConfigFlags = ConfigFlags
 
 data InputFlags = InputFlags
   { -- | [FILE...]
-    files :: [FilePath]
+    modules :: [FilePath],
+    -- | @-I@
+    includeDirs :: [FilePath]
   }
   deriving (Show)
 
 data OutputFlags = OutputFlags
   { -- | @-o@ or @--out@
-    out :: FilePath
+    out :: FilePath,
+    -- | @--no-main@
+    noMain :: Bool,
+    -- | @--keep-zci@
+    keepZci :: Bool,
+    -- | @--keep-zco@
+    keepZco :: Bool
   }
   deriving (Show)
 
@@ -44,11 +52,9 @@ data WarningFlags = WarningFlags
     recNonRec :: Bool,
     -- | @-Wadditive-singleton@ and @-Wno-additive-singleton@
     additiveSingleton :: Bool,
-
     -- | @-Werror@
     areErrors :: Bool,
     -- | @-Wall@
     all :: Bool
   }
   deriving (Show)
-

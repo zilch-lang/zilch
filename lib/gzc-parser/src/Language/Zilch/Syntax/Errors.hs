@@ -96,37 +96,37 @@ fromDesugarerError :: DesugarError -> Report String
 fromDesugarerError (InvalidIntegerSuffix suffix pos) =
   Err
     Nothing
-    "Parse error"
+    "Invalid integer suffix in integer literal."
     [(pos, This $ "Integral constant contains the suffix '" <> Text.unpack suffix <> "', which is invalid")]
     ["Numeric prefixes are only available for builtin integer and floating point types."]
 fromDesugarerError (LinearTopLevelBinding name pos) =
   Err
     Nothing
-    "Parse error"
+    "Linear top-level 'let' or 'rec' binding."
     [(pos, This $ "Top-level binding '" <> Text.unpack name <> "' cannot be made linear")]
     ["Top-level bindings may only be either erased (usage 0) or unrestricted (usage ω)."]
 fromDesugarerError (PublicAssumptions pos) =
   Err
     Nothing
-    "Parse error"
+    "Public assumptions in module."
     [(pos, This "Cannot bind assumptions publicly")]
     [Hint "Remove the 'public' modifier from this declaration."]
 fromDesugarerError (TypelessAssumption name pos) =
   Err
     Nothing
-    "Parse error"
+    "Type of assumption is not fully known."
     [(pos, This $ "Assumption '" <> Text.unpack name <> "' is missing a type")]
     ["Every top-level assumption must have a type to be complete."]
 fromDesugarerError (AssumptionsInMutualBlock pos) =
   Err
     Nothing
-    "Parse error"
+    "Assumptions bound within mutually recursive definitions."
     [(pos, This "Cannot bind assumptions inside a 'mutual' block")]
     []
 fromDesugarerError (HoleInValType loc p1 p2) =
   Err
     Nothing
-    "Parse error"
+    "Hole found within a 'val' type binding."
     messages
     []
   where
@@ -136,25 +136,25 @@ fromDesugarerError (HoleInValType loc p1 p2) =
 fromDesugarerError (ImplicitProductType p) =
   Err
     Nothing
-    "Parse error"
+    "Implicit dependent product parameter."
     [(p, This $ "Product dependent parameter cannot be made implicit")]
     []
 fromDesugarerError (AdditiveProductWithMultiplicity x p) =
   Err
     Nothing
-    "Parse error"
+    "Restricted bindings not allowed here."
     [(p, This $ "Binding named '" <> Text.unpack x <> "' cannot have a multiplicity attached")]
     [Note "The dependent parameter of an additive product cannot have a multiplicity."]
 fromDesugarerError (NumberSuffixInAccess p) =
   Err
     Nothing
-    "Parse error"
+    "Additive product access with integer literal type suffix."
     [(p, This "The accessor of an additive tuple cannot have a type suffix.")]
     []
 fromDesugarerError (DuplicateBindingInMultiplicativeTuplesEliminator x p ps) =
   Err
     Nothing
-    "Parse error"
+    "Non-linear eliminator pattern."
     ([(p, This $ "Binding '" <> Text.unpack x <> "' is present multiple times in this eliminator pattern")] <> poss)
     []
   where
@@ -162,7 +162,7 @@ fromDesugarerError (DuplicateBindingInMultiplicativeTuplesEliminator x p ps) =
 fromDesugarerError (SingletonMultiplicativeTupleElim p) =
   Err
     Nothing
-    "Parse error"
+    "Multiplicative singleton eliminator pattern"
     [(p, This "Invalid singleton pattern in eliminator")]
     []
 
@@ -170,7 +170,6 @@ fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =
   Warn
     (Just "-Wadditive-singleton")
-    "Parse warning"
+    "Singleton additive product."
     [(p, This "Additive dependent tuple only contains a single element")]
     [Note "This is equivalent to removing the tuple completely."]
-fromDesugarerWarning _ = Warn Nothing "sorry" [] []
