@@ -5,17 +5,7 @@ import Data.Text (Text)
 
 data Module
   = Mod
-      [Located Import]
       [Located TopLevelDefinition]
-  deriving (Show)
-
-data Import
-  = Import
-      Bool
-      -- ^ Is the import @public@?
-      Bool
-      -- ^ Is the import @open@ed?
-      () -- TODO
   deriving (Show)
 
 data TopLevelDefinition
@@ -55,6 +45,20 @@ data Definition
       (Maybe (Located Integer))
       (Located Text)
       (Located Expression)
+  | Import
+      Bool
+      -- ^ Is the import @open@ed
+      (Located ImportSpine)
+      -- ^ Import list
+  deriving (Show)
+
+data ImportSpine
+  = Empty
+  | Base
+      (Located Text)
+      (Located ImportSpine)
+  | Branch
+      [Located ImportSpine]
   deriving (Show)
 
 data Parameter

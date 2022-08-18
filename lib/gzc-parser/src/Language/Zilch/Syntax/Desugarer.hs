@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
@@ -12,7 +13,7 @@ import Control.Monad.Except (MonadError, runExcept, throwError)
 import Control.Monad.State (MonadState, evalStateT, get, modify)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
 import Data.Bifunctor (bimap, second)
-import Data.Foldable (fold, foldrM, foldlM)
+import Data.Foldable (fold, foldlM, foldrM)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
 import Data.Maybe (fromJust, fromMaybe)
@@ -42,9 +43,9 @@ desugarCST mod =
 -----------------
 
 desugarModule :: forall m. MonadDesugar m => Located CST.Module -> m (Located AST.Module)
-desugarModule (CST.Mod _ defs :@ p) = do
+desugarModule (CST.Mod defs :@ p) = do
   defs' <- mconcat <$> traverse desugarToplevel defs
-  pure $ AST.Mod [] defs' :@ p
+  pure $ AST.Mod defs' :@ p
 
 desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m [Located AST.TopLevel]
 desugarToplevel (CST.TopLevel _ True (CST.Assume _ :@ _) :@ p) = throwError $ PublicAssumptions p
@@ -259,8 +260,8 @@ desugarExpression (CST.EAccess e args :@ _) = do
     mkAccess _ (CST.EInt _ (Just _) :@ p) = throwError $ NumberSuffixInAccess p
     mkAccess e1 (CST.EInt x Nothing :@ p) =
       pure $ AST.EAdditiveTupleAccess e1 (Language.Zilch.Syntax.Desugarer.read x) :@ spanOf (getPos e1) p
-    mkAccess _ (CST.EId _ :@ _) = error "unsupported identifier access"
-    mkAccess _ _ = undefined
+    mkAccess e1 (CST.EId x :@ p) = pure $ AST.EFieldAccess e1 x :@ spanOf (getPos e1) p
+    mkAccess (_ :@ p1) (_ :@ p2) = throwError $ UnsupportedAccessKind (spanOf p1 p2)
 desugarExpression (CST.EMultiplicativeTupleElim bind mult [] m n :@ p) = do
   mult' <- desugarMultiplicity mult p
   m' <- desugarExpression m
@@ -279,6 +280,7 @@ desugarExpression (CST.EMultiplicativeTupleElim bind mult ids m n :@ p) = do
 
   pure $ foldr mkLet n' ((bind, mult, x, y, m) : tuples)
   where
+    go _ [] _ _ = undefined
     go mult [x, y] m _ = [(Nothing, mult, x, y, m)]
     go mult (x : xs) m n =
       let tmp = (Text.pack $ "?" <> show n) :@ p

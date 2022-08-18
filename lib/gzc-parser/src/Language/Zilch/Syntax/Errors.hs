@@ -87,6 +87,9 @@ data DesugarError
   | -- | Multiplicative tuple eliminator with a single element.
     SingletonMultiplicativeTupleElim
       Position
+  | -- | An access syntax is used with neither a number nor an identifier.
+    UnsupportedAccessKind
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -164,6 +167,12 @@ fromDesugarerError (SingletonMultiplicativeTupleElim p) =
     Nothing
     "Multiplicative singleton eliminator pattern"
     [(p, This "Invalid singleton pattern in eliminator")]
+    []
+fromDesugarerError (UnsupportedAccessKind p) =
+  Err
+    Nothing
+    "Unsupported field access."
+    [(p, This "Cannot access an element whose index is neither a number nor an identifier")]
     []
 
 fromDesugarerWarning :: DesugarWarning -> Report String

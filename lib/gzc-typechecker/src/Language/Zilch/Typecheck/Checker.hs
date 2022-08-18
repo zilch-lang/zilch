@@ -7,7 +7,7 @@
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
-import Control.Monad (forM, unless, when, void)
+import Control.Monad (forM, unless, void, when)
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad.State (gets)
 import Control.Monad.Writer (tell)
@@ -90,12 +90,12 @@ checkProgram ctx mod = do
         (_, _, _) -> pure $ Just mult
 
 checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module, Context, Map (Located Text) Usage)
-checkProgram' ctx (AST.Mod imports defs :@ p) = do
+checkProgram' ctx (AST.Mod defs :@ p) = do
   case defs of
     [] -> pure (TAST.Mod [] :@ p, ctx, mempty)
     b : bs -> do
       (!b, ctx, u1) <- checkToplevel ctx b
-      (TAST.Mod defs :@ p, ctx, u2) <- checkProgram' ctx (AST.Mod imports bs :@ p)
+      (TAST.Mod defs :@ p, ctx, u2) <- checkProgram' ctx (AST.Mod bs :@ p)
 
       pure (TAST.Mod (b : defs) :@ p, ctx, u1 <> u2)
 
@@ -418,27 +418,27 @@ check rel ctx expr ty = do
       pure (mempty, TAST.EAdditiveProduct (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
     (AST.EMultiplicativePair e1 e2 :@ p, VMultiplicativeProduct m1 x ty ty2 :@ p1) -> do
       {-
-         0Γ ⊢ M ⇐⁰ A          Γ ⊢ N ⇐ᵖ B            ip = 0
-        ─────────────────────────────────────────────────── [⇐ ⊗-I₀]
-                      Γ ⊢ (M, N) ⇐ᵖ (x :ⁱ A) ⊗ B
-                      
-         Γ₁ ⊢ M ⇐¹ A            Γ₂ ⊢ N ⇐ᵖ B
-        ──────────────────────────────────── [⇐ ⊗-I₁]
-         ipΓ₁ + Γ₂ ⊢ (M, N) ⇐ᵖ (x :ⁱ A) ⊗ B
-────  -}
+               0Γ ⊢ M ⇐⁰ A          Γ ⊢ N ⇐ᵖ B            ip = 0
+              ─────────────────────────────────────────────────── [⇐ ⊗-I₀]
+                            Γ ⊢ (M, N) ⇐ᵖ (x :ⁱ A) ⊗ B
+
+               Γ₁ ⊢ M ⇐¹ A            Γ₂ ⊢ N ⇐ᵖ B
+              ──────────────────────────────────── [⇐ ⊗-I₁]
+               ipΓ₁ + Γ₂ ⊢ (M, N) ⇐ᵖ (x :ⁱ A) ⊗ B
+      ────  -}
       case TAST.extend rel * m1 of
         TAST.O -> do
           -- apply [⇐ ⊗-I₀]
           (_, e1) <- check TAST.Irrelevant ctx e1 ty
-          
+
           ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) :@ p1)
           (qs2, e2) <- check rel ctx e2 ty2'
-          
+
           pure (qs2, TAST.EMultiplicativePair e1 e2 :@ p)
         xMult -> do
           -- apply [⇐ ⊗-I₁]
           (qs1, e1) <- check TAST.Present ctx e1 ty
-          
+
           ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) :@ p1)
           (qs2, e2) <- check rel ctx e2 ty2'
 
@@ -494,7 +494,7 @@ check rel ctx expr ty = do
 
           let ipMult = pMult * i
               pMult = TAST.extend rel * unLoc mult
-              
+
           (qs2, n) <- defineLocal x ipMult xVal s ctx \ctx -> do
             t <- apply ctx t xVal
             (qs, n) <- defineLocal y pMult yVal t ctx \ctx -> do
@@ -505,7 +505,7 @@ check rel ctx expr ty = do
                   pure (qs, getPos n, n)
               pure (qs, getPos n, n)
             pure (qs, getPos n, n)
-          
+
           pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x y m n :@ p)
         ty -> do
           ty@(_ :@ p) <- quote ctx (lvl ctx) ty
@@ -861,7 +861,7 @@ synthetize rel ctx (AST.EMultiplicativePairElim z mult x y m n :@ p) = do
     VMultiplicativeProduct i _ s t :@ _ -> do
       xVal <- eval ctx (TAST.EFst m :@ getPos m)
       yVal <- eval ctx (TAST.ESnd m :@ getPos m)
-  
+
       let ipMult = pMult * i
           pMult = TAST.extend rel * unLoc mult
 

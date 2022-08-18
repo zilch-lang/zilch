@@ -19,6 +19,7 @@ import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
 import Language.Zilch.CLI.Flags (WarningFlags)
 import Language.Zilch.Syntax.Core
+import Language.Zilch.Syntax.Core.CST (ImportSpine (..))
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Syntax.Internal ()
 import qualified Text.Megaparsec as MP
@@ -126,8 +127,7 @@ parseModule =
   located do
     removeFrontComments
     Mod
-      <$> pure []
-      <*> MP.many (nonIndented . lexeme $ parseTopLevelDefinition <|> parseMutualDefinitions)
+      <$> MP.many (nonIndented . lexeme $ parseTopLevelDefinition <|> parseMutualDefinitions)
       <* token TkEOF
   where
     removeFrontComments = lexeme (pure ())
@@ -137,7 +137,7 @@ parseTopLevelDefinition = located $ lineFold \s -> do
   TopLevel
     <$> pure []
     <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
-    <*> MP.choice [parseLet s, parseAssume s, parseVal s]
+    <*> MP.choice [parseLet s, parseAssume s, parseVal s, parseImport s]
 
 parseMutualDefinitions :: forall m. MonadParser m => m (Located TopLevelDefinition)
 parseMutualDefinitions = located do
@@ -166,6 +166,39 @@ parseVal s = lexeme $ located do
     <$> (MP.optional parseResourceUsage <* s)
     <*> (lexeme parseIdentifier <* s)
     <*> (lexeme (token TkColon) *> s *> parseExpression s)
+
+parseImport :: forall m. MonadParser m => m () -> m (Located Definition)
+parseImport s = lexeme $ located do
+  isOpened <- maybe False (const True) <$> MP.optional (lexeme (token TkOpen) <* s)
+  lexeme (token TkImport) <* s
+  parts <- parseSpine s >>= ($ (Empty :@ undefined))
+  pure $ Import isOpened parts
+  where
+    parseBase :: forall m. MonadParser m => m () -> m (Located ImportSpine -> m (Located ImportSpine))
+    parseBase _ = do
+      id@(_ :@ p) <- parseIdentifier
+      pure \sp -> pure $ Base id sp :@ p
+
+    parseBranch :: forall m. MonadParser m => m () -> m (Located ImportSpine -> m (Located ImportSpine))
+    parseBranch s = do
+      branches :@ p <- located do
+        lexeme (token TkLeftBrace) <* s
+        branches <- lexeme (parseSpine s) `MP.sepBy1` (s *> lexeme (token TkComma) <* s)
+        token TkRightBrace
+        pure branches
+      pure \sp -> (:@ p) . Branch <$> traverse ($ sp) branches
+
+    parseSpine :: forall m. MonadParser m => m () -> m (Located ImportSpine -> m (Located ImportSpine))
+    parseSpine s = do
+      base <- parseBase s
+
+      MP.choice
+        [ do
+            s *> lexeme (token TkDoubleColon <|> token TkUniDoubleColon) <* s
+            spine <- parseBranch s <|> parseSpine s
+            pure \sp -> base =<< spine sp,
+          pure base
+        ]
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =

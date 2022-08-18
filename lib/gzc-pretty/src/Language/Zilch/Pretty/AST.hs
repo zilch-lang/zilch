@@ -10,7 +10,7 @@ import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
 
 instance Pretty (Located Module) where
-  pretty (Mod _ defs :@ _) =
+  pretty (Mod defs :@ _) =
     vsep (pretty <$> defs)
 
 instance Pretty (Located TopLevel) where

@@ -8,7 +8,6 @@ import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
 data Module
   = Mod
-      [()]
       [Located TopLevel]
   deriving (Show)
 
@@ -40,6 +39,14 @@ data Definition
       -- ^ The name of the binding
       (Located Expression)
       -- ^ The type assumed
+  | -- | An import
+    Import
+      Bool
+      -- ^ Is it @open@?
+      [Located Text]
+      -- ^ The qualification (module name)
+      (Located Text)
+      -- ^ The imported item
   deriving (Show)
 
 data Parameter
@@ -118,6 +125,9 @@ data Expression
   | EAdditiveTupleAccess
       (Located Expression)
       Integer
+  | EFieldAccess
+      (Located Expression)
+      (Located Text)
   | -- | @let p (x, y) as z := M; N@
     EMultiplicativePairElim
       (Maybe (Located Text))
