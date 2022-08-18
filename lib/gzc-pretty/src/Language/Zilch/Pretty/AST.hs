@@ -82,7 +82,7 @@ instance Pretty (Located Expression) where
       <> "⇒"
       <> space
       <> pretty ret
-  pretty (ELet def ret :@ _) =
+  pretty (ELocal def ret :@ _) =
     pretty def
       <> line
       <> pretty ret

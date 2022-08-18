@@ -291,7 +291,7 @@ check rel ctx expr ty = do
       ty2 <- quote ctx (lvl ctx) ty2
 
       pure (qs, TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) u :@ p1)
-    (AST.ELet (AST.Let False m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
+    (AST.ELocal (AST.Let False m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
          0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ ⊢ e ⇐⁰ A          ip = 0
         ──────────────────────────────────────────────────────────────────────────────────────── [⇐ let-I₀]
@@ -328,7 +328,7 @@ check rel ctx expr ty = do
           let qs1' = qs1 `Usage.merge` qs3
 
           pure (qs1' `Usage.concat` Usage.scale xMultiplicity qs2, TAST.ELet (TAST.Let False m1 x ty ex :@ p1) u :@ p2)
-    (AST.ELet (AST.Let True m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
+    (AST.ELocal (AST.Let True m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
          0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ, x :⁰ A ⊢ e ⇐⁰ A          ip = 0
         ──────────────────────────────────────────────────────────────────────────────────────────────── [⇐ rec-I₀]

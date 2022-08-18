@@ -54,11 +54,11 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
 
   -- we forbid top-level linear definitions
   case def' of
-    Just (AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
-    Just (AST.Val (I :@ _) (name :@ _) _ :@ pos) -> throwError $ LinearTopLevelBinding name pos
-    Nothing -> pure []
-    Just (AST.Val _ _ ty :@ p1) | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
-    Just def' -> pure [AST.TopLevel isPublic def' :@ p]
+    [AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos] -> throwError $ LinearTopLevelBinding name pos
+    [AST.Val (I :@ _) (name :@ _) _ :@ pos] -> throwError $ LinearTopLevelBinding name pos
+    [] -> pure []
+    [AST.Val _ _ ty :@ p1] | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
+    [def'] -> pure [AST.TopLevel isPublic def' :@ p]
 desugarToplevel (CST.Mutual defs :@ _) = do
   defs' <- desugarToplevel' defs
   defs'' <- generateSignatures [] defs'
@@ -84,8 +84,9 @@ holes (AST.EInteger _ _ :@ _) = Nothing
 holes (AST.ECharacter _ :@ _) = Nothing
 holes (AST.EIdentifier _ :@ _) = Nothing
 holes (AST.ELam (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
-holes (AST.ELet (AST.Let _ _ _ e1 e2 :@ _) e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
-holes (AST.ELet (AST.Val {} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
+holes (AST.ELocal (AST.Let _ _ _ e1 e2 :@ _) e3 :@ _) = holes e1 <|> holes e2 <|> holes e3
+holes (AST.ELocal (AST.Val {} :@ _) _ :@ _) = error "cannot bind 'val' in 'val'"
+holes (AST.ELocal (AST.Import {} :@ _) e2 :@ _) = holes e2
 holes (AST.EApplication e1 _ e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EPi (AST.Parameter _ _ _ e1 :@ _) e2 :@ _) = holes e1 <|> holes e2
 holes (AST.EBoolean _ :@ _) = Nothing
@@ -104,7 +105,7 @@ holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EMultiplicativeUnitElim _ _ m n :@ _) = holes m <|> holes n
 
-desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m (Maybe (Located AST.Definition))
+desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m [Located AST.Definition]
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   usage' <- desugarMultiplicity usage p2
   (cParams, aParams) <- get
@@ -115,7 +116,7 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   let par = cParams <> params
   val <- if null par then desugarExpression ret else desugarExpression (CST.ELam par ret :@ p1)
 
-  pure . Just $ AST.Let False usage' name ty val :@ p
+  pure . pure $ AST.Let False usage' name ty val :@ p
   where
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -128,7 +129,7 @@ desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
   let par = cParams <> params
   val <- if null par then desugarExpression ret else desugarExpression (CST.ELam par ret :@ p1)
 
-  pure . Just $ AST.Let True usage' name ty val :@ p
+  pure . pure $ AST.Let True usage' name ty val :@ p
   where
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Assume params :@ _) = do
@@ -140,15 +141,17 @@ desugarDefinition (CST.Assume params :@ _) = do
         _ -> pure ()
       pure param'
   modify $ bimap (<> params) (<> params')
-  pure Nothing
+  pure []
 desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
   usage' <- desugarMultiplicity usage p2
   (_, aParams) <- get
   ty' <- desugarExpression ty
   let ty'' = foldr mkPi ty' aParams
-  pure . Just $ AST.Val usage' name ty'' :@ p
+  pure . pure $ AST.Val usage' name ty'' :@ p
   where
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
+desugarDefinition (CST.Import opened spine :@ p) = do
+  undefined
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m [Located AST.Parameter]
 desugarParameter (CST.Implicit args :@ p) = do
@@ -190,9 +193,9 @@ desugarExpression (CST.ELam params expr :@ _) = do
     mkLam param expr = AST.ELam param expr :@ spanOf (getPos param) (getPos expr)
 desugarExpression (CST.EDo expr :@ p) = desugarExpression (CST.ELam [] expr :@ p)
 desugarExpression (CST.ELet def ret :@ p) = do
-  def' <- fromJust <$> desugarDefinition def
+  defs' <- desugarDefinition def
   ret' <- desugarExpression ret
-  pure $ AST.ELet def' ret' :@ p
+  pure $ foldr (\d r -> AST.ELocal d r :@ p) ret' defs'
 desugarExpression (CST.EParens e :@ _) = desugarExpression e
 desugarExpression (CST.EApplication e es :@ _) = do
   e' <- desugarExpression e

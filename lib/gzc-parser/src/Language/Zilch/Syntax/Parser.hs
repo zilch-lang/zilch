@@ -9,6 +9,7 @@
 module Language.Zilch.Syntax.Parser (parseTokens) where
 
 import Control.Applicative ((<|>))
+import Control.Monad ((<=<))
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
@@ -19,7 +20,6 @@ import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
 import Language.Zilch.CLI.Flags (WarningFlags)
 import Language.Zilch.Syntax.Core
-import Language.Zilch.Syntax.Core.CST (ImportSpine (..))
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Syntax.Internal ()
 import qualified Text.Megaparsec as MP
@@ -196,7 +196,7 @@ parseImport s = lexeme $ located do
         [ do
             s *> lexeme (token TkDoubleColon <|> token TkUniDoubleColon) <* s
             spine <- parseBranch s <|> parseSpine s
-            pure \sp -> base =<< spine sp,
+            pure $ base <=< spine,
           pure base
         ]
 

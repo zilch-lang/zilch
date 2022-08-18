@@ -74,7 +74,7 @@ data Expression
       -- ^ Explicit or implicit parameters
       (Located Expression)
       -- ^ Return expression
-  | ELet
+  | ELocal
       (Located Definition)
       -- ^ Additional binding
       (Located Expression)
