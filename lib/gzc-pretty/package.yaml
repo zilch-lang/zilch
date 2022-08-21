@@ -15,3 +15,4 @@ dependencies:
 - gzc-core
 - prettyprinter == 1.7.0
 - prettyprinter-ansi-terminal == 1.1.2
+- containers ==0.6.*

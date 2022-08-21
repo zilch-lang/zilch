@@ -11,7 +11,7 @@ import Data.Located (Located)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Error.Diagnose (Diagnostic, addFile, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
+import Error.Diagnose (Diagnostic, Report (..), addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
 import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), WarningFlags)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.CLI.Parser (getFlags)
@@ -19,6 +19,7 @@ import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Pretty.TAST ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Syntax.Desugarer (desugarCST)
+import Language.Zilch.Syntax.Driver (parseModules)
 import Language.Zilch.Syntax.Lexer (lexFile)
 import Language.Zilch.Syntax.Parser (parseTokens)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
@@ -35,48 +36,63 @@ main :: IO ()
 main = do
   !flags <- getFlags
 
-  files <- case modules (input flags) of
-    [] -> pure . File "stdin" <$> Text.getContents
-    fs -> forM fs \f -> File f <$> Text.readFile f
+  -- files <- case modules (input flags) of
+  --   [] -> pure . File "stdin" <$> Text.getContents
+  --   fs -> forM fs \f -> File f <$> Text.readFile f
+
+  when (null $ modules $ input flags) do
+    printDiagnostic stderr True True 4 defaultStyle $ addReport def $ Err Nothing ("No module specified on command-line." :: String) [] []
+    exitFailure
 
   let ?warnings = warnings flags
+      ?includeDirs = includeDirs $ input flags
 
-  forM_ files \(File path content) -> do
-    ast <- runExceptT do
-      (!tks, warns) <- liftEither $ lexFile path content
-      liftIO $ doOutputWarnings path content warns
+  (files, res) <- parseModules $ Text.pack <$> modules (input flags)
+  ast <- runExceptT do
+    (allASTs, warns) <- liftEither res
 
-      (!cst, warns) <- liftEither $ parseTokens path tks
-      liftIO $ doOutputWarnings path content warns
+    liftIO $ doOutputWarnings files warns
+    pure allASTs
 
-      (!ast, warns) <- liftEither $ desugarCST cst
-      liftIO $ doOutputWarnings path content warns
-      liftIO $ doDumpAST flags ast
-      liftIO $ putStrLn $ "✅ Module '" <> path <> "' parsed"
+  -- forM_ files \(File path content) -> do
 
-      (!tast, warns) <- liftEither $ elabProgram ast
-      liftIO $ doOutputWarnings path content warns
-      liftIO $ doDumpTAST flags tast
-      liftIO $ putStrLn $ "✅ Module '" <> path <> "' passed type-checking"
+  --     (!tks, warns) <- liftEither $ lexFile path content
+  --     liftIO $ doOutputWarnings path content warns
 
-      pure (tks, cst, ast, tast)
+  --     (!cst, warns) <- liftEither $ parseTokens path tks
+  --     liftIO $ doOutputWarnings path content warns
 
-    case ast of
-      Left diag -> do
-        printDiagnostic stderr True True 4 defaultStyle (addFile diag path $ Text.unpack content)
-        exitFailure
-      Right (_, _, _, _) -> pure ()
+  --     (!ast, _, warns) <- liftEither =<< liftIO (desugarCST cst)
+  --     liftIO $ doOutputWarnings path content warns
+  --     liftIO $ doDumpAST flags ast
+  --     liftIO $ putStrLn $ "✅ Module '" <> path <> "' parsed"
 
-    pure ()
+  --     (!tast, warns) <- liftEither $ elabProgram ast
+  --     liftIO $ doOutputWarnings path content warns
+  --     liftIO $ doDumpTAST flags tast
+  --     liftIO $ putStrLn $ "✅ Module '" <> path <> "' passed type-checking"
 
-doOutputWarnings :: (?warnings :: WarningFlags) => FilePath -> Text -> Diagnostic String -> IO ()
-doOutputWarnings path content diag = do
+  --     pure (tks, cst, ast, tast)
+
+  case ast of
+    Left diag -> do
+      printDiagnostic stderr True True 4 defaultStyle (mkDiag diag files)
+      exitFailure
+    Right _ -> pure ()
+
+  pure ()
+
+doOutputWarnings :: (?warnings :: WarningFlags) => [(FilePath, Text)] -> Diagnostic String -> IO ()
+doOutputWarnings files diag = do
   let erroneous = W.areErrors ?warnings
   let diag' = if erroneous then warningsToErrors diag else diag
 
-  printDiagnostic stderr True True 4 defaultStyle (addFile diag' path $ Text.unpack content)
+  printDiagnostic stderr True True 4 defaultStyle (mkDiag diag' files) --addFile diag' path $ Text.unpack content)
   when (erroneous && hasReports diag') do
     exitFailure
+
+mkDiag :: Diagnostic String -> [(FilePath, Text)] -> Diagnostic String
+mkDiag diag files = foldr (\(path, content) diag -> addFile diag path $ Text.unpack content) diag files
 
 doDumpAST :: Flags -> Located AST.Module -> IO ()
 doDumpAST flags mod

@@ -17,6 +17,8 @@ dependencies:
 - mtl ==2.2.2
 - diagnose >=2
 - gzc-flags
+- algebraic-graphs >=0.6
+- containers ==0.6.*
 
 ghc-options:
 - -Wall

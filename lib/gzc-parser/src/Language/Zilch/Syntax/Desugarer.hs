@@ -9,17 +9,18 @@ module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
 import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_, when)
-import Control.Monad.Except (MonadError, runExcept, throwError)
-import Control.Monad.State (MonadState, evalStateT, get, modify)
+import Control.Monad.Except (MonadError, runExceptT, throwError)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State (MonadState, get, modify, runStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
-import Data.Bifunctor (bimap, second)
 import Data.Foldable (fold, foldlM, foldrM)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
+import GHC.Stack (HasCallStack)
 import Language.Zilch.CLI.Flags (WarningFlags)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
@@ -28,17 +29,18 @@ import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 
-type MonadDesugar m = (?warnings :: WarningFlags, MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter]) m)
+type MonadDesugar m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter], [Located Text]) m, HasCallStack, MonadIO m)
 
-desugarCST :: (?warnings :: WarningFlags) => Located CST.Module -> Either (Diagnostic String) (Located AST.Module, Diagnostic String)
-desugarCST mod =
-  bimap toErrorDiagnostic (second toWarningDiagnostic) $
-    runExcept $
-      runWriterT $
-        evalStateT (desugarModule mod) ([], [])
+desugarCST :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadIO m) => Located CST.Module -> m (Either (Diagnostic String) (Located AST.Module, [Located Text], Diagnostic String))
+desugarCST mod = do
+  res <- runExceptT $ runWriterT $ runStateT (desugarModule mod) ([], [], [])
+  pure $ adapt res
   where
     toErrorDiagnostic err = addReport def (fromDesugarerError err)
     toWarningDiagnostic warns = foldl' addReport def (fromDesugarerWarning <$> warns)
+
+    adapt (Left e) = Left $ toErrorDiagnostic e
+    adapt (Right ((mod, (_, _, graph)), warns)) = Right (mod, graph, toWarningDiagnostic warns)
 
 -----------------
 
@@ -52,13 +54,14 @@ desugarToplevel (CST.TopLevel _ True (CST.Assume _ :@ _) :@ p) = throwError $ Pu
 desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
   def' <- desugarDefinition def
 
-  -- we forbid top-level linear definitions
   case def' of
-    [AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos] -> throwError $ LinearTopLevelBinding name pos
-    [AST.Val (I :@ _) (name :@ _) _ :@ pos] -> throwError $ LinearTopLevelBinding name pos
     [] -> pure []
-    [AST.Val _ _ ty :@ p1] | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
-    [def'] -> pure [AST.TopLevel isPublic def' :@ p]
+    defs -> forM defs \case
+      -- we forbid top-level linear definitions
+      AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos -> throwError $ LinearTopLevelBinding name pos
+      AST.Val (I :@ _) (name :@ _) _ :@ pos -> throwError $ LinearTopLevelBinding name pos
+      AST.Val _ _ ty :@ p1 | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
+      def -> pure $ AST.TopLevel isPublic def :@ p
 desugarToplevel (CST.Mutual defs :@ _) = do
   defs' <- desugarToplevel' defs
   defs'' <- generateSignatures [] defs'
@@ -71,6 +74,7 @@ desugarToplevel (CST.Mutual defs :@ _) = do
       | n `elem` withSig = generateSignatures withSig ts
       | Just (loc, p1) <- holes ty = throwError $ HoleInValType loc p1 p
       | otherwise = ((AST.TopLevel False (AST.Val usage name ty :@ p) :@ p) :) <$> generateSignatures withSig ts
+    generateSignatures withSig ((AST.TopLevel _ (AST.Import {} :@ _) :@ _) : ts) = generateSignatures withSig ts
 
     desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Located AST.TopLevel]
     desugarToplevel' [] = pure []
@@ -104,11 +108,12 @@ holes (AST.ESnd e :@ _) = holes e
 holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EMultiplicativeUnitElim _ _ m n :@ _) = holes m <|> holes n
+holes (AST.EFieldAccess e _ :@ _) = holes e
 
 desugarDefinition :: forall m. MonadDesugar m => Located CST.Definition -> m [Located AST.Definition]
 desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   usage' <- desugarMultiplicity usage p2
-  (cParams, aParams) <- get
+  (cParams, aParams, _) <- get
   params' <- (<>) aParams . fold <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
@@ -121,7 +126,7 @@ desugarDefinition (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p)
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Rec usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
   usage' <- desugarMultiplicity usage p2
-  (cParams, aParams) <- get
+  (cParams, aParams, _) <- get
   params' <- (<>) aParams . fold <$> traverse desugarParameter params
   retTy' <- traverse desugarExpression retTy
 
@@ -140,18 +145,26 @@ desugarDefinition (CST.Assume params :@ _) = do
         AST.Parameter _ _ (name :@ _) ty :@ p | Just _ <- holes ty -> throwError $ TypelessAssumption name p
         _ -> pure ()
       pure param'
-  modify $ bimap (<> params) (<> params')
+  modify $ trimap (<> params) (<> params') id
   pure []
 desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
   usage' <- desugarMultiplicity usage p2
-  (_, aParams) <- get
+  (_, aParams, _) <- get
   ty' <- desugarExpression ty
   let ty'' = foldr mkPi ty' aParams
   pure . pure $ AST.Val usage' name ty'' :@ p
   where
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Import opened spine :@ p) = do
-  undefined
+  let spines = flattenBranches spine
+  pure $ (:@ p) . uncurry (AST.Import opened) . unsnoc <$> spines
+  where
+    flattenBranches :: Located CST.ImportSpine -> [[Located Text]]
+    flattenBranches (CST.Empty :@ _) = []
+    flattenBranches (CST.Base mod p :@ _) = case flattenBranches p of
+      [] -> [[mod]]
+      mods -> ([mod] <>) <$> mods
+    flattenBranches (CST.Branch mods :@ _) = mods >>= flattenBranches
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m [Located AST.Parameter]
 desugarParameter (CST.Implicit args :@ p) = do
@@ -196,6 +209,10 @@ desugarExpression (CST.ELet def ret :@ p) = do
   defs' <- desugarDefinition def
   ret' <- desugarExpression ret
   pure $ foldr (\d r -> AST.ELocal d r :@ p) ret' defs'
+desugarExpression (CST.EImport imp ret :@ p) = do
+  imps' <- desugarDefinition imp
+  ret' <- desugarExpression ret
+  pure $ foldr (\i r -> AST.ELocal i r :@ p) ret' imps'
 desugarExpression (CST.EParens e :@ _) = desugarExpression e
 desugarExpression (CST.EApplication e es :@ _) = do
   e' <- desugarExpression e
@@ -319,3 +336,9 @@ desugarIntegerSuffix p suffix = throwError $ InvalidIntegerSuffix suffix p
 
 read :: Read a => Text -> a
 read = Prelude.read . Text.unpack
+
+unsnoc :: [a] -> ([a], a)
+unsnoc l = (init l, last l)
+
+trimap :: (a -> d) -> (b -> e) -> (c -> f) -> (a, b, c) -> (d, e, f)
+trimap f g h (x, y, z) = (f x, g y, h z)

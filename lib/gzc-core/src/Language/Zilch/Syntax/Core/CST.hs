@@ -92,6 +92,9 @@ data Expression
       (Located Definition)
       -- ^ Local definition
       (Located Expression)
+  | EImport
+      (Located Definition)
+      (Located Expression)
   | EParens (Located Expression)
   | EHole
   | ETypedHole

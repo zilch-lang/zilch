@@ -247,7 +247,8 @@ parseExpression s =
   located $
     MP.choice
       [ lineFold \s' -> parseMultiplicativePairDestructor s s',
-        ELet <$> (lineFold (\s' -> lexeme (parseLet s')) <* s) <*> parseExpression s,
+        ELet <$> (lineFold (lexeme . parseLet) <* s) <*> parseExpression s,
+        EImport <$> (lineFold (lexeme . parseImport) <* s) <*> parseExpression s,
         parseIf s,
         parseLambda s,
         parseDo s,

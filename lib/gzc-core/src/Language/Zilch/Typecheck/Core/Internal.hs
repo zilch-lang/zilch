@@ -1,9 +1,10 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Language.Zilch.Typecheck.Core.Internal (Value (.., VMeta, VVariable), module Language.Zilch.Typecheck.Core.Internal) where
-    
+
 import Data.Located (Located)
+import Data.Map (Map)
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
@@ -97,9 +98,11 @@ data Expression
   | EAdditiveUnit
   | EOne
   | ETop
-  | EFst
+  | -- | @FST e@
+    EFst
       (Located Expression)
-  | ESnd
+  | -- | @SND e@
+    ESnd
       (Located Expression)
   | -- | @let p (x, y) as z := M; N@
     EMultiplicativePairElim
@@ -125,6 +128,15 @@ data Expression
       -- ^ @M@
       (Located Expression)
       -- ^ @N@
+  | -- | @INCLUDE "file.zc(i)" : τ@
+    EInclude
+      FilePath
+      -- ^ @"file.zc(i)"@
+      (Located Expression)
+      -- ^ @τ@
+  | -- | @'{ p x : τ }@
+    EComposite
+      (Map (Located Text) (Located Multiplicity, Located Expression))
   deriving (Show)
 
 data BuiltinType
@@ -266,4 +278,3 @@ instance Show Closure where
   show _ = "<<clos>>"
 
 type Implicitness = Bool
-

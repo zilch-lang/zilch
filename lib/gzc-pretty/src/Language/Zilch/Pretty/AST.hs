@@ -7,7 +7,7 @@ module Language.Zilch.Pretty.AST where
 import Data.Located (Located ((:@)), unLoc)
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, concatWith, emptyDoc, enclose, hardline, indent, line, parens, space, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -48,6 +48,13 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
+  pretty (Import isOpened mod name :@ _) =
+    (if isOpened then "open" <> space else "")
+      <> "import"
+      <> space
+      <> concatWith (surround "∷") (pretty . unLoc <$> mod)
+      <> (if null mod then "" else "∷")
+      <> pretty (unLoc name)
 
 instance Pretty (Located Parameter) where
   pretty (Parameter False (W :@ _) ("_" :@ _) ty :@ _) =

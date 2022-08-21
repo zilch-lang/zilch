@@ -5,10 +5,11 @@
 module Language.Zilch.Pretty.TAST where
 
 import Data.Located (Located ((:@)), unLoc)
+import qualified Data.Map as Map
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity
-import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, emptyDoc, enclose, hardline, indent, line, parens, space, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, emptyDoc, enclose, hardline, indent, line, parens, space, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -163,6 +164,32 @@ instance Pretty (Located Expression) where
       <> pretty m
       <> hardline
       <> pretty n
+  pretty (EInclude file ty :@ _) =
+    "INCLUDE"
+      <> space
+      <> enclose "\"" "\"" (pretty file)
+      <> space
+      <> colon
+      <> space
+      <> pretty ty
+  pretty (EComposite fields :@ _) =
+    "'"
+      <> align
+        ( "{"
+            <> space
+            <> concatWith (surround $ line <> ", ") (prettyField <$> Map.toList fields)
+            <> space
+            <> "}"
+        )
+    where
+      prettyField (x, (p, t)) =
+        pretty p
+          <> space
+          <> pretty (unLoc x)
+          <> space
+          <> colon
+          <> space
+          <> pretty t
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

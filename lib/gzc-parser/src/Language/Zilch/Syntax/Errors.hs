@@ -5,7 +5,7 @@
 
 module Language.Zilch.Syntax.Errors where
 
-import Data.Located (Position)
+import Data.Located (Located, Position)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Marker (This, Where), Note (Hint, Note), Report (Err, Warn))
@@ -182,3 +182,43 @@ fromDesugarerWarning (SingletonAdditivePair p) =
     "Singleton additive product."
     [(p, This "Additive dependent tuple only contains a single element")]
     [Note "This is equivalent to removing the tuple completely."]
+
+------------------------------------
+
+data DriverError
+  = LexingE (Report String)
+  | ParsingE (Report String)
+  | DesugaringE DesugarError
+  | InvalidModuleName Text Int
+  | EmptyModuleName Text
+  | CyclicImports [[Located Text]]
+  | AmbiguousModuleName [Located Text] [FilePath]
+  | ModuleNotFound [Located Text] [FilePath]
+
+data DriverWarning
+  = LexingW LexicalWarning
+  | ParsingW ParsingWarning
+  | DesugaringW DesugarWarning
+
+fromDriverError :: DriverError -> Report String
+fromDriverError (LexingE err) = err
+fromDriverError (ParsingE err) = err
+fromDriverError (DesugaringE err) = fromDesugarerError err
+fromDriverError (InvalidModuleName mod idx) =
+  Err
+    Nothing
+    ("Invalid character '" <> (Text.index mod idx : "") <> "' found at index " <> show idx <> " in name '" <> Text.unpack mod <> "'.")
+    []
+    []
+fromDriverError (EmptyModuleName mod) =
+  Err
+    Nothing
+    ("Module '" <> Text.unpack mod <> "' contains an empty path.")
+    []
+    []
+fromDriverError _ = undefined
+
+fromDriverWarning :: DriverWarning -> Report String
+fromDriverWarning (LexingW warn) = fromLexicalWarning warn
+fromDriverWarning (ParsingW warn) = fromParsingWarning warn
+fromDriverWarning (DesugaringW warn) = fromDesugarerWarning warn

@@ -26,6 +26,7 @@ library
   ghc-options: -Wall -Wextra
   build-depends:
       base >=4.7 && <5
+    , containers ==0.6.*
     , gzc-core
     , prettyprinter ==1.7.0
     , prettyprinter-ansi-terminal ==1.1.2
