@@ -69,6 +69,7 @@ executable gzc
     , gzc-parser
     , gzc-pretty
     , gzc-typechecker
+    , hashable >=1.4
     , mtl ==2.2.2
     , prettyprinter ==1.7.0
     , text ==1.2.4.1

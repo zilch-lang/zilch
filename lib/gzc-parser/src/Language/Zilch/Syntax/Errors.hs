@@ -2,13 +2,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Syntax.Errors where
 
-import Data.Located (Located, Position)
+import Data.Located (Located, Position, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Error.Diagnose (Marker (This, Where), Note (Hint, Note), Report (Err, Warn))
+import Error.Diagnose (Diagnostic, Marker (This, Where), Note (Hint, Note), Report (Err, Warn))
 import Error.Diagnose.Compat.Megaparsec
 import Language.Zilch.Syntax.Core.AST (HoleLocation (..))
 import qualified Text.Megaparsec as MP
@@ -186,9 +187,9 @@ fromDesugarerWarning (SingletonAdditivePair p) =
 ------------------------------------
 
 data DriverError
-  = LexingE (Report String)
-  | ParsingE (Report String)
-  | DesugaringE DesugarError
+  = LexingE (Diagnostic String)
+  | ParsingE (Diagnostic String)
+  | DesugaringE (Diagnostic String)
   | InvalidModuleName Text Int
   | EmptyModuleName Text
   | CyclicImports [[Located Text]]
@@ -196,14 +197,8 @@ data DriverError
   | ModuleNotFound [Located Text] [FilePath]
 
 data DriverWarning
-  = LexingW LexicalWarning
-  | ParsingW ParsingWarning
-  | DesugaringW DesugarWarning
 
 fromDriverError :: DriverError -> Report String
-fromDriverError (LexingE err) = err
-fromDriverError (ParsingE err) = err
-fromDriverError (DesugaringE err) = fromDesugarerError err
 fromDriverError (InvalidModuleName mod idx) =
   Err
     Nothing
@@ -216,9 +211,23 @@ fromDriverError (EmptyModuleName mod) =
     ("Module '" <> Text.unpack mod <> "' contains an empty path.")
     []
     []
+fromDriverError (AmbiguousModuleName mod dirs) =
+  Err
+    Nothing
+    ("Module '" <> show' mod <> "' found in multiple include directories.")
+    []
+    [Note $ "The following files were found in the include directories:\n" <> unlines (mappend "- " <$> dirs)]
+  where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+fromDriverError (ModuleNotFound mod dirs) =
+  Err
+    Nothing
+    ("Module '" <> show' mod <> "' not found in include path.")
+    []
+    [Note $ "None of the following directories contain this module:\n" <> unlines (mappend "- " <$> dirs)]
+  where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
 fromDriverError _ = undefined
 
 fromDriverWarning :: DriverWarning -> Report String
-fromDriverWarning (LexingW warn) = fromLexicalWarning warn
-fromDriverWarning (ParsingW warn) = fromParsingWarning warn
-fromDriverWarning (DesugaringW warn) = fromDesugarerWarning warn
+fromDriverWarning _ = undefined

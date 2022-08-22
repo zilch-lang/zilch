@@ -9,7 +9,7 @@ module Language.Zilch.Syntax.Desugarer (desugarCST) where
 
 import Control.Applicative ((<|>))
 import Control.Monad (forM, forM_, when)
-import Control.Monad.Except (MonadError, runExceptT, throwError)
+import Control.Monad.Except (MonadError, runExcept, runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State (MonadState, get, modify, runStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
@@ -29,12 +29,10 @@ import qualified Language.Zilch.Syntax.Core.CST as CST
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 
-type MonadDesugar m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter], [Located Text]) m, HasCallStack, MonadIO m)
+type MonadDesugar m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadError DesugarError m, MonadWriter [DesugarWarning] m, MonadState ([Located CST.Parameter], [Located AST.Parameter], [[Located Text]]) m, HasCallStack)
 
-desugarCST :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadIO m) => Located CST.Module -> m (Either (Diagnostic String) (Located AST.Module, [Located Text], Diagnostic String))
-desugarCST mod = do
-  res <- runExceptT $ runWriterT $ runStateT (desugarModule mod) ([], [], [])
-  pure $ adapt res
+desugarCST :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath]) => Located CST.Module -> Either (Diagnostic String) (Located AST.Module, [[Located Text]], Diagnostic String)
+desugarCST mod = adapt $ runExcept $ runWriterT $ runStateT (desugarModule mod) ([], [], [])
   where
     toErrorDiagnostic err = addReport def (fromDesugarerError err)
     toWarningDiagnostic warns = foldl' addReport def (fromDesugarerWarning <$> warns)
