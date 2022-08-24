@@ -122,7 +122,7 @@ parseModules modules = do
       --   and remove graph vertices when conjunctive constraints are @FALSE@
       modify $ second (nubOrdOn fst)
 
-      gets snd >>= liftIO . print
+      -- gets snd >>= liftIO . print
 
       ifaces <- foldrM (\(path, mod, iface) cache -> generateInterface path mod iface asts cache) [] asts
       (_, cache') <-
@@ -176,7 +176,7 @@ parseModules modules = do
 
 resolveModule :: forall m. MonadDriver m => Bool -> ImportGraph -> ParsedFiles -> Located Text -> m (ParsedFiles, ImportGraph)
 resolveModule isSourceImport graph cache mod = do
-  liftIO do putStrLn $ "Resolving module " <> Text.unpack (unLoc mod)
+  -- liftIO do putStrLn $ "Resolving module " <> Text.unpack (unLoc mod)
 
   -- - create constraints from all the module names
   constr <- pruneConstraints =<< generateConstraints [mod]

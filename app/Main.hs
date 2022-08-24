@@ -50,9 +50,6 @@ main = do
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
     liftIO $ putStrLn $ "✅ Modules parsed!"
 
-    liftIO do
-      forM_ allASTs \(path, mod, _) -> print (path, unLoc <$> mod)
-
     -- (allTASTs, warns) <- typecheckModules allASTs
     -- liftIO $ doOutputWarnings files warns
     -- liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
