@@ -6,9 +6,11 @@
 
 module Language.Zilch.Syntax.Errors where
 
-import Data.Located (Located, Position, unLoc)
+import Data.Functor ((<&>))
+import Data.Located (Located, Position, getPos, spanOf, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Debug.Trace (traceId, traceShow, traceShowId)
 import Error.Diagnose (Diagnostic, Marker (This, Where), Note (Hint, Note), Report (Err, Warn))
 import Error.Diagnose.Compat.Megaparsec
 import Language.Zilch.Syntax.Core.AST (HoleLocation (..))
@@ -195,6 +197,9 @@ data DriverError
   | CyclicImports [[Located Text]]
   | AmbiguousModuleName [Located Text] [FilePath]
   | ModuleNotFound [Located Text] [FilePath]
+  | UnresolvedImport [Located Text] [FilePath]
+  | CannotImportPrivateMember (Located Text) [Located Text]
+  | CyclicModuleImports [([Located Text], FilePath)]
 
 data DriverWarning
 
@@ -214,7 +219,7 @@ fromDriverError (EmptyModuleName mod) =
 fromDriverError (AmbiguousModuleName mod dirs) =
   Err
     Nothing
-    ("Module '" <> show' mod <> "' found in multiple include directories.")
+    ("Namespace '" <> show' mod <> "' found in multiple include directories.")
     []
     [Note $ "The following files were found in the include directories:\n" <> unlines (mappend "- " <$> dirs)]
   where
@@ -222,10 +227,38 @@ fromDriverError (AmbiguousModuleName mod dirs) =
 fromDriverError (ModuleNotFound mod dirs) =
   Err
     Nothing
-    ("Module '" <> show' mod <> "' not found in include path.")
+    ("Namespace '" <> show' mod <> "' not found in include path.")
     []
-    [Note $ "None of the following directories contain this module:\n" <> unlines (mappend "- " <$> dirs)]
+    [Note $ "None of the following directories contain this namespace:\n" <> unlines (mappend "- " <$> dirs)]
   where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+fromDriverError (UnresolvedImport mod dirs) =
+  Err
+    Nothing
+    ("Namespace '" <> show' mod <> "' not found in include path.")
+    [(p, This "While checking that this namespace exists")]
+    [Note $ "None of the following directories contain this namespace:\n" <> unlines (mappend "- " <$> dirs)]
+  where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+
+    p = foldr1 spanOf (getPos <$> mod)
+fromDriverError (CannotImportPrivateMember id mod) =
+  Err
+    Nothing
+    ("'" <> Text.unpack (unLoc id) <> "' is private within the module '" <> show' mod <> "'.")
+    [(getPos id, This "While checking that this namespace exists")]
+    []
+  where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+fromDriverError (CyclicModuleImports mods) =
+  Err
+    Nothing
+    ("Module ended up importing itself.")
+    messages
+    []
+  where
+    messages = mods <&> \(mod, _) -> (foldr1 spanOf (getPos <$> mod), Where $ "'" <> show' mod <> "' is included here")
+
     show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
 fromDriverError _ = undefined
 

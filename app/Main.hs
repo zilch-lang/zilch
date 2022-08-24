@@ -44,7 +44,7 @@ main = do
     (allASTs, warns) <- liftEither res
 
     liftIO $ doOutputWarnings files warns
-    liftIO $ forM_ allASTs \(path, ast) -> doDumpAST flags ast path
+    liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
     pure allASTs
 
   -- forM_ files \(File path content) -> do
@@ -71,9 +71,13 @@ main = do
     Left diag -> do
       printDiagnostic stderr True True 4 defaultStyle (mkDiag diag files)
       exitFailure
-    Right _ -> pure ()
+    Right ast -> do
+      print (fst3 <$> ast)
+      pure ()
 
   pure ()
+  where
+    fst3 ~(x, _, _) = x
 
 doOutputWarnings :: (?warnings :: WarningFlags) => [(FilePath, Text)] -> Diagnostic String -> IO ()
 doOutputWarnings files diag = do

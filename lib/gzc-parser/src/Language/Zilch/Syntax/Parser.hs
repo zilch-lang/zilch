@@ -136,7 +136,7 @@ parseTopLevelDefinition :: forall m. MonadParser m => m (Located TopLevelDefinit
 parseTopLevelDefinition = located $ lineFold \s -> do
   TopLevel
     <$> pure []
-    <*> (isJust <$> MP.optional (lexeme (token TkPublic) <* s))
+    <*> (isJust <$> MP.optional (lexeme (token TkPublic)))
     <*> MP.choice [parseLet s, parseAssume s, parseVal s, parseImport s]
 
 parseMutualDefinitions :: forall m. MonadParser m => m (Located TopLevelDefinition)

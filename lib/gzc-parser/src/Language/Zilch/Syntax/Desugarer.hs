@@ -155,6 +155,7 @@ desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
 desugarDefinition (CST.Import opened spine :@ p) = do
   let spines = flattenBranches spine
+  modify $ third3 (<> spines)
   pure $ (:@ p) . uncurry (AST.Import opened) . unsnoc <$> spines
   where
     flattenBranches :: Located CST.ImportSpine -> [[Located Text]]
@@ -340,3 +341,6 @@ unsnoc l = (init l, last l)
 
 trimap :: (a -> d) -> (b -> e) -> (c -> f) -> (a, b, c) -> (d, e, f)
 trimap f g h (x, y, z) = (f x, g y, h z)
+
+third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
+third3 = trimap id id

@@ -1,26 +1,40 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Syntax.Driver where
 
 import qualified Algebra.Graph.Acyclic.AdjacencyMap as Acyclic
 import qualified Algebra.Graph.AdjacencyMap as Cyclic
-import Control.Monad (when)
+import qualified Algebra.Graph.AdjacencyMap.Algorithm as Graph
+import Control.Applicative ((<|>))
+import Control.Monad (forM_, when)
 import Control.Monad.Except (MonadError, liftEither, runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State (MonadState, modify, runStateT)
+import Control.Monad.State (MonadState, gets, modify, runStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT)
-import Data.Bifunctor (bimap, first)
-import Data.Foldable (fold, foldl')
-import Data.Located (Located ((:@)), Position (file), unLoc)
+import Data.Bifunctor (bimap, first, second)
+import Data.Containers.ListUtils (nubOrdOn)
+import Data.Foldable (fold, foldl', foldrM)
+import Data.Functor ((<&>))
+import Data.List (intercalate, partition)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Located (Located ((:@)), Position (file), getPos, spanOf, unLoc)
+import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import Data.Tuple (swap)
 import Error.Diagnose (Diagnostic, addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
 import Language.Zilch.CLI.Flags (WarningFlags (..))
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
@@ -31,21 +45,106 @@ import Language.Zilch.Syntax.Desugarer (desugarCST)
 import Language.Zilch.Syntax.Errors
 import Language.Zilch.Syntax.Lexer (lexFile)
 import Language.Zilch.Syntax.Parser (parseTokens)
+import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 import System.Directory (doesFileExist)
 import System.Exit (exitFailure)
-import System.FilePath (joinPath, (<.>), (</>))
+import System.FilePath (joinPath, splitExtension, (<.>), (</>))
 import System.IO (stderr)
 
-type ImportGraph = Cyclic.AdjacencyMap (FilePath, [Located Text])
+type ModName = [Located Text]
+
+type ImportGraph = Cyclic.AdjacencyMap ModName
 
 type Files = [(FilePath, Text)]
 
-type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadState (ImportGraph, Files) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m)
+type ParsedFiles = [(FilePath, ModName, Either (Located AST.Module) Interface)]
 
-parseModules :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadIO m) => [Text] -> m ([(FilePath, Text)], Either (Diagnostic String) ([(FilePath, Located AST.Module)], Diagnostic String))
+type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadState (Files, [DisSystem]) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m)
+
+data Interface
+  = Iface
+      [ModName]
+      -- ^ Dependencies on other namespaces
+      (Map (Located Text) (Located Multiplicity, Interface))
+      -- ^ Public exported items
+      (Map (Located Text) (Located Multiplicity, Interface))
+      -- ^ Private items
+  deriving (Show)
+
+data Module
+  = Mod FilePath
+  | Access Module (Located Text)
+  deriving (Eq)
+
+instance Show Module where
+  show (Mod path) = "MODULE \"" <> path <> "\""
+  show (Access mod (x :@ _)) = "(" <> show mod <> ")∷" <> Text.unpack x
+
+data Constraint
+  = In (Located Text) Module
+  | TrueC
+  | FalseC
+  deriving (Eq)
+
+instance Show Constraint where
+  show (In (x :@ _) mod) = Text.unpack x <> " ∈ " <> show mod
+  show TrueC = "TRUE"
+  show FalseC = "FALSE"
+
+type FileConstraint = (Unit, [Constraint])
+
+instance {-# OVERLAPPING #-} Show FileConstraint where
+  show (path, constraints) = unUnit path <> ": " <> intercalate " ∧ " (show <$> constraints)
+
+type DisSystem = ([Located Text], [FileConstraint])
+
+instance {-# OVERLAPPING #-} Show DisSystem where
+  show (path, sys) = show' path <> ":\n    " <> if null sys then "FALSE" else intercalate "\n  ∨ " (show <$> sys)
+    where
+      show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+
+instance {-# OVERLAPPING #-} Show [DisSystem] where
+  show sys = unlines (show <$> sys)
+
+parseModules :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadIO m) => [Text] -> m ([(FilePath, Text)], Either (Diagnostic String) ([(FilePath, [Located Text], Located AST.Module)], Diagnostic String))
 parseModules modules = do
-  ((res, (graph, files)), warns) <- runWriterT $ flip runStateT (Cyclic.empty, []) $ runExceptT (parseAndPatchModules modules)
-  pure $ (files, adjust res graph warns)
+  ((res, (files, _)), warns) <- runWriterT $
+    flip runStateT ([], []) $ runExceptT do
+      let modules' = (:@ dummy) <$> modules
+      -- - resolve all modules on the command-line
+      (asts, graph) <-
+        foldrM
+          (\mod (asts, graph) -> resolveModule False graph asts mod)
+          ([], Cyclic.empty)
+          modules'
+      -- - generate modules interfaces, solve constraints
+      --   and remove graph vertices when conjunctive constraints are @FALSE@
+      modify $ second (nubOrdOn fst)
+
+      -- gets snd >>= liftIO . print
+
+      ifaces <- foldrM (\(path, mod, iface) cache -> generateInterface path mod iface asts cache) [] asts
+      (_, cache') <-
+        foldrM (\mod (res, cache) -> first (: res) <$> resolveNamespace mod asts cache) ([], ifaces)
+          =<< traverse tryParseModuleName modules'
+
+      constr <- gets snd
+      -- - remove all the graph vertices which are not within the remaining solved constraints
+      let remainingModules = fst <$> constr
+          graph' = Cyclic.induce (`elem` remainingModules) graph
+          modules'' = constr <&> \(mod, [(f, _)]) -> (mod, f)
+          graph'' = flip Cyclic.gmap graph' \mod -> (mod, fromJust $ lookup mod modules'')
+      -- - check if the remaining graph contains cycles via a simple DFS
+      topsort <- case Graph.topSort (Cyclic.transpose graph'') of
+        -- transpose the graph in order not to reverse the topsort afterwards
+        Left (NonEmpty.toList -> cycle) -> throwError $ CyclicModuleImports (second unUnit <$> cycle)
+        Right sort -> pure sort
+
+      pure (asts, topsort)
+
+  -- TODO: error out if a CLI module name is a non-module namespace (e.g. an @enum@ namespace)
+
+  pure (files, adjust res warns)
   where
     toErrorDiagnostic (LexingE d) = d
     toErrorDiagnostic (ParsingE d) = d
@@ -54,49 +153,335 @@ parseModules modules = do
 
     toWarningDiagnostic warns = foldl' addReport def (fromDriverWarning <$> warns)
 
-    adjust (Left err) _ _ = Left $ toErrorDiagnostic err
-    adjust (Right mods) graph warns =
-      let sorted = Acyclic.topSort $ fromJust $ Acyclic.toAcyclic graph
-          mods' = Map.fromList mods
-       in Right (fetchModule mods' <$> reverse sorted, toWarningDiagnostic warns)
+    adjust (Left err) _ = Left $ toErrorDiagnostic err
+    adjust (Right (mods, sorted)) warns =
+      let mods' = Map.fromList $ catMaybes $ mods <&> \(path, mod, ast) -> ((path, mod),) <$> eitherToMaybe (swapEither ast)
+       in Right (fetch mods' . first unUnit . swap <$> sorted, toWarningDiagnostic warns)
 
-    fetchModule mods (path, name) = (path, mods Map.! name)
+    fetch mods k@(path, mod) = (path, mod, mods Map.! k)
 
-parseAndPatchModules :: forall m. MonadDriver m => [Text] -> m [([Located Text], Located AST.Module)]
-parseAndPatchModules [] = pure []
-parseAndPatchModules (m : ms) = do
+    dummy = def {file = "command-line"}
+
+    eitherToMaybe (Left _) = Nothing
+    eitherToMaybe (Right x) = Just x
+
+    swapEither (Left x) = Right x
+    swapEither (Right x) = Left x
+
+resolveModule :: forall m. MonadDriver m => Bool -> ImportGraph -> ParsedFiles -> Located Text -> m (ParsedFiles, ImportGraph)
+resolveModule isSourceImport graph cache mod = do
+  -- - create constraints from all the module names
+  constr <- pruneConstraints =<< generateConstraints [mod]
+  -- - check that all modules have at least a single constraint
+  --   if not, at least one of them could not be found in the include path
+  checkThatNamespacesExist isSourceImport constr
+  -- - remove the @.zc@ files if there is also a @.zci@ file for the same exact file prefix
+  constr <- pruneDuplicatedWithInterface constr
+  -- - parse every possible modules (or decipher .zci files) and generate entries in the include graph
+  (cache', graph) <- parseAllFiles graph cache constr
+
+  modify $ second (<> constr)
+
+  pure (cache', graph)
+
+generateConstraints :: forall m. MonadDriver m => [Located Text] -> m [DisSystem]
+generateConstraints [] = pure []
+generateConstraints (m : ms) = do
   m' <- tryParseModuleName m
-  path <-
-    tryFindModule m' >>= \case
-      [] -> throwError $ ModuleNotFound m' ?includeDirs
-      ps@(_ : _ : _) -> throwError $ AmbiguousModuleName m' ps
-      [path] -> pure path
+  cs <- mkConstraints m'
 
-  content <- liftIO $ Text.readFile path
-  modify $ bimap id ((path, content) :)
+  cs2 <- generateConstraints ms
+  pure $ (m', cs) : cs2
+  where
+    mkConstraints :: forall m. MonadDriver m => [Located Text] -> m [FileConstraint]
+    mkConstraints modParts = do
+      -- - generate all possible paths from @modParts@
+      --   for example, @x::y@ yields the paths @[("x.zc", ["y"]), ("x/y.zc", [])]@
+      let paths = genPathAndComponents [] modParts :: [(FilePath, [Located Text])]
+      -- - then concatenate every include directory in front of each path generated
+      --   (copy all the paths for every include directory)
+      let withDirs =
+            ?includeDirs >>= \dir ->
+              paths <&> \(path, comps) -> case splitExtension path of
+                (path, ".zc") -> (File dir path, comps)
+                (path, ".zci") -> (Interface dir path, comps)
+                (_, ext) -> error $ "Unknown file extension '" <> ext <> "'"
+      -- - finally make all the necessary constraints (where an empty component list is transformed into a @TrueC@ constraint)
+      pure $ uncurry mkConstraints' <$> withDirs
 
-  (tks, warns) <- tryLexing path content
-  liftIO $ doOutputWarnings path content warns
+    genPathAndComponents _ [] = []
+    genPathAndComponents acc (x : xs) =
+      let x' = Text.unpack (unLoc x)
+          comp1 = (joinPath $ acc <> [x' <.> "zc"], xs)
+          comp2 = (joinPath $ acc <> [x' <.> "zci"], xs)
+          xs' = genPathAndComponents (acc <> [x']) xs
+       in comp1 : comp2 : xs'
 
-  (cst, warns) <- tryParsing path tks
-  liftIO $ doOutputWarnings path content warns
+    mkConstraints' path [] = (path, [TrueC])
+    mkConstraints' path xs = (path, reverse . snd $ foldl' genConstraint (Mod $ unUnit path, []) xs)
 
-  (imports, ast, warns) <- tryDesugaring cst
-  liftIO $ doOutputWarnings path content warns
+    genConstraint (mod, cs) id = (Access mod id, In id mod : cs)
 
-  imports' <- resolveImports imports
-  ast' <- patchASTImports imports' ast
+pruneConstraints :: forall m. MonadDriver m => [DisSystem] -> m [DisSystem]
+pruneConstraints [] = pure []
+pruneConstraints ((mod, constrs) : sys) = do
+  constrs' <- catMaybes <$> traverse removeConstraintIfFileDoesNotExist constrs
+  sys' <- pruneConstraints sys
+  pure $ (mod, constrs') : sys'
+  where
+    removeConstraintIfFileDoesNotExist c@(unUnit -> file, _) = do
+      fileExists <- liftIO $ doesFileExist file
+      pure
+        if fileExists
+          then Just c
+          else Nothing
 
-  let myself = (path, m')
-  let imports'' = (myself,) <$> imports'
-  modify $ bimap (`Cyclic.overlay` Cyclic.edges imports'') id
+checkThatNamespacesExist :: forall m. MonadDriver m => Bool -> [DisSystem] -> m ()
+checkThatNamespacesExist isSource sys = forM_ sys \(mod, constrs) -> case constrs of
+  [] ->
+    throwError
+      if isSource
+        then UnresolvedImport mod ?includeDirs
+        else ModuleNotFound mod ?includeDirs
+  _ -> pure ()
 
-  mods <- parseAndPatchModules ms
+pruneDuplicatedWithInterface :: forall m. MonadDriver m => [DisSystem] -> m [DisSystem]
+pruneDuplicatedWithInterface sys = pure $ sys <&> \(mod, constr) -> (mod, go constr)
+  where
+    go constr =
+      let interfaces = filter isInterface (fst <$> constr) <&> \(Interface _ path) -> path
+       in flip filter constr \case
+            (File _ path, _) -> path `notElem` interfaces
+            _ -> True
 
-  pure ((m', ast') : mods)
+parseAllFiles :: forall m. MonadDriver m => ImportGraph -> ParsedFiles -> [DisSystem] -> m (ParsedFiles, ImportGraph)
+parseAllFiles graph asts sys = do
+  let units = sys >>= \(mod, constr) -> (mod,) . fst <$> constr
+  (asts, graph) <- go graph units asts
+  pure (asts, graph)
+  where
+    go :: forall m. MonadDriver m => ImportGraph -> [(ModName, Unit)] -> ParsedFiles -> m (ParsedFiles, ImportGraph)
+    go graph [] cache = pure (cache, graph)
+    go graph ((mod, u) : us) cache = do
+      (cache', graph') <- go graph us cache
 
-tryParseModuleName :: forall m. MonadDriver m => Text -> m [Located Text]
-tryParseModuleName m = do
+      case u of
+        Interface _ _ -> error "TODO: decipher .zci and add imports to graph"
+        File _ _ -> do
+          let path' = unUnit u
+
+          case lookup' (mod, path') cache' of
+            Nothing -> do
+              content <- liftIO $ Text.readFile path'
+              modify $ first ((path', content) :)
+
+              (tks, warns) <- tryLexing path' content
+              liftIO $ doOutputWarnings path' content warns
+
+              (cst, warns) <- tryParsing path' tks
+              liftIO $ doOutputWarnings path' content warns
+
+              (imports, ast, warns) <- tryDesugaring cst
+              liftIO $ doOutputWarnings path' content warns
+
+              -- try to also resolve all the imports right now
+              (cache'', graph'') <-
+                foldrM
+                  (\mod (asts, graph) -> resolveModule True graph asts mod)
+                  ((path', mod, Left ast) : cache', graph')
+                  (mkMod <$> imports)
+
+              pure (cache'', Cyclic.overlay graph'' $ Cyclic.edges $ (mod,) <$> imports)
+            Just _ -> pure (cache', graph')
+
+    mkMod :: [Located Text] -> Located Text
+    mkMod mod =
+      let pos = foldr1 spanOf (getPos <$> mod)
+       in (:@ pos) . Text.intercalate "::" $ unLoc <$> mod
+
+    lookup' :: (ModName, FilePath) -> ParsedFiles -> Maybe (Either (Located AST.Module) Interface)
+    lookup' _ [] = Nothing
+    lookup' (m, p) ((path, mod, r) : cs)
+      | m == mod && p == path = Just r
+      | otherwise = lookup' (m, p) cs
+
+generateInterface :: forall m. MonadDriver m => FilePath -> ModName -> Either (Located AST.Module) Interface -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m [(FilePath, ModName, Interface)]
+generateInterface path mod (Right iface) _ cache = pure $ (path, mod, iface) : cache
+generateInterface path mod (Left ast) asts cache = do
+  (items, deps, cache') <- accumItemsAndDeps ast cache
+  let (pub, priv) = bimap (Map.map keepIface) (Map.map keepIface) $ Map.partition snd3 items
+  pure $ (path, mod, Iface deps pub priv) : cache'
+  where
+    accumItemsAndDeps :: forall m. MonadDriver m => Located AST.Module -> [(FilePath, ModName, Interface)] -> m (Map (Located Text) (Located Multiplicity, Bool, Interface), [ModName], [(FilePath, ModName, Interface)])
+    accumItemsAndDeps (AST.Mod toplevel :@ _) cache = fold <$> traverse (flip accumItemsAndDepsToplevel cache) toplevel
+
+    accumItemsAndDepsToplevel (AST.TopLevel isPublic def :@ _) cache = case def of
+      AST.Let _ mult name ty ex :@ _ ->
+        let imps = findImports ty <> findImports ex
+         in pure (Map.singleton name (mult, isPublic, Iface imps mempty mempty), imps, cache)
+      AST.Val mult name ty :@ _ ->
+        let imps = findImports ty
+         in pure (Map.singleton name (mult, isPublic, Iface imps mempty mempty), imps, cache)
+      AST.Import isOpen path x :@ _ -> do
+        -- - if the import is open:
+        --   - if @...path::x@ is a namespace, bring every public item into the scope
+        --   - if @...path::x@ is not a namespace, act as if the import is not opened (and emit a warning)
+        -- - otherwise:
+        --   - add @x@ into the scope
+        let ns = path <> [x]
+        (resolved, cache') <- resolveNamespace ns asts cache
+        let intoScope =
+              case resolved of
+                ResolvedNamespace iface@(Iface _ pub _) ->
+                  if isOpen
+                    then pub <&> \(mult, iface) -> (mult, isPublic, iface)
+                    else Map.singleton x (W :@ dummy, isPublic, iface)
+                ResolvedItem id mult -> Map.singleton id (mult, isPublic, Iface [] mempty mempty)
+        pure (intoScope, [ns], cache')
+
+    dummy = def {file = "unknown"}
+
+    findImports :: Located AST.Expression -> [ModName]
+    findImports (AST.EInteger _ _ :@ _) = []
+    findImports (AST.ECharacter _ :@ _) = []
+    findImports (AST.EIdentifier _ :@ _) = []
+    findImports (AST.EType :@ _) = []
+    findImports (AST.EHole _ :@ _) = []
+    findImports (AST.EMultiplicativeUnit :@ _) = []
+    findImports (AST.EAdditiveUnit :@ _) = []
+    findImports (AST.EBoolean _ :@ _) = []
+    findImports (AST.EOne :@ _) = []
+    findImports (AST.ETop :@ _) = []
+    findImports (AST.ELam param ex :@ _) = findImportsInParam param <> findImports ex
+    findImports (AST.EApplication e1 _ e2 :@ _) = findImports e1 <> findImports e2
+    findImports (AST.EPi param ex :@ _) = findImportsInParam param <> findImports ex
+    findImports (AST.EMultiplicativeProduct param ex :@ _) = findImportsInParam param <> findImports ex
+    findImports (AST.EAdditiveProduct param ex :@ _) = findImportsInParam param <> findImports ex
+    findImports (AST.EMultiplicativePair e1 e2 :@ _) = findImports e1 <> findImports e2
+    findImports (AST.EAdditivePair e1 e2 :@ _) = findImports e1 <> findImports e2
+    findImports (AST.EIfThenElse c e1 e2 :@ _) = findImports c <> findImports e1 <> findImports e2
+    findImports (AST.EFst e :@ _) = findImports e
+    findImports (AST.ESnd e :@ _) = findImports e
+    findImports (AST.EAdditiveTupleAccess e _ :@ _) = findImports e
+    findImports (AST.EMultiplicativePairElim _ _ _ _ e1 e2 :@ _) = findImports e1 <> findImports e2
+    findImports (AST.EMultiplicativeUnitElim _ _ e1 e2 :@ _) = findImports e1 <> findImports e2
+    findImports (AST.EFieldAccess e _ :@ _) = findImports e
+    findImports (AST.ELocal def e :@ _) = findImportsInDefinition def <> findImports e
+
+    findImportsInParam (AST.Parameter _ _ _ e :@ _) = findImports e
+
+    findImportsInDefinition (AST.Let _ _ _ ty ex :@ _) = findImports ty <> findImports ex
+    findImportsInDefinition (AST.Val _ _ ty :@ _) = findImports ty
+    findImportsInDefinition (AST.Import _ path x :@ _) = [path <> [x]]
+
+    snd3 ~(_, x, _) = x
+
+    keepIface ~(x, _, z) = (x, z)
+
+data Resolved
+  = ResolvedNamespace Interface
+  | ResolvedItem (Located Text) (Located Multiplicity)
+
+resolveNamespace :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m (Resolved, [(FilePath, ModName, Interface)])
+resolveNamespace mod asts cache = solveConstraintFor mod asts cache
+
+solveConstraintFor :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m (Resolved, [(FilePath, ModName, Interface)])
+solveConstraintFor mod asts cache = do
+  constr <- gets snd
+  let Just ((mod', c), cs) = findElem ((== mod) . fst) constr
+
+  -- - try to solve each file constraint independently
+  --   however, there is a small "problem" regarding errors:
+  --
+  --   ideally, we'd know exactly which part of a constraint failed to be satisfied
+  --   in order to report an error more useful than "name resolution failed"
+  --
+  --   but in order to do so, we have to store independently the value of each constraint
+  --   and also return the value of the whole conjonction/disjunction
+  --
+  --   we needs to inspect each disjunction value anyways (to report ambiguous resolved items)
+  --   and we need to throw an error if the disjunction has no @TRUE@ value inside (in such case, constraints were not satisfied)
+  (c', cache') <- foldrM (\c (cs, cache) -> first (: cs) <$> solve' mod' c cache) ([], cache) c
+
+  let trueCons =
+        -- filtering here is equivalent to applying an 'or'
+        -- because we only keep the values which are @TRUE@ ('or' is @TRUE@ only if there is at least one @TRUE@)
+        --
+        -- when there is no such value, the end list is empty, therefore equivalent to @FALSE@
+        --
+        -- this allows us to keep every subconstraint for error-reporting later, and also to check how many
+        -- @TRUE@ subconstraints there really are
+        filter snd $ second (Prelude.all snd) <$> c'
+
+  unit <- case trueCons of
+    [(u, _)] -> pure u
+    -- - check whether this constraint is ambiguous (if multiple subconstraints are @TRUE@)
+    cs@(_ : _) -> throwError $ AmbiguousModuleName mod' (unUnit . fst <$> cs)
+    -- - check whether this constraint is actually @TRUE@ otherwise report an unresolved namespace
+    [] -> throwError $ UnresolvedImport mod' ?includeDirs
+  modify $ second $ const ((mod', [(unit, [TrueC])]) : cs)
+
+  let Just cs = lookup unit c'
+  (r, cache'') <- resolve mod (unUnit unit) cs cache'
+
+  case r of
+    Nothing -> undefined
+    Just i@(Iface _ pub priv)
+      | Map.null pub && Map.null priv -> pure (ResolvedItem (last mod) undefined, cache'')
+      | otherwise -> pure (ResolvedNamespace i, cache'')
+  where
+    solve' :: forall m. MonadDriver m => ModName -> FileConstraint -> [(FilePath, ModName, Interface)] -> m ((Unit, [(Constraint, Bool)]), [(FilePath, ModName, Interface)])
+    solve' mod (f, c) cache = do
+      (cs, cache') <- foldrM (\c (cs, cache) -> first (: cs) <$> solve'' mod c cache) ([], cache) c
+      pure ((f, cs), cache')
+
+    solve'' :: forall m. MonadDriver m => ModName -> Constraint -> [(FilePath, ModName, Interface)] -> m ((Constraint, Bool), [(FilePath, ModName, Interface)])
+    solve'' mod c cache = do
+      (b, cache') <- case c of
+        TrueC -> pure (True, cache)
+        FalseC -> pure (False, cache)
+        In id mod' -> do
+          (iface, cache') <- interfaceOf mod mod' cache
+          case iface of
+            Nothing -> pure (False, cache')
+            Just (Iface _ pub _) ->
+              -- - if @id@ is not a public member, constraint cannot be solved
+              case Map.lookup id pub of
+                Nothing -> pure (False, cache')
+                Just _ -> pure (True, cache')
+      pure ((c, b), cache')
+
+    interfaceOf mod (Mod path) cache = do
+      case safeHead (filter (\(p, m, _) -> p == path && m == mod) cache) of
+        Just (_, _, iface) -> pure (Just iface, cache)
+        Nothing -> do
+          let (path', mod', ast) = head (filter (\(p, m, _) -> p == path && m == mod) asts)
+          interfaceOf mod (Mod path') =<< generateInterface path' mod' ast asts cache
+    interfaceOf mod (Access mod' x) cache = do
+      (iface, cache') <- interfaceOf mod mod' cache
+      case iface of
+        Nothing -> pure (Nothing, cache')
+        Just (Iface _ pub _) -> do
+          -- - if @id@ is not a public member, constraint cannot be solved
+          case Map.lookup x pub of
+            Nothing -> pure (Nothing, cache')
+            Just (_, iface) -> pure (Just iface, cache')
+
+    resolve = goResolve Nothing
+
+    goResolve acc _ _ [] cache = pure (acc, cache)
+    goResolve acc mod unit ((c, True) : cs) cache = case c of
+      TrueC -> do
+        (iface, cache') <- interfaceOf mod (Mod unit) cache
+        goResolve (iface <|> acc) mod unit cs cache'
+      FalseC -> undefined
+      In x mod' -> interfaceOf mod (Access mod' x) cache
+    goResolve _ _ _ ((_, False) : _) cache = pure (Nothing, cache)
+
+--------------------
+
+tryParseModuleName :: forall m. MonadDriver m => Located Text -> m [Located Text]
+tryParseModuleName (m :@ p) = do
   let parts = fold $ Text.splitOn "∷" <$> Text.splitOn "::" m
   traverse checkValid parts
   where
@@ -104,7 +489,7 @@ tryParseModuleName m = do
     checkValid part = do
       case Text.findIndex invalidCharacters part of
         Just idx -> throwError $ InvalidModuleName part idx
-        Nothing -> pure $ part :@ dummy
+        Nothing -> pure $ part :@ p
 
     invalidCharacters '/' = True
     invalidCharacters ':' = True
@@ -115,20 +500,48 @@ tryParseModuleName m = do
     invalidCharacters '=' = True
     invalidCharacters _ = False
 
-    dummy = def {file = "command-line"}
+data Unit
+  = -- | a @.zci@ module interface
+    Interface FilePath FilePath
+  | -- | a @.zc@ normal file
+    File FilePath FilePath
+  deriving (Eq, Ord)
 
-tryFindModule :: forall m. MonadDriver m => [Located Text] -> m [FilePath]
-tryFindModule mod = go (toPath mod) ?includeDirs
+instance Show Unit where
+  show = unUnit
+
+unUnit :: Unit -> FilePath
+unUnit (Interface dir path) = dir </> path <.> "zci"
+unUnit (File dir path) = dir </> path <.> "zc"
+
+isInterface :: Unit -> Bool
+isInterface (Interface _ _) = True
+isInterface _ = False
+
+tryFindModule :: forall m. MonadDriver m => [Located Text] -> m [Unit]
+tryFindModule mod =
+  -- if there are any .zci file in the include paths, only keep those
+  --   otherwise keep all the files found
+  (splitZci <$> go (toPath mod) ?includeDirs) >>= \case
+    ([], zc) -> pure zc
+    (zci, _) -> pure zci
   where
     go _ [] = pure []
     go path (d : dir) = do
       let p = d </> path
-      fileExists <- liftIO $ doesFileExist p
-      if fileExists
-        then (p :) <$> go path dir
-        else go path dir
+      zcExists <- liftIO $ doesFileExist $ p <.> "zc"
+      zciExists <- liftIO $ doesFileExist $ p <.> "zci"
 
-    toPath mod = joinPath (Text.unpack . unLoc <$> mod) <.> "zc"
+      go path dir
+        <&> if
+            -- give priority to a .zci file over a .zc file
+            | zciExists -> (Interface d path :)
+            | zcExists -> (File d path :)
+            | otherwise -> id
+
+    toPath mod = joinPath (Text.unpack . unLoc <$> mod)
+
+    splitZci = partition isInterface
 
 tryLexing :: forall m. MonadDriver m => FilePath -> Text -> m ([Located Token], Diagnostic String)
 tryLexing path content = liftEither . first LexingE $ lexFile path content
@@ -141,12 +554,6 @@ tryDesugaring cst = liftEither . bimap DesugaringE swapFirstTwo $ desugarCST cst
   where
     swapFirstTwo ~(a, b, c) = (b, a, c)
 
-resolveImports :: forall m. MonadDriver m => [[Located Text]] -> m [(FilePath, [Located Text])]
-resolveImports imps = pure [] -- TODO
-
-patchASTImports :: forall m. MonadDriver m => [(FilePath, [Located Text])] -> Located AST.Module -> m (Located AST.Module)
-patchASTImports imps ast = pure ast -- TODO
-
 ---------------------------------
 
 doOutputWarnings :: (?warnings :: WarningFlags) => FilePath -> Text -> Diagnostic String -> IO ()
@@ -157,3 +564,17 @@ doOutputWarnings path content diag = do
   printDiagnostic stderr True True 4 defaultStyle (addFile diag' path $ Text.unpack content)
   when (erroneous && hasReports diag') do
     exitFailure
+
+-------------------------------
+
+findElem :: (a -> Bool) -> [a] -> Maybe (a, [a])
+findElem p = find' id
+  where
+    find' _ [] = Nothing
+    find' prefix (x : xs)
+      | p x = Just (x, prefix xs)
+      | otherwise = find' (prefix . (x :)) xs
+
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x : _) = Just x
