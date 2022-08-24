@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
@@ -156,7 +157,7 @@ desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
 desugarDefinition (CST.Import opened spine :@ p) = do
   let spines = flattenBranches spine
   modify $ third3 (<> spines)
-  pure $ (:@ p) . uncurry (AST.Import opened) . unsnoc <$> spines
+  pure $ (:@ p) . flip (AST.Import opened) [] <$> spines
   where
     flattenBranches :: Located CST.ImportSpine -> [[Located Text]]
     flattenBranches (CST.Empty :@ _) = []

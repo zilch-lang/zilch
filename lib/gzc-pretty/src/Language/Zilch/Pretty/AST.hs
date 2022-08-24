@@ -48,13 +48,13 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
-  pretty (Import isOpened mod name :@ _) =
+  pretty (Import isOpened mod item :@ _) =
     (if isOpened then "open" <> space else "")
       <> "import"
       <> space
       <> concatWith (surround "∷") (pretty . unLoc <$> mod)
-      <> (if null mod then "" else "∷")
-      <> pretty (unLoc name)
+      <> space
+      <> concatWith (surround "∷") (pretty . unLoc <$> item)
 
 instance Pretty (Located Parameter) where
   pretty (Parameter False (W :@ _) ("_" :@ _) ty :@ _) =

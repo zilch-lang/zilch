@@ -12,7 +12,6 @@
 
 module Language.Zilch.Syntax.Driver where
 
-import qualified Algebra.Graph.Acyclic.AdjacencyMap as Acyclic
 import qualified Algebra.Graph.AdjacencyMap as Cyclic
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as Graph
 import Control.Applicative ((<|>))
@@ -34,8 +33,8 @@ import Data.Maybe (catMaybes, fromJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Data.Tuple (swap)
 import Error.Diagnose (Diagnostic, addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
+import GHC.Stack (HasCallStack)
 import Language.Zilch.CLI.Flags (WarningFlags (..))
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -48,7 +47,7 @@ import Language.Zilch.Syntax.Parser (parseTokens)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
 import System.Directory (doesFileExist)
 import System.Exit (exitFailure)
-import System.FilePath (joinPath, splitExtension, (<.>), (</>))
+import System.FilePath (joinPath, splitDirectories, splitExtension, (<.>), (</>))
 import System.IO (stderr)
 
 type ModName = [Located Text]
@@ -59,7 +58,7 @@ type Files = [(FilePath, Text)]
 
 type ParsedFiles = [(FilePath, ModName, Either (Located AST.Module) Interface)]
 
-type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadState (Files, [DisSystem]) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m)
+type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadState (Files, [DisSystem]) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m, HasCallStack)
 
 data Interface
   = Iface
@@ -72,12 +71,14 @@ data Interface
   deriving (Show)
 
 data Module
-  = Mod FilePath
+  = Mod ModName FilePath
   | Access Module (Located Text)
   deriving (Eq)
 
 instance Show Module where
-  show (Mod path) = "MODULE \"" <> path <> "\""
+  show (Mod mod path) = "MODULE " <> show' mod <> " \"" <> path <> "\""
+    where
+      show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
   show (Access mod (x :@ _)) = "(" <> show mod <> ")∷" <> Text.unpack x
 
 data Constraint
@@ -121,7 +122,7 @@ parseModules modules = do
       --   and remove graph vertices when conjunctive constraints are @FALSE@
       modify $ second (nubOrdOn fst)
 
-      -- gets snd >>= liftIO . print
+      gets snd >>= liftIO . print
 
       ifaces <- foldrM (\(path, mod, iface) cache -> generateInterface path mod iface asts cache) [] asts
       (_, cache') <-
@@ -140,7 +141,12 @@ parseModules modules = do
         Left (NonEmpty.toList -> cycle) -> throwError $ CyclicModuleImports (second unUnit <$> cycle)
         Right sort -> pure sort
 
-      pure (asts, topsort)
+      let asts' = nubOrdOn (\(path, _, _) -> path) asts
+          topsort' = nubOrdOn snd topsort
+
+      asts' <- patchImports asts' constr
+
+      pure (asts', topsort')
 
   -- TODO: error out if a CLI module name is a non-module namespace (e.g. an @enum@ namespace)
 
@@ -156,9 +162,9 @@ parseModules modules = do
     adjust (Left err) _ = Left $ toErrorDiagnostic err
     adjust (Right (mods, sorted)) warns =
       let mods' = Map.fromList $ catMaybes $ mods <&> \(path, mod, ast) -> ((path, mod),) <$> eitherToMaybe (swapEither ast)
-       in Right (fetch mods' . first unUnit . swap <$> sorted, toWarningDiagnostic warns)
+       in Right (fetch mods' <$> sorted, toWarningDiagnostic warns)
 
-    fetch mods k@(path, mod) = (path, mod, mods Map.! k)
+    fetch mods (_, u) = (unUnit u, unit2Mod u, mods Map.! (unUnit u, unit2Mod u))
 
     dummy = def {file = "command-line"}
 
@@ -170,6 +176,8 @@ parseModules modules = do
 
 resolveModule :: forall m. MonadDriver m => Bool -> ImportGraph -> ParsedFiles -> Located Text -> m (ParsedFiles, ImportGraph)
 resolveModule isSourceImport graph cache mod = do
+  liftIO do putStrLn $ "Resolving module " <> Text.unpack (unLoc mod)
+
   -- - create constraints from all the module names
   constr <- pruneConstraints =<< generateConstraints [mod]
   -- - check that all modules have at least a single constraint
@@ -218,7 +226,7 @@ generateConstraints (m : ms) = do
        in comp1 : comp2 : xs'
 
     mkConstraints' path [] = (path, [TrueC])
-    mkConstraints' path xs = (path, reverse . snd $ foldl' genConstraint (Mod $ unUnit path, []) xs)
+    mkConstraints' path xs = (path, reverse . snd $ foldl' genConstraint (Mod (unit2Mod path) (unUnit path), []) xs)
 
     genConstraint (mod, cs) id = (Access mod id, In id mod : cs)
 
@@ -269,8 +277,9 @@ parseAllFiles graph asts sys = do
         Interface _ _ -> error "TODO: decipher .zci and add imports to graph"
         File _ _ -> do
           let path' = unUnit u
+              mod' = unit2Mod u
 
-          case lookup' (mod, path') cache' of
+          case lookup' (mod', path') cache' of
             Nothing -> do
               content <- liftIO $ Text.readFile path'
               modify $ first ((path', content) :)
@@ -288,7 +297,7 @@ parseAllFiles graph asts sys = do
               (cache'', graph'') <-
                 foldrM
                   (\mod (asts, graph) -> resolveModule True graph asts mod)
-                  ((path', mod, Left ast) : cache', graph')
+                  ((path', mod', Left ast) : cache', graph')
                   (mkMod <$> imports)
 
               pure (cache'', Cyclic.overlay graph'' $ Cyclic.edges $ (mod,) <$> imports)
@@ -328,14 +337,14 @@ generateInterface path mod (Left ast) asts cache = do
         --   - if @...path::x@ is not a namespace, act as if the import is not opened (and emit a warning)
         -- - otherwise:
         --   - add @x@ into the scope
-        let ns = path <> [x]
+        let ns = path <> x
         (resolved, cache') <- resolveNamespace ns asts cache
         let intoScope =
               case resolved of
                 ResolvedNamespace iface@(Iface _ pub _) ->
                   if isOpen
                     then pub <&> \(mult, iface) -> (mult, isPublic, iface)
-                    else Map.singleton x (W :@ dummy, isPublic, iface)
+                    else Map.singleton (last ns) (W :@ dummy, isPublic, iface)
                 ResolvedItem id mult -> Map.singleton id (mult, isPublic, Iface [] mempty mempty)
         pure (intoScope, [ns], cache')
 
@@ -372,7 +381,7 @@ generateInterface path mod (Left ast) asts cache = do
 
     findImportsInDefinition (AST.Let _ _ _ ty ex :@ _) = findImports ty <> findImports ex
     findImportsInDefinition (AST.Val _ _ ty :@ _) = findImports ty
-    findImportsInDefinition (AST.Import _ path x :@ _) = [path <> [x]]
+    findImportsInDefinition (AST.Import _ path x :@ _) = [path <> x]
 
     snd3 ~(_, x, _) = x
 
@@ -422,7 +431,7 @@ solveConstraintFor mod asts cache = do
   modify $ second $ const ((mod', [(unit, [TrueC])]) : cs)
 
   let Just cs = lookup unit c'
-  (r, cache'') <- resolve mod (unUnit unit) cs cache'
+  (r, cache'') <- resolve mod unit cs cache'
 
   case r of
     Nothing -> undefined
@@ -451,12 +460,12 @@ solveConstraintFor mod asts cache = do
                 Just _ -> pure (True, cache')
       pure ((c, b), cache')
 
-    interfaceOf mod (Mod path) cache = do
+    interfaceOf base (Mod mod path) cache = do
       case safeHead (filter (\(p, m, _) -> p == path && m == mod) cache) of
         Just (_, _, iface) -> pure (Just iface, cache)
         Nothing -> do
           let (path', mod', ast) = head (filter (\(p, m, _) -> p == path && m == mod) asts)
-          interfaceOf mod (Mod path') =<< generateInterface path' mod' ast asts cache
+          interfaceOf base (Mod mod path') =<< generateInterface path' mod' ast asts cache
     interfaceOf mod (Access mod' x) cache = do
       (iface, cache') <- interfaceOf mod mod' cache
       case iface of
@@ -472,11 +481,113 @@ solveConstraintFor mod asts cache = do
     goResolve acc _ _ [] cache = pure (acc, cache)
     goResolve acc mod unit ((c, True) : cs) cache = case c of
       TrueC -> do
-        (iface, cache') <- interfaceOf mod (Mod unit) cache
+        (iface, cache') <- interfaceOf mod (Mod (unit2Mod unit) (unUnit unit)) cache
         goResolve (iface <|> acc) mod unit cs cache'
       FalseC -> undefined
       In x mod' -> interfaceOf mod (Access mod' x) cache
     goResolve _ _ _ ((_, False) : _) cache = pure (Nothing, cache)
+
+patchImports :: forall m. MonadDriver m => ParsedFiles -> [DisSystem] -> m ParsedFiles
+patchImports [] _ = pure []
+patchImports ((path, mod, ast) : fs) sys = do
+  ast' <- patch ast sys
+  fs' <- patchImports fs sys
+  pure ((path, mod, ast') : fs')
+  where
+    patch (Right iface) _ = pure $ Right iface
+    patch (Left (AST.Mod defs :@ p)) sys = do
+      defs' <- traverse (flip patchToplevel sys) defs
+      pure $ Left $ AST.Mod defs' :@ p
+
+    patchToplevel (AST.TopLevel isPublic def :@ p) sys = do
+      def' <- patchDefinition def sys
+      pure $ AST.TopLevel isPublic def' :@ p
+
+    patchDefinition (AST.Let isRec mult name ty ex :@ p) sys = do
+      ty' <- patchExpression ty sys
+      ex' <- patchExpression ex sys
+      pure $ AST.Let isRec mult name ty' ex' :@ p
+    patchDefinition (AST.Val mult name ty :@ p) sys = do
+      ty' <- patchExpression ty sys
+      pure $ AST.Val mult name ty' :@ p
+    patchDefinition (AST.Import isOpen mod _ :@ p) sys = do
+      --                                   ^ should be empty because desugaring gives @[]@
+      let Just [(unit, _)] = lookup mod sys
+          mod' = unit2Mod unit
+          item = drop (length mod') mod
+      pure $ AST.Import isOpen mod' item :@ p
+
+    patchExpression (AST.EInteger i suf :@ p) _ = pure $ AST.EInteger i suf :@ p
+    patchExpression (AST.ECharacter c :@ p) _ = pure $ AST.ECharacter c :@ p
+    patchExpression (AST.EIdentifier id :@ p) _ = pure $ AST.EIdentifier id :@ p
+    patchExpression (AST.ELam param ex :@ p) sys = do
+      param' <- patchParameter param sys
+      ex' <- patchExpression ex sys
+      pure $ AST.ELam param' ex' :@ p
+    patchExpression (AST.ELocal def ex :@ p) sys = do
+      def' <- patchDefinition def sys
+      ex' <- patchExpression ex sys
+      pure $ AST.ELocal def' ex' :@ p
+    patchExpression (AST.EApplication e1 isImp e2 :@ p) sys = do
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EApplication e1' isImp e2' :@ p
+    patchExpression (AST.EType :@ p) _ = pure $ AST.EType :@ p
+    patchExpression (AST.EHole loc :@ p) _ = pure $ AST.EHole loc :@ p
+    patchExpression (AST.EPi param ex :@ p) sys = do
+      param' <- patchParameter param sys
+      ex' <- patchExpression ex sys
+      pure $ AST.EPi param' ex' :@ p
+    patchExpression (AST.EMultiplicativeProduct param ex :@ p) sys = do
+      param' <- patchParameter param sys
+      ex' <- patchExpression ex sys
+      pure $ AST.EMultiplicativeProduct param' ex' :@ p
+    patchExpression (AST.EAdditiveProduct param ex :@ p) sys = do
+      param' <- patchParameter param sys
+      ex' <- patchExpression ex sys
+      pure $ AST.EAdditiveProduct param' ex' :@ p
+    patchExpression (AST.EMultiplicativePair e1 e2 :@ p) sys = do
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EMultiplicativePair e1' e2' :@ p
+    patchExpression (AST.EAdditivePair e1 e2 :@ p) sys = do
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EAdditivePair e1' e2' :@ p
+    patchExpression (AST.EMultiplicativeUnit :@ p) _ = pure $ AST.EMultiplicativeUnit :@ p
+    patchExpression (AST.EAdditiveUnit :@ p) _ = pure $ AST.EAdditiveUnit :@ p
+    patchExpression (AST.EBoolean b :@ p) _ = pure $ AST.EBoolean b :@ p
+    patchExpression (AST.EIfThenElse c e1 e2 :@ p) sys = do
+      c' <- patchExpression c sys
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EIfThenElse c' e1' e2' :@ p
+    patchExpression (AST.EOne :@ p) _ = pure $ AST.EOne :@ p
+    patchExpression (AST.ETop :@ p) _ = pure $ AST.ETop :@ p
+    patchExpression (AST.EFst e :@ p) sys = do
+      e' <- patchExpression e sys
+      pure $ AST.EFst e' :@ p
+    patchExpression (AST.ESnd e :@ p) sys = do
+      e' <- patchExpression e sys
+      pure $ AST.ESnd e' :@ p
+    patchExpression (AST.EAdditiveTupleAccess e n :@ p) sys = do
+      e' <- patchExpression e sys
+      pure $ AST.EAdditiveTupleAccess e' n :@ p
+    patchExpression (AST.EFieldAccess e x :@ p) sys = do
+      e' <- patchExpression e sys
+      pure $ AST.EFieldAccess e' x :@ p
+    patchExpression (AST.EMultiplicativePairElim z mult x y e1 e2 :@ p) sys = do
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EMultiplicativePairElim z mult x y e1' e2' :@ p
+    patchExpression (AST.EMultiplicativeUnitElim z mult e1 e2 :@ p) sys = do
+      e1' <- patchExpression e1 sys
+      e2' <- patchExpression e2 sys
+      pure $ AST.EMultiplicativeUnitElim z mult e1' e2' :@ p
+
+    patchParameter (AST.Parameter isImp mult name ty :@ p) sys = do
+      ty' <- patchExpression ty sys
+      pure $ AST.Parameter isImp mult name ty' :@ p
 
 --------------------
 
@@ -513,6 +624,13 @@ instance Show Unit where
 unUnit :: Unit -> FilePath
 unUnit (Interface dir path) = dir </> path <.> "zci"
 unUnit (File dir path) = dir </> path <.> "zc"
+
+unit2Mod :: Unit -> ModName
+unit2Mod = \case
+  Interface _ path -> mkMod path
+  File _ path -> mkMod path
+  where
+    mkMod = fmap ((:@ def) . Text.pack) . splitDirectories
 
 isInterface :: Unit -> Bool
 isInterface (Interface _ _) = True

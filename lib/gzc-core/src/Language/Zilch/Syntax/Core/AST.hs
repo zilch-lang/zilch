@@ -44,8 +44,8 @@ data Definition
       Bool
       -- ^ Is it @open@?
       [Located Text]
-      -- ^ The qualification (module name)
-      (Located Text)
+      -- ^ The qualification (module name, direct translation to file path)
+      [Located Text]
       -- ^ The imported item
   deriving (Show)
 

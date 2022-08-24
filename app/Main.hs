@@ -8,8 +8,9 @@ import Control.Monad (forM_, when)
 import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.Hashable (Hashable (hash))
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (nub)
-import Data.Located (Located)
+import Data.Located (Located, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, Report (..), addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
@@ -39,45 +40,33 @@ main = do
   idirs <- nub <$> traverse makeAbsolute (includeDirs $ input flags)
   let ?includeDirs = idirs
 
-  (files, res) <- parseModules $ Text.pack <$> modules (input flags)
-  ast <- runExceptT do
-    (allASTs, warns) <- liftEither res
+  filesRef <- newIORef []
+  res <- runExceptT do
+    (files, res) <- liftIO $ parseModules $ Text.pack <$> modules (input flags)
+    liftIO $ writeIORef filesRef files
 
+    (allASTs, warns) <- liftEither res
     liftIO $ doOutputWarnings files warns
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
-    pure allASTs
+    liftIO $ putStrLn $ "✅ Modules parsed!"
 
-  -- forM_ files \(File path content) -> do
+    liftIO do
+      forM_ allASTs \(path, mod, _) -> print (path, unLoc <$> mod)
 
-  --     (!tks, warns) <- liftEither $ lexFile path content
-  --     liftIO $ doOutputWarnings path content warns
+    -- (allTASTs, warns) <- typecheckModules allASTs
+    -- liftIO $ doOutputWarnings files warns
+    -- liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
+    -- liftIO $ putStrLn $ "✅ Modules passed type-checking!"
 
-  --     (!cst, warns) <- liftEither $ parseTokens path tks
-  --     liftIO $ doOutputWarnings path content warns
+    pure ()
 
-  --     (!ast, _, warns) <- liftEither =<< liftIO (desugarCST cst)
-  --     liftIO $ doOutputWarnings path content warns
-  --     liftIO $ doDumpAST flags ast
-  --     liftIO $ putStrLn $ "✅ Module '" <> path <> "' parsed"
-
-  --     (!tast, warns) <- liftEither $ elabProgram ast
-  --     liftIO $ doOutputWarnings path content warns
-  --     liftIO $ doDumpTAST flags tast
-  --     liftIO $ putStrLn $ "✅ Module '" <> path <> "' passed type-checking"
-
-  --     pure (tks, cst, ast, tast)
-
-  case ast of
+  case res of
     Left diag -> do
+      files <- liftIO $ readIORef filesRef
       printDiagnostic stderr True True 4 defaultStyle (mkDiag diag files)
       exitFailure
-    Right ast -> do
-      print (fst3 <$> ast)
+    Right _ -> do
       pure ()
-
-  pure ()
-  where
-    fst3 ~(x, _, _) = x
 
 doOutputWarnings :: (?warnings :: WarningFlags) => [(FilePath, Text)] -> Diagnostic String -> IO ()
 doOutputWarnings files diag = do
@@ -100,13 +89,13 @@ doDumpAST flags mod path
     writeFile (joinPath $ dir <> [show (hash path) <> "-ast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
   | otherwise = pure ()
 
-doDumpTAST :: Flags -> Located TAST.Module -> IO ()
-doDumpTAST flags mod
+doDumpTAST :: Flags -> Located TAST.Module -> FilePath -> IO ()
+doDumpTAST flags mod path
   | dumpTAST (debug flags) = do
     let dir = getDumpBasePath flags
 
     createDirectoryIfMissing True (joinPath dir)
-    writeFile (joinPath $ dir <> ["tast.dbg.zc"]) (show $ pretty mod)
+    writeFile (joinPath $ dir <> [show (hash path) <> "tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
   | otherwise = pure ()
 
 getDumpBasePath :: Flags -> [FilePath]
