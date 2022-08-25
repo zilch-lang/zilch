@@ -370,3 +370,4 @@ showMult :: Multiplicity -> String
 showMult O = "0"
 showMult I = "1"
 showMult W = "ω"
+showMult A = "_"

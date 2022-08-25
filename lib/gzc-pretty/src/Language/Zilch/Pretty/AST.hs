@@ -74,6 +74,7 @@ instance Pretty (Located Parameter) where
 instance Pretty (Located Multiplicity) where
   pretty (Unrestricted :@ _) = "ω"
   pretty (Linear :@ _) = "1"
+  pretty (Any :@ _) = "_"
   pretty (Erased :@ _) = "0"
 
 instance Pretty (Located Expression) where

@@ -178,7 +178,7 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :
   let ctx' = define (unLoc mult) name (VUndefined :@ p6) ty' ctx
   pure ([TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5], ctx', mempty)
 checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access path :@ _) :@ p5) = do
-  binds <- resolveImport cache TAST.Present isOpen mod access path p5
+  binds <- resolveImport cache isOpen mod access path p5
 
   let ctx' = foldl' (\ctx (m :@ _, name, ty, ex) -> define m name ex ty ctx) ctx binds
   top <- forM binds \(m, name, ty, ex) -> do
@@ -188,14 +188,14 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access pat
 
   pure (top, ctx', Map.fromList $ binds <&> \(_, name, _, _) -> (name, mempty))
 
-resolveImport :: forall m. MonadElab m => ImportCache -> TAST.Relevance -> Bool -> [Located Text] -> [Located Text] -> FilePath -> Position -> m [(Located TAST.Multiplicity, Located Text, Located Value, Located Value)]
-resolveImport cache rel isOpen mod access path p5 = case ImportCache.lookup (path, mod) cache of
+resolveImport :: forall m. MonadElab m => ImportCache -> Bool -> [Located Text] -> [Located Text] -> FilePath -> Position -> m [(Located TAST.Multiplicity, Located Text, Located Value, Located Value)]
+resolveImport cache isOpen mod access path p5 = case ImportCache.lookup (path, mod) cache of
   Nothing -> throwError $ UnresolvedModule mod p5
   Just iface@(Iface pub _) -> case access of
     [] ->
       if isOpen
         then pure $ insertName <$> Map.toList pub
-        else pure [(TAST.extend rel :@ p5, last mod, mkComposite pub :@ p5, mkRecord pub :@ p5)]
+        else pure [(TAST.A :@ p5, last mod, mkComposite pub :@ p5, mkRecord pub :@ p5)]
     path -> fetchFromPath path iface
   where
     fetchFromPath [] _ = undefined
@@ -592,7 +592,7 @@ check cache rel ctx expr ty = do
           pure (qs, getPos n, n)
       pure (qs1 `Usage.concat` qs2, TAST.EMultiplicativeUnitElim z mult m n :@ p)
     (AST.ELocal (AST.Import isOpen mod access path :@ p5) expr :@ _, ty) -> do
-      (qs, _, e) <- go ctx =<< resolveImport cache rel isOpen mod access path p5
+      (qs, _, e) <- go ctx =<< resolveImport cache isOpen mod access path p5
       pure (qs, e)
       where
         go ctx [] = do
@@ -982,7 +982,7 @@ synthetize cache rel ctx (AST.EMultiplicativeUnitElim z mult m n :@ p) = do
   (qs2, n, t, _) <- synthetize cache rel ctx n
   pure (qs1 `Usage.concat` qs2, TAST.EMultiplicativeUnitElim z mult m n :@ p, t, TAST.extend rel :@ p)
 synthetize cache rel ctx (AST.ELocal (AST.Import isOpen mod access path :@ p4) expr :@ p) = do
-  (qs, _, (e, t)) <- go ctx =<< resolveImport cache rel isOpen mod access path p4
+  (qs, _, (e, t)) <- go ctx =<< resolveImport cache isOpen mod access path p4
   pure (qs, e, t, TAST.extend rel :@ p)
   where
     go ctx [] = do
