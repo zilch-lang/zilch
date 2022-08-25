@@ -6,6 +6,7 @@ module Language.Zilch.Pretty.TAST where
 
 import Data.Located (Located ((:@)), unLoc)
 import qualified Data.Map as Map
+import qualified Data.Text as Text
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity
@@ -50,6 +51,29 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
+  pretty (External mult name typ _ mod path :@ _) =
+    "external"
+      <> space
+      <> pretty mult
+      <> space
+      <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> pretty typ
+      <> line
+      <> indent
+        2
+        ( "from"
+            <> space
+            <> pretty' mod
+            <> space
+            <> "("
+            <> pretty path
+            <> ")"
+        )
+    where
+      pretty' = pretty . Text.intercalate "∷" . fmap unLoc
 
 instance Pretty (Located Parameter) where
   pretty (Parameter False (W :@ _) ("_" :@ _) ty :@ _) =

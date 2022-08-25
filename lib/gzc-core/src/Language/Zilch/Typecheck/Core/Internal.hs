@@ -24,6 +24,13 @@ data Definition
       (Located Multiplicity)
       (Located Text)
       (Located Expression)
+  | External
+      (Located Multiplicity)
+      (Located Text)
+      (Located Expression)
+      (Located Expression)
+      [Located Text]
+      FilePath
   deriving (Show)
 
 data Parameter

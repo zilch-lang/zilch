@@ -157,7 +157,7 @@ desugarDefinition (CST.Val usage name@(_ :@ p2) ty :@ p) = do
 desugarDefinition (CST.Import opened spine :@ p) = do
   let spines = flattenBranches spine
   modify $ third3 (<> spines)
-  pure $ (:@ p) . flip (AST.Import opened) [] <$> spines
+  pure $ (:@ p) . (\m -> AST.Import opened m [] "") <$> spines
   where
     flattenBranches :: Located CST.ImportSpine -> [[Located Text]]
     flattenBranches (CST.Empty :@ _) = []

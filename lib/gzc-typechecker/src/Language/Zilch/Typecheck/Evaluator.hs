@@ -1,10 +1,11 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force) where
+module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
 
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Text (Text)
@@ -105,7 +106,7 @@ eval ctx (TAST.ESnd e :@ _) = do
 eval ctx (TAST.EMultiplicativePairElim _ _ _ _ m n :@ _) = do
   m' <- eval ctx m
   let env' = Env.extend (Env.extend (env ctx) (VFst m' :@ getPos m')) (VSnd m' :@ getPos m')
-  eval (ctx{env = env'}) n
+  eval (ctx {env = env'}) n
 eval ctx (TAST.EMultiplicativeUnitElim _ _ m n :@ _) = do
   eval ctx m -- << this will not be evaluated
   eval ctx n
@@ -115,6 +116,9 @@ apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Loca
 apply _ (Clos env expr) val =
   let env' = Env.extend env val
    in eval (emptyContext {env = env'}) expr
+
+destroyClosure :: forall m. MonadElab m => Closure -> m (Located Value)
+destroyClosure (Clos env expr) = eval (emptyContext {env}) expr
 
 applyVal :: forall m. MonadElab m => Context -> Located Value -> Located Value -> Implicitness -> m (Located Value)
 applyVal ctx (VLam _ _ _ _ t :@ _) u _ = apply ctx t u

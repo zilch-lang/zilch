@@ -17,10 +17,11 @@ import qualified Language.Zilch.Syntax.Core.AST as AST
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Errors
+import Language.Zilch.Typecheck.Imports (ImportCache, ModuleInterface)
 
 type MetaContext = (Int, IntMap (MetaEntry, TAST.Path, Position, AST.HoleLocation))
 type MonadElab m = (?warnings :: WarningFlags, HasCallStack, MonadError ElabError m, MonadFix m, MonadWriter [ElabWarning] m, MonadState MetaContext m)
 
 -------------
 
-elabProgram :: (?warnings :: WarningFlags) => Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, Diagnostic String)
+elabProgram :: (?warnings :: WarningFlags) => ImportCache -> Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, ModuleInterface, Diagnostic String)

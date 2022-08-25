@@ -47,6 +47,8 @@ data Definition
       -- ^ The qualification (module name, direct translation to file path)
       [Located Text]
       -- ^ The imported item
+      FilePath
+      -- ^ The path to the module to consider
   deriving (Show)
 
 data Parameter

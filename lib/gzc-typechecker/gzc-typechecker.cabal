@@ -13,10 +13,12 @@ library
       Language.Zilch.Typecheck.Checker
       Language.Zilch.Typecheck.Context
       Language.Zilch.Typecheck.Defaults
+      Language.Zilch.Typecheck.Driver
       Language.Zilch.Typecheck.Elaborator
       Language.Zilch.Typecheck.Environment
       Language.Zilch.Typecheck.Errors
       Language.Zilch.Typecheck.Evaluator
+      Language.Zilch.Typecheck.Imports
       Language.Zilch.Typecheck.Metavars
       Language.Zilch.Typecheck.Unification
       Language.Zilch.Typecheck.Usage

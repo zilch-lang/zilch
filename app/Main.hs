@@ -7,6 +7,7 @@ module Main (main) where
 import Control.Monad (forM_, when)
 import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
+import Data.Functor ((<&>))
 import Data.Hashable (Hashable (hash))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (nub)
@@ -22,6 +23,7 @@ import Language.Zilch.Pretty.TAST ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Syntax.Driver (parseModules)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
+import Language.Zilch.Typecheck.Driver (typecheckModules)
 import Prettyprinter (pretty)
 import System.Directory (createDirectoryIfMissing, makeAbsolute)
 import System.Exit (exitFailure)
@@ -50,10 +52,10 @@ main = do
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
     liftIO $ putStrLn $ "✅ Modules parsed!"
 
-    -- (allTASTs, warns) <- typecheckModules allASTs
-    -- liftIO $ doOutputWarnings files warns
-    -- liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
-    -- liftIO $ putStrLn $ "✅ Modules passed type-checking!"
+    (allTASTs, warns) <- liftEither $ typecheckModules allASTs
+    liftIO $ doOutputWarnings files warns
+    liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
+    liftIO $ putStrLn $ "✅ Modules passed type-checking!"
 
     pure ()
 
@@ -92,7 +94,7 @@ doDumpTAST flags mod path
     let dir = getDumpBasePath flags
 
     createDirectoryIfMissing True (joinPath dir)
-    writeFile (joinPath $ dir <> [show (hash path) <> "tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
+    writeFile (joinPath $ dir <> [show (hash path) <> "-tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
   | otherwise = pure ()
 
 getDumpBasePath :: Flags -> [FilePath]

@@ -108,6 +108,19 @@ data ElabError
     ExpectedMultiplicativeProduct
       (Located Expression)
       Position
+  | -- | A module was not found in the import cache.
+    UnresolvedModule
+      [Located Text]
+      Position
+  | -- | Trying to import a private namespace member.
+    PrivateModuleImport
+      (Located Text)
+      Position
+  | -- | An unresolved namespace is being imported.
+    UnresolvedNamespace
+      [Located Text]
+      (Located Text)
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -300,6 +313,14 @@ fromElabError (ExpectedMultiplicativeProduct ty p) =
     "Unification error"
     [(p, This $ "A multiplicative dependent pair (⊗-type) was expected here\nbut a term of type '" <> show (pretty ty) <> "' was found")]
     []
+fromElabError (UnresolvedModule mod p) =
+  Err
+    Nothing
+    "Cannot find module."
+    [(p, This $ "Cannot resolve module '" <> show' mod <> "' inside this import")]
+    []
+  where
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
 
 ordinal :: Integral a => a -> String
 ordinal number

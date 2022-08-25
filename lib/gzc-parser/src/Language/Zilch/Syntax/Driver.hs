@@ -10,7 +10,7 @@
 {-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Syntax.Driver where
+module Language.Zilch.Syntax.Driver (parseModules) where
 
 import qualified Algebra.Graph.AdjacencyMap as Cyclic
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as Graph
@@ -126,7 +126,7 @@ parseModules modules = do
 
       ifaces <- foldrM (\(path, mod, iface) cache -> generateInterface path mod iface asts cache) [] asts
       (_, cache') <-
-        foldrM (\mod (res, cache) -> first (: res) <$> resolveNamespace mod asts cache) ([], ifaces)
+        foldrM (\mod (res, cache) -> first (: res) <$> resolveNamespace mod asts cache []) ([], ifaces)
           =<< traverse tryParseModuleName modules'
 
       constr <- gets snd
@@ -300,7 +300,7 @@ parseAllFiles graph asts sys = do
                   ((path', mod', Left ast) : cache', graph')
                   (mkMod <$> imports)
 
-              pure (cache'', Cyclic.overlay graph'' $ Cyclic.edges $ (mod,) <$> imports)
+              pure (cache'', graph'' `Cyclic.overlay` (Cyclic.edges $ (mod,) <$> imports) `Cyclic.overlay` Cyclic.vertex mod')
             Just _ -> pure (cache', graph')
 
     mkMod :: [Located Text] -> Located Text
@@ -317,6 +317,8 @@ parseAllFiles graph asts sys = do
 generateInterface :: forall m. MonadDriver m => FilePath -> ModName -> Either (Located AST.Module) Interface -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m [(FilePath, ModName, Interface)]
 generateInterface path mod (Right iface) _ cache = pure $ (path, mod, iface) : cache
 generateInterface path mod (Left ast) asts cache = do
+  -- liftIO do putStrLn $ "Generating interface for module " <> show (unLoc <$> mod) <> " " <> path
+
   (items, deps, cache') <- accumItemsAndDeps ast cache
   let (pub, priv) = bimap (Map.map keepIface) (Map.map keepIface) $ Map.partition snd3 items
   pure $ (path, mod, Iface deps pub priv) : cache'
@@ -331,14 +333,14 @@ generateInterface path mod (Left ast) asts cache = do
       AST.Val mult name ty :@ _ ->
         let imps = findImports ty
          in pure (Map.singleton name (mult, isPublic, Iface imps mempty mempty), imps, cache)
-      AST.Import isOpen path x :@ _ -> do
+      AST.Import isOpen path' x _ :@ _ -> do
         -- - if the import is open:
         --   - if @...path::x@ is a namespace, bring every public item into the scope
         --   - if @...path::x@ is not a namespace, act as if the import is not opened (and emit a warning)
         -- - otherwise:
         --   - add @x@ into the scope
-        let ns = path <> x
-        (resolved, cache') <- resolveNamespace ns asts cache
+        let ns = path' <> x
+        (resolved, cache') <- resolveNamespace ns asts cache [path]
         let intoScope =
               case resolved of
                 ResolvedNamespace iface@(Iface _ pub _) ->
@@ -381,7 +383,7 @@ generateInterface path mod (Left ast) asts cache = do
 
     findImportsInDefinition (AST.Let _ _ _ ty ex :@ _) = findImports ty <> findImports ex
     findImportsInDefinition (AST.Val _ _ ty :@ _) = findImports ty
-    findImportsInDefinition (AST.Import _ path x :@ _) = [path <> x]
+    findImportsInDefinition (AST.Import _ path x _ :@ _) = [path <> x]
 
     snd3 ~(_, x, _) = x
 
@@ -391,11 +393,11 @@ data Resolved
   = ResolvedNamespace Interface
   | ResolvedItem (Located Text) (Located Multiplicity)
 
-resolveNamespace :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m (Resolved, [(FilePath, ModName, Interface)])
+resolveNamespace :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> [FilePath] -> m (Resolved, [(FilePath, ModName, Interface)])
 resolveNamespace mod asts cache = solveConstraintFor mod asts cache
 
-solveConstraintFor :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> m (Resolved, [(FilePath, ModName, Interface)])
-solveConstraintFor mod asts cache = do
+solveConstraintFor :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> [FilePath] -> m (Resolved, [(FilePath, ModName, Interface)])
+solveConstraintFor mod asts cache filteredPaths = do
   constr <- gets snd
   let Just ((mod', c), cs) = findElem ((== mod) . fst) constr
 
@@ -461,11 +463,13 @@ solveConstraintFor mod asts cache = do
       pure ((c, b), cache')
 
     interfaceOf base (Mod mod path) cache = do
-      case safeHead (filter (\(p, m, _) -> p == path && m == mod) cache) of
-        Just (_, _, iface) -> pure (Just iface, cache)
-        Nothing -> do
-          let (path', mod', ast) = head (filter (\(p, m, _) -> p == path && m == mod) asts)
-          interfaceOf base (Mod mod path') =<< generateInterface path' mod' ast asts cache
+      if path `elem` filteredPaths
+        then pure (Nothing, cache)
+        else case safeHead (filter (\(p, m, _) -> p == path && m == mod) cache) of
+          Just (_, _, iface) -> pure (Just iface, cache)
+          Nothing -> do
+            let (path', mod', ast) = head (filter (\(p, m, _) -> p == path && m == mod) asts)
+            interfaceOf base (Mod mod path') =<< generateInterface path' mod' ast asts cache
     interfaceOf mod (Access mod' x) cache = do
       (iface, cache') <- interfaceOf mod mod' cache
       case iface of
@@ -510,12 +514,13 @@ patchImports ((path, mod, ast) : fs) sys = do
     patchDefinition (AST.Val mult name ty :@ p) sys = do
       ty' <- patchExpression ty sys
       pure $ AST.Val mult name ty' :@ p
-    patchDefinition (AST.Import isOpen mod _ :@ p) sys = do
-      --                                   ^ should be empty because desugaring gives @[]@
+    patchDefinition (AST.Import isOpen mod _ _ :@ p) sys = do
+      --                                   ^^^ should be empty because desugaring gives @[]@ and @""@
       let Just [(unit, _)] = lookup mod sys
           mod' = unit2Mod unit
+          path = unUnit unit
           item = drop (length mod') mod
-      pure $ AST.Import isOpen mod' item :@ p
+      pure $ AST.Import isOpen mod' item path :@ p
 
     patchExpression (AST.EInteger i suf :@ p) _ = pure $ AST.EInteger i suf :@ p
     patchExpression (AST.ECharacter c :@ p) _ = pure $ AST.ECharacter c :@ p
@@ -635,31 +640,6 @@ unit2Mod = \case
 isInterface :: Unit -> Bool
 isInterface (Interface _ _) = True
 isInterface _ = False
-
-tryFindModule :: forall m. MonadDriver m => [Located Text] -> m [Unit]
-tryFindModule mod =
-  -- if there are any .zci file in the include paths, only keep those
-  --   otherwise keep all the files found
-  (splitZci <$> go (toPath mod) ?includeDirs) >>= \case
-    ([], zc) -> pure zc
-    (zci, _) -> pure zci
-  where
-    go _ [] = pure []
-    go path (d : dir) = do
-      let p = d </> path
-      zcExists <- liftIO $ doesFileExist $ p <.> "zc"
-      zciExists <- liftIO $ doesFileExist $ p <.> "zci"
-
-      go path dir
-        <&> if
-            -- give priority to a .zci file over a .zc file
-            | zciExists -> (Interface d path :)
-            | zcExists -> (File d path :)
-            | otherwise -> id
-
-    toPath mod = joinPath (Text.unpack . unLoc <$> mod)
-
-    splitZci = partition isInterface
 
 tryLexing :: forall m. MonadDriver m => FilePath -> Text -> m ([Located Token], Diagnostic String)
 tryLexing path content = liftEither . first LexingE $ lexFile path content

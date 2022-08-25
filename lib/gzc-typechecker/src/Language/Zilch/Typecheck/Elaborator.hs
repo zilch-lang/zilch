@@ -21,6 +21,7 @@ import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (MetaEntry)
 import Language.Zilch.Typecheck.Defaults
 import Language.Zilch.Typecheck.Errors
+import Language.Zilch.Typecheck.Imports (ImportCache, ModuleInterface)
 
 type MetaContext = (Int, IntMap (MetaEntry, TAST.Path, Position, AST.HoleLocation))
 
@@ -28,13 +29,20 @@ type MonadElab m = (?warnings :: WarningFlags, HasCallStack, MonadError ElabErro
 
 -------------
 
-elabProgram :: (?warnings :: WarningFlags) => Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, Diagnostic String)
-elabProgram mod = bimap errToDiagnostic warnToDiagnostic . runExcept . flip evalStateT (0, mempty) . runWriterT $ checkProgram defaultContext mod
+elabProgram :: (?warnings :: WarningFlags) => ImportCache -> Located AST.Module -> Either (Diagnostic String) (Located TAST.Module, ModuleInterface, Diagnostic String)
+elabProgram cache mod =
+  bimap errToDiagnostic warnToDiagnostic
+    . runExcept
+    . flip evalStateT (0, mempty)
+    . runWriterT
+    $ checkProgram cache defaultContext mod
 
 errToDiagnostic :: ElabError -> Diagnostic String
 errToDiagnostic = addReport def . fromElabError
 
-warnToDiagnostic :: (Located TAST.Module, [ElabWarning]) -> (Located TAST.Module, Diagnostic String)
-warnToDiagnostic = second toDiag
+warnToDiagnostic :: ((Located TAST.Module, ModuleInterface), [ElabWarning]) -> (Located TAST.Module, ModuleInterface, Diagnostic String)
+warnToDiagnostic = toTriple . second toDiag
   where
     toDiag = foldl' addReport def . fmap fromElabWarning . nub
+
+    toTriple ((x, y), z) = (x, y, z)

@@ -3,6 +3,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Checker (checkProgram, check) where
@@ -11,7 +12,9 @@ import Control.Monad (forM, unless, void, when)
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad.State (gets)
 import Control.Monad.Writer (tell)
-import Data.Bifunctor (first)
+import Data.Bifunctor (Bifunctor (..), first, second)
+import Data.Foldable (foldl')
+import Data.Functor ((<&>))
 import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
@@ -30,14 +33,16 @@ import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
 import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
+import Language.Zilch.Typecheck.Imports (ImportCache, ModuleInterface (..), Namespace (..))
+import qualified Language.Zilch.Typecheck.Imports as ImportCache
 import Language.Zilch.Typecheck.Metavars (freshMeta)
 import Language.Zilch.Typecheck.Unification (unify)
 import Language.Zilch.Typecheck.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Usage as Usage
 
-checkProgram :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module)
-checkProgram ctx mod = do
-  (TAST.Mod binds :@ p, ctx, usages) <- checkProgram' ctx mod
+checkProgram :: forall m. MonadElab m => ImportCache -> Context -> Located AST.Module -> m (Located TAST.Module, ModuleInterface)
+checkProgram cache ctx mod = do
+  (TAST.Mod binds :@ p, iface, ctx, usages) <- checkProgram' cache ctx mod
 
   metas <- gets (IntMap.toList . snd)
   addBinds <- forM metas \(m, e) -> do
@@ -60,7 +65,7 @@ checkProgram ctx mod = do
   checkAllDefined (types ctx) (env ctx)
   checkMutuallyRecursiveValues ctx (types ctx) usages
 
-  pure $ TAST.Mod (addBinds' <> binds) :@ p
+  pure (TAST.Mod (addBinds' <> binds) :@ p, iface)
   where
     checkAllDefined :: forall m. MonadElab m => [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> m ()
     checkAllDefined [] [] = pure ()
@@ -89,18 +94,37 @@ checkProgram ctx mod = do
         (_, _, VPi {} :@ _) -> pure Nothing
         (_, _, _) -> pure $ Just mult
 
-checkProgram' :: forall m. MonadElab m => Context -> Located AST.Module -> m (Located TAST.Module, Context, Map (Located Text) Usage)
-checkProgram' ctx (AST.Mod defs :@ p) = do
+checkProgram' :: forall m. MonadElab m => ImportCache -> Context -> Located AST.Module -> m (Located TAST.Module, ModuleInterface, Context, Map (Located Text) Usage)
+checkProgram' cache ctx (AST.Mod defs :@ p) = do
   case defs of
-    [] -> pure (TAST.Mod [] :@ p, ctx, mempty)
+    [] -> pure (TAST.Mod [] :@ p, mempty, ctx, mempty)
     b : bs -> do
-      (!b, ctx, u1) <- checkToplevel ctx b
-      (TAST.Mod defs :@ p, ctx, u2) <- checkProgram' ctx (AST.Mod bs :@ p)
+      (!b, ctx, u1) <- checkToplevel cache ctx b
+      iface' <-
+        mconcat
+          <$> forM b \(TAST.TopLevel _ isPublic def :@ _) -> case def of
+            (TAST.Let _ mult name ty ex :@ _) -> do
+              let ctx' = unbind ctx
+              ty <- force ctx' =<< eval ctx' ty
+              ex <- eval ctx' ex
+              let addNS = ((name, SingleNS mult ty ex) :)
+              pure $ (if isPublic then first addNS else second addNS) ([], [])
+            (TAST.Val mult name ty :@ _) -> pure ([], [])
+            (TAST.External mult name ty ex _ _ :@ _) -> do
+              ty <- force ctx =<< eval ctx ty
+              ex <- eval ctx ex
+              let addNS = ((name, SingleNS mult ty ex) :)
+              pure $ (if isPublic then first addNS else second addNS) ([], [])
+      let iface'' = mkInterface iface'
 
-      pure (TAST.Mod (b : defs) :@ p, ctx, u1 <> u2)
+      (TAST.Mod defs :@ p, iface, ctx, u2) <- checkProgram' cache ctx (AST.Mod bs :@ p)
 
-checkToplevel :: forall m. MonadElab m => Context -> Located AST.TopLevel -> m (Located TAST.TopLevel, Context, Map (Located Text) Usage)
-checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
+      pure (TAST.Mod (b <> defs) :@ p, iface <> iface'', ctx, u1 <> u2)
+  where
+    mkInterface = uncurry Iface . bimap Map.fromList Map.fromList
+
+checkToplevel :: forall m. MonadElab m => ImportCache -> Context -> Located AST.TopLevel -> m ([Located TAST.TopLevel], Context, Map (Located Text) Usage)
+checkToplevel cache ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
   {-
      0Γ ⊢ A ⇐⁰ type ℓ            0Γ ⊢ e ⇐⁰ A          i = 0
     ──────────────────────────────────────────────────────── [⇐ let-I₀]
@@ -146,13 +170,43 @@ checkToplevel ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty e
       _ -> pure $ VThunk ex' :@ getPos ex'
     pure (ex', ex'', usage)
 
-  pure (TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4, define (unLoc mult) name ex' ty' ctx, Map.singleton name usage)
-checkToplevel ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
+  pure ([TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4], define (unLoc mult) name ex' ty' ctx, Map.singleton name usage)
+checkToplevel cache ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
   (_, ty) <- check TAST.Irrelevant ctx ty (VType :@ p4)
   ty' <- eval ctx ty
 
   let ctx' = define (unLoc mult) name (VUndefined :@ p6) ty' ctx
-  pure (TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5, ctx', mempty)
+  pure ([TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5], ctx', mempty)
+checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access path :@ p4) :@ p5) = do
+  binds <- case ImportCache.lookup (path, mod) cache of
+    Nothing -> throwError $ UnresolvedModule mod p5
+    Just iface -> case access of
+      [] ->
+        if isOpen
+          then undefined
+          else undefined
+      path -> fetchFromPath path iface
+
+  let ctx' = foldl' (\ctx (m :@ _, name, ty, ex) -> define m name ex ty ctx) ctx binds
+  top <- forM binds \(m, name, ty, ex) -> do
+    ty <- quote ctx (lvl ctx) ty
+    ex <- quote ctx (lvl ctx) ex
+    pure $ TAST.TopLevel [] isPublic (TAST.External m name ty ex (mod <> access <> if isOpen then [name] else []) path :@ p5) :@ p5
+
+  pure (top, ctx', Map.fromList $ binds <&> \(_, name, _, _) -> (name, mempty))
+  where
+    fetchFromPath [] _ = undefined
+    fetchFromPath [x] (Iface pub priv) =
+      case Map.lookup x pub of
+        Just (SingleNS mult ty ex) -> do
+          -- when isOpen do
+          --   tell [UselessOpenOnNonNamespace x p5]
+          pure [(mult, x, ty, ex)]
+        Just (MultipleNS mult val within) -> undefined
+        Nothing -> case Map.lookup x priv of
+          Just _ -> throwError $ PrivateModuleImport x p5
+          Nothing -> throwError $ UnresolvedNamespace mod x p5
+    fetchFromPath (x : xs) (Iface pub priv) = undefined
 
 checkAlreadyBound :: forall m. MonadElab m => Located Text -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> Position -> m (Maybe (Located TAST.Multiplicity, Located Value))
 checkAlreadyBound _ [] [] _ = pure Nothing

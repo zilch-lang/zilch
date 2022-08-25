@@ -48,9 +48,11 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
-  pretty (Import isOpened mod item :@ _) =
+  pretty (Import isOpened mod item path :@ _) =
     (if isOpened then "open" <> space else "")
       <> "import"
+      <> space
+      <> enclose "\"" "\"" (pretty path)
       <> space
       <> concatWith (surround "∷") (pretty . unLoc <$> mod)
       <> space
