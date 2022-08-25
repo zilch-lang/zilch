@@ -188,20 +188,12 @@ instance Pretty (Located Expression) where
       <> pretty m
       <> hardline
       <> pretty n
-  pretty (EInclude file ty :@ _) =
-    "INCLUDE"
-      <> space
-      <> enclose "\"" "\"" (pretty file)
-      <> space
-      <> colon
-      <> space
-      <> pretty ty
   pretty (EComposite fields :@ _) =
     "'"
       <> align
         ( "{"
             <> space
-            <> concatWith (surround $ line <> ", ") (prettyField <$> Map.toList fields)
+            <> concatWith (surround $ line <> "," <> space) (prettyField <$> Map.toList fields)
             <> space
             <> "}"
         )
@@ -214,6 +206,26 @@ instance Pretty (Located Expression) where
           <> colon
           <> space
           <> pretty t
+  pretty (ERecord fields :@ _) =
+    "@"
+      <> align
+        ( "{"
+            <> space
+            <> concatWith (surround $ line <> "," <> space) (prettyField <$> Map.toList fields)
+            <> space
+            <> "}"
+        )
+    where
+      prettyField (x, (p, t, e)) =
+        pretty p
+          <> space
+          <> pretty (unLoc x)
+          <> space
+          <> colon
+          <> space
+          <> pretty t
+          <> line
+          <> indent 2 ("≔" <> space <> pretty e)
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

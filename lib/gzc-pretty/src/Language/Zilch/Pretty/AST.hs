@@ -171,6 +171,10 @@ instance Pretty (Located Expression) where
       <> pretty m
       <> hardline
       <> pretty n
+  pretty (EFieldAccess e x :@ _) =
+    parens (pretty e)
+      <> "∷"
+      <> pretty (unLoc x)
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

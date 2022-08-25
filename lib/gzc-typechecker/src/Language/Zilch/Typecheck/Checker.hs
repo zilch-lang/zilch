@@ -180,11 +180,11 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :
 checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access path :@ p4) :@ p5) = do
   binds <- case ImportCache.lookup (path, mod) cache of
     Nothing -> throwError $ UnresolvedModule mod p5
-    Just iface -> case access of
+    Just iface@(Iface pub _) -> case access of
       [] ->
         if isOpen
-          then undefined
-          else undefined
+          then pure $ insertName <$> Map.toList pub
+          else pure [(TAST.W :@ p5, last mod, mkComposite pub :@ p5, mkRecord pub :@ p5)]
       path -> fetchFromPath path iface
 
   let ctx' = foldl' (\ctx (m :@ _, name, ty, ex) -> define m name ex ty ctx) ctx binds
@@ -207,6 +207,17 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access pat
           Just _ -> throwError $ PrivateModuleImport x p5
           Nothing -> throwError $ UnresolvedNamespace mod x p5
     fetchFromPath (x : xs) (Iface pub priv) = undefined
+
+    insertName (x, SingleNS m ty ex) = (m, x, ty, ex)
+    insertName (x, MultipleNS m ty (Iface pub _)) = (m, x, ty, mkRecord pub :@ getPos x)
+
+    mkComposite fields = VComposite $ Map.mapWithKey mkCompositeFieldFromNS fields
+    mkCompositeFieldFromNS _ (SingleNS mult ty _) = (mult, ty)
+    mkCompositeFieldFromNS _ (MultipleNS mult ty _) = (mult, ty)
+
+    mkRecord fields = VRecord $ Map.mapWithKey mkRecordFieldFromNS fields
+    mkRecordFieldFromNS _ (SingleNS mult ty ex) = (mult, ty, ex)
+    mkRecordFieldFromNS (_ :@ p) (MultipleNS mult ty (Iface pub _)) = (mult, ty, mkRecord pub :@ p)
 
 checkAlreadyBound :: forall m. MonadElab m => Located Text -> [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> Position -> m (Maybe (Located TAST.Multiplicity, Located Value))
 checkAlreadyBound _ [] [] _ = pure Nothing

@@ -135,15 +135,12 @@ data Expression
       -- ^ @M@
       (Located Expression)
       -- ^ @N@
-  | -- | @INCLUDE "file.zc(i)" : τ@
-    EInclude
-      FilePath
-      -- ^ @"file.zc(i)"@
-      (Located Expression)
-      -- ^ @τ@
   | -- | @'{ p x : τ }@
     EComposite
       (Map (Located Text) (Located Multiplicity, Located Expression))
+  | -- | @\@{p x : t := e }@
+    ERecord
+      (Map (Located Text) (Located Multiplicity, Located Expression, Located Expression))
   deriving (Show)
 
 data BuiltinType
@@ -253,6 +250,12 @@ data Value
   | VBuiltinS8
   | VBuiltinBool
   | VUndefined
+  | -- | @'{ p x : τ }@
+    VComposite
+      (Map (Located Text) (Located Multiplicity, Located Value))
+  | -- | @\@{p x : t := e }@
+    VRecord
+      (Map (Located Text) (Located Multiplicity, Located Value, Located Value))
   deriving (Show)
 
 data MetaEntry

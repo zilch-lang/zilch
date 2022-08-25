@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
@@ -110,6 +111,12 @@ eval ctx (TAST.EMultiplicativePairElim _ _ _ _ m n :@ _) = do
 eval ctx (TAST.EMultiplicativeUnitElim _ _ m n :@ _) = do
   eval ctx m -- << this will not be evaluated
   eval ctx n
+eval ctx (TAST.EComposite fields :@ p) = do
+  fields' <- traverse (\(m, ty) -> (m,) <$> eval ctx ty) fields
+  pure $ VComposite fields' :@ p
+eval ctx (TAST.ERecord fields :@ p) = do
+  fields' <- traverse (\(m, ty, ex) -> (m,,) <$> eval ctx ty <*> eval ctx ex) fields
+  pure $ VRecord fields' :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -225,6 +232,12 @@ quote ctx level val = do
     VSnd e :@ p -> do
       e' <- quote ctx level e
       pure $ TAST.ESnd e' :@ p
+    VComposite fields :@ p -> do
+      fields' <- traverse (\(m, ty) -> (m,) <$> quote ctx level ty) fields
+      pure $ TAST.EComposite fields' :@ p
+    VRecord fields :@ p -> do
+      fields' <- traverse (\(m, ty, ex) -> (m,,) <$> quote ctx level ty <*> quote ctx level ex) fields
+      pure $ TAST.ERecord fields' :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)
