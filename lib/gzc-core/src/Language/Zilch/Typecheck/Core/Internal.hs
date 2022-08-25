@@ -141,6 +141,9 @@ data Expression
   | -- | @\@{p x : t := e }@
     ERecord
       (Map (Located Text) (Located Multiplicity, Located Expression, Located Expression))
+  | ERecordAccess
+      (Located Expression)
+      (Located Text)
   deriving (Show)
 
 data BuiltinType

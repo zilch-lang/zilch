@@ -9,6 +9,7 @@
 module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
 
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
+import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
@@ -48,6 +49,10 @@ eval ctx (TAST.ELet (TAST.Let True _ _ _ val :@ _) u :@ _) = mdo
   val' <- eval ctx' val
   eval ctx' u
 eval ctx (TAST.ELet (TAST.Let False _ _ _ val :@ _) u :@ _) = do
+  val' <- eval ctx val
+  let env' = Env.extend (env ctx) val'
+  eval (ctx {env = env'}) u
+eval ctx (TAST.ELet (TAST.External _ _ _ val _ _ :@ _) u :@ _) = do
   val' <- eval ctx val
   let env' = Env.extend (env ctx) val'
   eval (ctx {env = env'}) u
@@ -117,6 +122,12 @@ eval ctx (TAST.EComposite fields :@ p) = do
 eval ctx (TAST.ERecord fields :@ p) = do
   fields' <- traverse (\(m, ty, ex) -> (m,,) <$> eval ctx ty <*> eval ctx ex) fields
   pure $ VRecord fields' :@ p
+eval ctx (TAST.ERecordAccess r x :@ _) =
+  eval ctx r >>= \case
+    VRecord fields :@ _ -> case Map.lookup x fields of
+      Nothing -> undefined
+      Just (_, _, ex) -> pure ex
+    _ -> undefined
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)

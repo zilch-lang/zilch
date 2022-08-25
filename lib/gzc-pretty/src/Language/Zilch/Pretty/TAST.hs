@@ -226,6 +226,15 @@ instance Pretty (Located Expression) where
           <> pretty t
           <> line
           <> indent 2 ("≔" <> space <> pretty e)
+  pretty (ERecordAccess r x :@ _) =
+    parensIfNeeded r
+      <> "∷"
+      <> pretty (unLoc x)
+    where
+      parensIfNeeded e@(EIdentifier _ _ :@ _) = pretty e
+      parensIfNeeded e@(ERecord _ :@ _) = pretty e
+      parensIfNeeded e@(ERecordAccess _ _ :@ _) = pretty e
+      parensIfNeeded e = parens (pretty e)
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

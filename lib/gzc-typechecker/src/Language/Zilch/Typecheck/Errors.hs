@@ -121,6 +121,14 @@ data ElabError
       [Located Text]
       (Located Text)
       Position
+  | -- | Expected either a module (from an @import@) or a record literal.
+    ExpectedRecordOrModule
+      (Located Expression)
+      Position
+  | -- | A record or module does not contain the given field.
+    FieldNotFound
+      (Located Text)
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.
@@ -321,6 +329,18 @@ fromElabError (UnresolvedModule mod p) =
     []
   where
     show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+fromElabError (ExpectedRecordOrModule _ p) =
+  Err
+    Nothing
+    "Expected a module or a record."
+    [(p, This $ "Expected either a module or a record here")]
+    []
+fromElabError (FieldNotFound x p) =
+  Err
+    Nothing
+    ("Unknown member '" <> Text.unpack (unLoc x) <> "'.")
+    [(p, This $ "Is a record or a module which does not contain a binding for '" <> Text.unpack (unLoc x) <> "'")]
+    []
 
 ordinal :: Integral a => a -> String
 ordinal number
