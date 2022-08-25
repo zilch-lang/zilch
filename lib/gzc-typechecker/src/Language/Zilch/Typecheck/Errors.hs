@@ -341,6 +341,18 @@ fromElabError (FieldNotFound x p) =
     ("Unknown member '" <> Text.unpack (unLoc x) <> "'.")
     [(p, This $ "Is a record or a module which does not contain a binding for '" <> Text.unpack (unLoc x) <> "'")]
     []
+fromElabError (PrivateModuleImport x p) =
+  Err
+    Nothing
+    ("Private member import.")
+    [(p, This $ "Trying to import the private member '" <> Text.unpack (unLoc x) <> "'")]
+    []
+fromElabError (UnresolvedNamespace mod x p) =
+  Err
+    Nothing
+    ("Unresolved namespace.")
+    [(p, This $ "Trying to import the unresolved namespace '" <> Text.unpack (Text.intercalate "∷" $ unLoc <$> (mod <> [x])) <> "'.")]
+    []
 
 ordinal :: Integral a => a -> String
 ordinal number
