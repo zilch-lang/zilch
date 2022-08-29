@@ -45,10 +45,12 @@ simplify = fmap snd . foldlM simp (emptyContext, [])
         TAST.Let isRec mult name ty val :@ p -> do
           ty <- simplify' ctx ty
           val <- simplify' ctx val
-          pure (ctx, TAST.Let isRec mult name ty val :@ p)
+          let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
+          pure (ctx', TAST.Let isRec mult name ty val :@ p)
         TAST.Val mult name ty :@ p -> do
           ty <- simplify' ctx ty
-          pure (ctx, TAST.Val mult name ty :@ p)
+          let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
+          pure (ctx', TAST.Val mult name ty :@ p)
         TAST.External mult name ty val mod path :@ p -> do
           ty <- simplify' ctx ty
           val <- simplify' ctx val
