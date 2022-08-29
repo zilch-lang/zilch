@@ -14,7 +14,7 @@ import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position (..), getPos, spanOf, unLoc)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
@@ -285,19 +285,19 @@ parseApplication s = located do
       pure (True, exprs)
 
     explicit s = located do
-      lexeme (token TkLeftParen) *> s
-      exprs <- parseExpression s `MP.sepBy1` (token TkComma <* s)
-      s <* token TkRightParen
-      pure (False, exprs)
+      exprs :@ p <- located do
+        lexeme (token TkLeftParen) *> s
+        exprs <- MP.optional $ parseExpression s `MP.sepBy1` (token TkComma <* s)
+        s <* token TkRightParen
+        pure exprs
+      pure (False, fromMaybe [EMultiplicativeUnit :@ p] exprs)
 
 parseAtom :: forall m. MonadParser m => m () -> m (Located Expression)
 parseAtom s = located do
   MP.choice
     [ ETrue <$ token TkTrue,
       EFalse <$ token TkFalse,
-      do
-        (nb, suf) :@ _ <- parseNumber
-        pure $ EInt nb suf,
+      uncurry EInt . unLoc <$> parseNumber,
       EHole <$ token TkUnderscore,
       EType <$ token TkType,
       parseOne,
