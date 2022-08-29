@@ -122,12 +122,12 @@ eval ctx (TAST.EComposite fields :@ p) = do
 eval ctx (TAST.ERecord fields :@ p) = do
   fields' <- traverse (\(m, ty, ex) -> (m,,) <$> eval ctx ty <*> eval ctx ex) fields
   pure $ VRecord fields' :@ p
-eval ctx (TAST.ERecordAccess r x :@ _) =
+eval ctx (TAST.ERecordAccess r x :@ p) =
   eval ctx r >>= \case
     VRecord fields :@ _ -> case Map.lookup x fields of
       Nothing -> undefined
       Just (_, _, ex) -> pure ex
-    _ -> undefined
+    r -> pure $ VRecordAccess r x :@ p
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
@@ -249,6 +249,9 @@ quote ctx level val = do
     VRecord fields :@ p -> do
       fields' <- traverse (\(m, ty, ex) -> (m,,) <$> quote ctx level ty <*> quote ctx level ex) fields
       pure $ TAST.ERecord fields' :@ p
+    VRecordAccess r x :@ p -> do
+      r' <- quote ctx level r
+      pure $ TAST.ERecordAccess r' x :@ p
     v -> error $ "not yet handled " <> show v
 
 quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)

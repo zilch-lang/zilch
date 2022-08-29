@@ -36,36 +36,21 @@ import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
 import Language.Zilch.Typecheck.Imports (ImportCache, ModuleInterface (..), Namespace (..))
 import qualified Language.Zilch.Typecheck.Imports as ImportCache
 import Language.Zilch.Typecheck.Metavars (freshMeta)
+import Language.Zilch.Typecheck.Simplifier (inlineMetavariables)
 import Language.Zilch.Typecheck.Unification (unify)
 import Language.Zilch.Typecheck.Usage (Usage)
 import qualified Language.Zilch.Typecheck.Usage as Usage
 
 checkProgram :: forall m. MonadElab m => ImportCache -> Context -> Located AST.Module -> m (Located TAST.Module, ModuleInterface)
 checkProgram cache ctx mod = do
-  (TAST.Mod binds :@ p, iface, ctx, usages) <- checkProgram' cache ctx mod
+  (mod, iface, ctx, usages) <- checkProgram' cache ctx mod
 
-  metas <- gets (IntMap.toList . snd)
-  addBinds <- forM metas \(m, e) -> do
-    case e of
-      (Unsolved _ _, path, p, loc) -> do
-        let go TAST.Here = pure []
-            go (TAST.Bind path mult x ty) = do
-              ty' <- quote ctx (lvl ctx) ty
-              ((unLoc x, mult, ty') :) <$> go path
-            go (TAST.Define path _ _ _ _) = go path
-
-        path' <- go path
-        throwError $ CannotSolveHole path' p loc
-      (Solved val mult ty, _, p, _) -> do
-        val@(_ :@ p1) <- quote ctx (lvl ctx) (val :@ p)
-        ty' <- quote ctx (lvl ctx) ty
-        pure (TAST.Let False (mult :@ p) (Text.pack ("?" <> show m) :@ p) ty' val :@ p1)
-  let addBinds' = (:@ p) . TAST.TopLevel [] False <$> addBinds
+  mod <- inlineMetavariables mod ctx
 
   checkAllDefined (types ctx) (env ctx)
   checkMutuallyRecursiveValues ctx (types ctx) usages
 
-  pure (TAST.Mod (addBinds' <> binds) :@ p, iface)
+  pure (mod, iface)
   where
     checkAllDefined :: forall m. MonadElab m => [(TAST.Multiplicity, Located Text, Origin, Located Value)] -> Environment -> m ()
     checkAllDefined [] [] = pure ()

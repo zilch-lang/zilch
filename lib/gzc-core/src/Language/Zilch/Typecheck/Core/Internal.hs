@@ -259,6 +259,9 @@ data Value
   | -- | @\@{p x : t := e }@
     VRecord
       (Map (Located Text) (Located Multiplicity, Located Value, Located Value))
+  | VRecordAccess
+      (Located Value)
+      (Located Text)
   deriving (Show)
 
 data MetaEntry

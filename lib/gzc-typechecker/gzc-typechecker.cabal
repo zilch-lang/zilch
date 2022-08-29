@@ -20,6 +20,8 @@ library
       Language.Zilch.Typecheck.Evaluator
       Language.Zilch.Typecheck.Imports
       Language.Zilch.Typecheck.Metavars
+      Language.Zilch.Typecheck.Monomorphiser
+      Language.Zilch.Typecheck.Simplifier
       Language.Zilch.Typecheck.Unification
       Language.Zilch.Typecheck.Usage
   other-modules:
