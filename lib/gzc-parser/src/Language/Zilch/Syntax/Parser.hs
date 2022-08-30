@@ -103,7 +103,7 @@ indentBlock p = do
 
 -- | See @'MPL.lineFold'@.
 lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
-lineFold = MPL.lineFold whitespace
+lineFold p = MPL.lineFold whitespace \s -> p (MP.try s)
 {-# INLINE lineFold #-}
 
 -- | See @'MPL.indentGuard'@.

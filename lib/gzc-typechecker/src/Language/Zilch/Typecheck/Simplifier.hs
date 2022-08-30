@@ -43,18 +43,18 @@ simplify = fmap snd . foldlM simp (emptyContext, [])
     simp (ctx, ts) (TAST.TopLevel attrs isOpen def :@ p) = do
       (ctx, def) <- case def of
         TAST.Let isRec mult name ty val :@ p -> do
-          ty <- simplify' ctx ty
-          val <- simplify' ctx val
           let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
+          ty <- simplify' (if isRec then ctx' else ctx) ty
+          val <- simplify' (if isRec then ctx' else ctx) val
           pure (ctx', TAST.Let isRec mult name ty val :@ p)
         TAST.Val mult name ty :@ p -> do
-          ty <- simplify' ctx ty
           let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
+          ty <- simplify' ctx ty
           pure (ctx', TAST.Val mult name ty :@ p)
         TAST.External mult name ty val mod path :@ p -> do
+          let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
           ty <- simplify' ctx ty
           val <- simplify' ctx val
-          let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
           pure (ctx', TAST.External mult name ty val mod path :@ p)
       pure (ctx, (TAST.TopLevel attrs isOpen def :@ p) : ts)
 
