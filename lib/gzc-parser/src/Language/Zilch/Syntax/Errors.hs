@@ -93,6 +93,10 @@ data DesugarError
   | -- | An access syntax is used with neither a number nor an identifier.
     UnsupportedAccessKind
       Position
+  | -- | A by-ref operator has not been used where it was meant to be.
+    InvalidUseOfByRef
+      Text
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -176,6 +180,12 @@ fromDesugarerError (UnsupportedAccessKind p) =
     Nothing
     "Unsupported field access."
     [(p, This "Cannot access an element whose index is neither a number nor an identifier")]
+    []
+fromDesugarerError (InvalidUseOfByRef _ p) =
+  Err
+    Nothing
+    "Invalid by-ref operator usage."
+    [(p, This "By-ref operator (&) used in a context where it was unexpected")]
     []
 
 fromDesugarerWarning :: DesugarWarning -> Report String

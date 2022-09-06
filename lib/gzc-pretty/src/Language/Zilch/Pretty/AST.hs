@@ -91,7 +91,8 @@ instance Pretty (Located Expression) where
       <> space
       <> "⇒"
       <> space
-      <> pretty ret
+      <> hardline
+      <> indent 2 (pretty ret)
   pretty (ELocal def ret :@ _) =
     pretty def
       <> line

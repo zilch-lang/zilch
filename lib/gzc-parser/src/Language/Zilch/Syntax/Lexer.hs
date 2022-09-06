@@ -114,6 +114,7 @@ identifierOrReserved =
             TkComma <$ MPC.string ",",
             TkLeftAngle <$ MPC.string "⟨",
             TkRightAngle <$ MPC.string "⟩",
+            TkAmpersand <$ MPC.string "&",
             anySymbol
           ] ::
             [m Token]
@@ -132,7 +133,7 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v" :: Str
     toToken "⇒" = TkUniDoubleRightArrow
     toToken "×" = TkTimes
     toToken "⊗" = TkUniTensor
-    toToken "&" = TkAmpersand
+    -- toToken "&" = TkAmpersand
     toToken "let" = TkLet
     toToken "rec" = TkRec
     toToken "val" = TkVal

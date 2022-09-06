@@ -276,7 +276,9 @@ parseApplication :: forall m. MonadParser m => m () -> m (Located Expression)
 parseApplication s = located do
   f <- parseAtom s
   args <- MP.many (MP.try s *> (implicit s <|> explicit s))
-  pure $ EApplication f args
+  case args of
+    [] -> pure $ unLoc f
+    args -> pure $ EApplication f args
   where
     implicit s = located do
       lexeme (token TkLeftBrace) *> s
@@ -302,6 +304,7 @@ parseAtom s = located do
       EType <$ token TkType,
       parseOne,
       parseTop,
+      parseByRef,
       EId <$> parseIdentifier,
       parseTuple s
     ]
@@ -387,6 +390,11 @@ parseOne = EOne <$ (token (TkSymbol "𝟏") <|> token (TkSymbol "𝟭"))
 
 parseTop :: forall m. MonadParser m => m Expression
 parseTop = ETop <$ (token (TkSymbol "⊤"))
+
+parseByRef :: forall m. MonadParser m => m Expression
+parseByRef = do
+  lexeme (token TkAmpersand)
+  EByRef <$> parseIdentifier
 
 parseMultiplicativePairDestructor :: forall m. MonadParser m => m () -> m () -> m Expression
 parseMultiplicativePairDestructor s' s = do

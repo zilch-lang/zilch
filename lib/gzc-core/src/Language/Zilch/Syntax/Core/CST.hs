@@ -130,4 +130,6 @@ data Expression
       [Located Text]
       (Located Expression)
       (Located Expression)
+  | EByRef
+      (Located Text)
   deriving (Show)
