@@ -97,6 +97,17 @@ data DesugarError
     InvalidUseOfByRef
       Text
       Position
+  | -- | Assumptions bound with meta attributes.
+    AssumptionWithMetaAttributes
+      Position
+  | -- | @val@ binding has an @inline@ attribute.
+    InlineAttributeOnVal
+      Position
+      Position
+  | -- | @import@ is only allowed on @val@s.
+    ImportAttributeOnlyAllowedOnVal
+      Position
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -186,6 +197,28 @@ fromDesugarerError (InvalidUseOfByRef _ p) =
     Nothing
     "Invalid by-ref operator usage."
     [(p, This "By-ref operator (&) used in a context where it was unexpected")]
+    []
+fromDesugarerError (AssumptionWithMetaAttributes p) =
+  Err
+    Nothing
+    "Cannot put meta attributes on 'assume' construct."
+    [(p, This "Found some meta attributes while binding these assumptions")]
+    []
+fromDesugarerError (InlineAttributeOnVal p p1) =
+  Err
+    Nothing
+    "Cannot make 'val' bindings inlineable."
+    [ (p, This "This binding has an 'inline' meta attribute attached to it"),
+      (p1, Where "While checking that this attribute should not be here")
+    ]
+    []
+fromDesugarerError (ImportAttributeOnlyAllowedOnVal p p1) =
+  Err
+    Nothing
+    "'import' meta attribute is only allowed on 'val' bindings."
+    [ (p, This "This binding is not a 'val' binding"),
+      (p1, Where "While checking that this attribute should not be here")
+    ]
     []
 
 fromDesugarerWarning :: DesugarWarning -> Report String

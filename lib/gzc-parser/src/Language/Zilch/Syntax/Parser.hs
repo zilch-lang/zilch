@@ -74,6 +74,13 @@ parseNumber = do
 
   pure $ (nb, suf) :@ p
 
+parseString :: forall m. MonadParser m => m (Located Token)
+parseString = do
+  let isString (TkString _) = True
+      isString _ = False
+
+  MP.satisfy (isString . unLoc)
+
 lexeme :: forall m a. MonadParser m => m a -> m a
 lexeme = MPL.lexeme whitespace
 
@@ -135,9 +142,43 @@ parseModule =
 parseTopLevelDefinition :: forall m. MonadParser m => m (Located TopLevelDefinition)
 parseTopLevelDefinition = located $ lineFold \s -> do
   TopLevel
-    <$> pure []
+    <$> MP.option [] (parseAttributes s)
     <*> (isJust <$> MP.optional (lexeme (token TkPublic)))
     <*> MP.choice [parseLet s, parseAssume s, parseVal s, parseImport s]
+
+parseAttributes :: forall m. MonadParser m => m () -> m [Located MetaAttribute]
+parseAttributes s = do
+  lexeme (token TkHashAttributes) <* s
+  lexeme (token TkLeftParen) <* s
+  attrs <- parseAttr s `MP.sepEndBy` (s *> lexeme (token TkComma) <* s)
+  token TkRightParen
+  pure attrs
+  where
+    parseAttr s =
+      lexeme . located $
+        MP.choice
+          [ parseInline s,
+            parseForeign s
+          ]
+
+    parseInline _ = do
+      token (TkSymbol "inline")
+      pure Inline
+
+    parseForeign s = do
+      lexeme (token TkImport) <* s
+      lexeme (token TkLeftParen) <* s
+      call <- lexeme (located parseCallingConv) <* s
+      lexeme (token TkComma) <* s
+      TkString name :@ p <- lexeme parseString <* s
+      token TkRightParen
+      pure $ Foreign call (name :@ p)
+
+    parseCallingConv =
+      MP.choice
+        [ CCall <$ token (TkSymbol "c"),
+          UnknownCall <$> parseIdentifier
+        ]
 
 parseMutualDefinitions :: forall m. MonadParser m => m (Located TopLevelDefinition)
 parseMutualDefinitions = located do
@@ -157,7 +198,7 @@ parseLet s = lexeme $ located do
 parseAssume :: forall m. MonadParser m => m () -> m (Located Definition)
 parseAssume s = lexeme $ located do
   lexeme (token TkAssume) <* s
-  Assume <$> (lexeme (parseParameter s) `MP.sepBy1` MP.try s)
+  Assume <$> (lexeme (parseParameter s) `MP.sepBy1` s)
 
 parseVal :: forall m. MonadParser m => m () -> m (Located Definition)
 parseVal s = lexeme $ located do
@@ -183,7 +224,7 @@ parseImport s = lexeme $ located do
     parseBranch s = do
       branches :@ p <- located do
         lexeme (token TkLeftBrace) <* s
-        branches <- lexeme (parseSpine s) `MP.sepBy1` (s *> lexeme (token TkComma) <* s)
+        branches <- lexeme (parseSpine s) `MP.sepEndBy1` (s *> lexeme (token TkComma) <* s)
         token TkRightBrace
         pure branches
       pure \sp -> (:@ p) . Branch <$> traverse ($ sp) branches

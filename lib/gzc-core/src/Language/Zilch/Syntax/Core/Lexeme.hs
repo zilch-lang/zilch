@@ -40,6 +40,8 @@ data Token
     TkElse
   | -- | @mutual@
     TkMutual
+  | -- | @#attributes@
+    TkHashAttributes
   | -- | @:@: @id : type@ means that the binding @id@ has the type @type@
     TkColon
   | -- | @:=@: binding definition

@@ -142,6 +142,7 @@ applyVal :: forall m. MonadElab m => Context -> Located Value -> Located Value -
 applyVal ctx (VLam _ _ _ _ t :@ _) u _ = apply ctx t u
 applyVal _ (VFlexible x sp :@ p) u i = pure $ VFlexible x ((u, i) : sp) :@ p
 applyVal _ (VRigid x name sp :@ p) u i = pure $ VRigid x name ((u, i) : sp) :@ p
+applyVal _ (VFFI name sp :@ p) u i = pure $ VFFI name ((u, i) : sp) :@ p
 applyVal _ _ _ _ = undefined
 
 applySpine :: forall m. MonadElab m => Context -> Located Value -> Spine -> m (Located Value)

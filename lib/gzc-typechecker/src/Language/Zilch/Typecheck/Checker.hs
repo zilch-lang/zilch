@@ -70,7 +70,7 @@ checkProgram cache ctx mod = do
         let y = last stack
          in throwError $ BindingWillEndUpCallingItself (unLoc y) (getPos y) (getPos x) (init stack)
     checkRecursivity ctx stack x usages = do
-      usageX <- removeFunctionals ctx (usages Map.! x)
+      usageX <- maybe (pure mempty) (removeFunctionals ctx) (Map.lookup x usages)
       let (_, _ :@ pos, _) = indexContext ctx x
       void $ flip Map.traverseWithKey usageX \k _ -> Just <$> checkRecursivity ctx ((unLoc x :@ pos) : stack) k usages
 
@@ -109,7 +109,7 @@ checkProgram' cache ctx (AST.Mod defs :@ p) = do
     mkInterface = uncurry Iface . bimap Map.fromList Map.fromList
 
 checkToplevel :: forall m. MonadElab m => ImportCache -> Context -> Located AST.TopLevel -> m ([Located TAST.TopLevel], Context, Map (Located Text) Usage)
-checkToplevel cache ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
+checkToplevel cache ctx (AST.TopLevel isPublic metas (AST.Let isRec mult name@(_ :@ p5) ty ex :@ p3) :@ p4) = do
   {-
      0Γ ⊢ A ⇐⁰ type ℓ            0Γ ⊢ e ⇐⁰ A          i = 0
     ──────────────────────────────────────────────────────── [⇐ let-I₀]
@@ -155,14 +155,26 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Let isRec mult name@(_ :@ p5
       _ -> pure $ VThunk ex' :@ getPos ex'
     pure (ex', ex'', usage)
 
-  pure ([TAST.TopLevel [] isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4], define (unLoc mult) name ex' ty' ctx, Map.singleton name usage)
-checkToplevel cache ctx (AST.TopLevel isPublic (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
+  let metas' = toTASTMetas <$> metas
+  pure ([TAST.TopLevel metas' isPublic (TAST.Let isRec mult name ty ex :@ p3) :@ p4], define (unLoc mult) name ex' ty' ctx, Map.singleton name usage)
+checkToplevel cache ctx (AST.TopLevel isPublic metas (AST.Val mult name@(_ :@ p6) ty :@ p4) :@ p5) = do
   (_, ty) <- check cache TAST.Irrelevant ctx ty (VType :@ p4)
   ty' <- eval ctx ty
 
-  let ctx' = define (unLoc mult) name (VUndefined :@ p6) ty' ctx
-  pure ([TAST.TopLevel [] isPublic (TAST.Val mult name ty :@ p4) :@ p5], ctx', mempty)
-checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access path :@ _) :@ p5) = do
+  let val =
+        if any
+          ( \(m :@ _) -> case m of
+              AST.Foreign {} -> True
+              _ -> False
+          )
+          metas
+          then VFFI name [] :@ p6
+          else VUndefined :@ p6
+  let ctx' = define (unLoc mult) name val ty' ctx
+
+  let metas' = toTASTMetas <$> metas
+  pure ([TAST.TopLevel metas' isPublic (TAST.Val mult name ty :@ p4) :@ p5], ctx', mempty)
+checkToplevel cache ctx (AST.TopLevel isPublic _ (AST.Import isOpen mod access path :@ _) :@ p5) = do
   binds <- resolveImport cache isOpen mod access path p5
 
   let ctx' = foldl' (\ctx (m :@ _, name, ty, ex) -> define m name ex ty ctx) ctx binds
@@ -172,6 +184,12 @@ checkToplevel cache ctx (AST.TopLevel isPublic (AST.Import isOpen mod access pat
     pure $ TAST.TopLevel [] isPublic (TAST.External m name ty ex (mod <> access <> if isOpen then [name] else []) path :@ p5) :@ p5
 
   pure (top, ctx', Map.fromList $ binds <&> \(_, name, _, _) -> (name, mempty))
+
+toTASTMetas :: Located AST.MetaAttribute -> Located TAST.MetaAttribute
+toTASTMetas (AST.Inline :@ p) = TAST.Inline :@ p
+toTASTMetas (AST.Foreign conv name :@ p) = TAST.Foreign (toConv conv) name :@ p
+  where
+    toConv (AST.CCall :@ _) = TAST.CCall
 
 resolveImport :: forall m. MonadElab m => ImportCache -> Bool -> [Located Text] -> [Located Text] -> FilePath -> Position -> m [(Located TAST.Multiplicity, Located Text, Located Value, Located Value)]
 resolveImport cache isOpen mod access path p5 = case ImportCache.lookup (path, mod) cache of

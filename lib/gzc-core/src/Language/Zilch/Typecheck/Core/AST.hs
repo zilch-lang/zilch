@@ -1,9 +1,10 @@
 {-# LANGUAGE DerivingVia #-}
 
-module Language.Zilch.Typecheck.Core.AST (Module (..), TopLevel (..), module Export) where
+module Language.Zilch.Typecheck.Core.AST (Module (..), TopLevel (..), MetaAttribute (..), CallingConvention (..), module Export) where
 
 import Data.Located (Located)
-import Language.Zilch.Typecheck.Core.Internal as Export (Parameter (..), Expression (..), Definition (..), DeBruijnIdx (..), BuiltinType (..), Path (..))
+import Data.Text (Text)
+import Language.Zilch.Typecheck.Core.Internal as Export (BuiltinType (..), DeBruijnIdx (..), Definition (..), Expression (..), Parameter (..), Path (..))
 
 data Module
   = Mod [Located TopLevel]
@@ -11,9 +12,18 @@ data Module
 
 data TopLevel
   = TopLevel
-      [()]
-      -- ^ For future use (maybe)
+      [Located MetaAttribute]
+      -- ^ Meta attributes
       Bool
       -- ^ Is it public?
       (Located Definition)
+  deriving (Show)
+
+data MetaAttribute
+  = Foreign CallingConvention (Located Text)
+  | Inline
+  deriving (Show)
+
+data CallingConvention
+  = CCall
   deriving (Show)

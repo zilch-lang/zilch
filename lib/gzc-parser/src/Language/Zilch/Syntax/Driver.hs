@@ -326,7 +326,7 @@ generateInterface path mod (Left ast) asts cache = do
     accumItemsAndDeps :: forall m. MonadDriver m => Located AST.Module -> [(FilePath, ModName, Interface)] -> m (Map (Located Text) (Located Multiplicity, Bool, Interface), [ModName], [(FilePath, ModName, Interface)])
     accumItemsAndDeps (AST.Mod toplevel :@ _) cache = fold <$> traverse (flip accumItemsAndDepsToplevel cache) toplevel
 
-    accumItemsAndDepsToplevel (AST.TopLevel isPublic def :@ _) cache = case def of
+    accumItemsAndDepsToplevel (AST.TopLevel isPublic _ def :@ _) cache = case def of
       AST.Let _ mult name ty ex :@ _ ->
         let imps = findImports ty <> findImports ex
          in pure (Map.singleton name (mult, isPublic, Iface imps mempty mempty), imps, cache)
@@ -503,9 +503,9 @@ patchImports ((path, mod, ast) : fs) sys = do
       defs' <- traverse (flip patchToplevel sys) defs
       pure $ Left $ AST.Mod defs' :@ p
 
-    patchToplevel (AST.TopLevel isPublic def :@ p) sys = do
+    patchToplevel (AST.TopLevel isPublic metas def :@ p) sys = do
       def' <- patchDefinition def sys
-      pure $ AST.TopLevel isPublic def' :@ p
+      pure $ AST.TopLevel isPublic metas def' :@ p
 
     patchDefinition (AST.Let isRec mult name ty ex :@ p) sys = do
       ty' <- patchExpression ty sys

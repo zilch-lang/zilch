@@ -262,6 +262,9 @@ data Value
   | VRecordAccess
       (Located Value)
       (Located Text)
+  | VFFI
+      (Located Text)
+      Spine
   deriving (Show)
 
 data MetaEntry

@@ -15,7 +15,20 @@ data TopLevel
   = TopLevel
       Bool
       -- ^ Is the toplevel binding public?
+      [Located MetaAttribute]
+      -- ^ Meta-attributes
       (Located Definition)
+  deriving (Show)
+
+data MetaAttribute
+  = Inline
+  | Foreign
+      (Located CallingConvention)
+      (Located Text)
+  deriving (Show)
+
+data CallingConvention
+  = CCall
   deriving (Show)
 
 data Definition

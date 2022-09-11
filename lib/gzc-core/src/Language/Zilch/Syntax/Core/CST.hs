@@ -20,6 +20,14 @@ data TopLevelDefinition
 
 data MetaAttribute
   = Inline
+  | Foreign
+      (Located CallingConvention)
+      (Located Text)
+  deriving (Show)
+
+data CallingConvention
+  = CCall
+  | UnknownCall (Located Text)
   deriving (Show)
 
 data Definition

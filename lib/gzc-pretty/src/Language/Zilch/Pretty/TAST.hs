@@ -4,23 +4,51 @@
 
 module Language.Zilch.Pretty.TAST where
 
+import Data.Foldable (fold)
+import Data.Functor ((<&>))
 import Data.Located (Located ((:@)), unLoc)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity
-import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, emptyDoc, enclose, hardline, indent, line, parens, space, surround, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, hardline, indent, line, lparen, parens, rparen, space, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
     vsep (pretty <$> defs)
 
 instance Pretty (Located TopLevel) where
-  pretty (TopLevel _ isPublic def :@ _) =
-    (if isPublic then "public" <> space else emptyDoc)
+  pretty (TopLevel attrs isPublic def :@ _) =
+    "#attributes"
+      <> lparen
+      <> prettyAttrs attrs
+      <> (if not (null attrs) then hardline else emptyDoc)
+      <> rparen
+      <> hardline
+      <> (if isPublic then "public" <> space else emptyDoc)
       <> pretty def
       <> hardline
+    where
+      prettyAttrs attrs = fold $ attrs <&> \a -> hardline <> indent 2 (pretty a) <> comma
+
+instance Pretty (Located MetaAttribute) where
+  pretty (Inline :@ _) = "inline"
+  pretty (Foreign conv (name :@ _) :@ _) =
+    "foreign"
+      <> lparen
+      <> "import"
+      <> comma
+      <> space
+      <> pretty' conv
+      <> comma
+      <> space
+      <> dquote
+      <> pretty name
+      <> dquote
+      <> rparen
+    where
+      pretty' CCall = "c"
 
 instance Pretty (Located Definition) where
   pretty (Let isRec usage name typ val :@ _) =

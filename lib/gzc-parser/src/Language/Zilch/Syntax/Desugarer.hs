@@ -15,12 +15,12 @@ import Control.Monad.Except (MonadError, runExcept, runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State (MonadState, get, modify, runStateT)
 import Control.Monad.Writer (MonadWriter, runWriterT, tell)
-import Data.Bifunctor (second)
+import Data.Bifunctor (first, second)
 import Data.Foldable (fold, foldlM, foldrM)
 import Data.Functor ((<&>))
 import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Debug.Trace (trace, traceShow)
@@ -52,10 +52,35 @@ desugarModule (CST.Mod defs :@ p) = do
   defs' <- mconcat <$> traverse desugarToplevel defs
   pure $ AST.Mod defs' :@ p
 
+checkConsistencyOfMetaAttributes :: forall m. MonadDesugar m => [Located AST.MetaAttribute] -> m ()
+checkConsistencyOfMetaAttributes l = do
+  let (inlines, imports) = groupMetaAttrs l
+  when (length inlines > 1) do
+    -- when (... ?warnings) do
+    --   tell [RedundantMetaAttribute $ getPos <$> inlines]
+    pure ()
+  when (length imports > 1) do
+    -- when there are multiple of the same calling convention, error out
+    let (c, other) = groupByConv imports
+    pure ()
+
+  pure ()
+  where
+    groupMetaAttrs [] = ([], [])
+    groupMetaAttrs (attr@(AST.Inline {} :@ _) : ls) = first (attr :) (groupMetaAttrs ls)
+    groupMetaAttrs (attr@(AST.Foreign {} :@ _) : ls) = second (attr :) (groupMetaAttrs ls)
+
+    groupByConv = undefined
+
 desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m [Located AST.TopLevel]
 desugarToplevel (CST.TopLevel _ True (CST.Assume _ :@ _) :@ p) = throwError $ PublicAssumptions p
-desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
+desugarToplevel (CST.TopLevel metas _ (CST.Assume _ :@ _) :@ p)
+  | not (null metas) = throwError $ AssumptionWithMetaAttributes p
+desugarToplevel (CST.TopLevel metas isPublic def :@ p) = do
+  metas' <- catMaybes <$> traverse desugarMetaAttribute metas
   def' <- desugarDefinition True def
+
+  checkConsistencyOfMetaAttributes metas'
 
   case def' of
     [] -> pure []
@@ -64,7 +89,20 @@ desugarToplevel (CST.TopLevel _ isPublic def :@ p) = do
       (AST.Let _ (I :@ _) (name :@ _) _ _ :@ pos, _) -> throwError $ LinearTopLevelBinding name pos
       (AST.Val (I :@ _) (name :@ _) _ :@ pos, _) -> throwError $ LinearTopLevelBinding name pos
       (AST.Val _ _ ty :@ p1, _) | Just (loc, p) <- holes ty -> throwError $ HoleInValType loc p p1
-      (def, _) -> pure $ AST.TopLevel isPublic def :@ p
+      -- check that @inline@ does not appear on a @val@
+      (AST.Val {} :@ p1, _) | Just p <- hasInline metas' -> throwError $ InlineAttributeOnVal p1 p
+      -- check that @import@ only happens on @val@
+      (AST.Let {} :@ p1, _) | Just p <- hasImport metas' -> throwError $ ImportAttributeOnlyAllowedOnVal p1 p
+      (AST.Import {} :@ p1, _) | Just p <- hasImport metas' -> throwError $ ImportAttributeOnlyAllowedOnVal p1 p
+      (def, _) -> pure $ AST.TopLevel isPublic metas' def :@ p
+  where
+    hasInline [] = Nothing
+    hasInline ((AST.Inline {} :@ p) : _) = Just p
+    hasInline (_ : ms) = hasInline ms
+
+    hasImport [] = Nothing
+    hasImport ((AST.Foreign {} :@ p) : _) = Just p
+    hasImport (_ : ms) = hasImport ms
 desugarToplevel (CST.Mutual defs :@ _) = do
   defs' <- desugarToplevel' defs
   defs'' <- generateSignatures [] defs'
@@ -72,17 +110,25 @@ desugarToplevel (CST.Mutual defs :@ _) = do
   where
     generateSignatures :: forall m. MonadDesugar m => [Text] -> [Located AST.TopLevel] -> m [Located AST.TopLevel]
     generateSignatures _ [] = pure []
-    generateSignatures withSig ((AST.TopLevel _ (AST.Val _ (name :@ _) _ :@ _) :@ _) : ts) = generateSignatures (name : withSig) ts
-    generateSignatures withSig ((AST.TopLevel _ (AST.Let _ usage name@(n :@ _) ty _ :@ p) :@ _) : ts)
+    generateSignatures withSig ((AST.TopLevel _ _ (AST.Val _ (name :@ _) _ :@ _) :@ _) : ts) = generateSignatures (name : withSig) ts
+    generateSignatures withSig ((AST.TopLevel _ metas (AST.Let _ usage name@(n :@ _) ty _ :@ p) :@ _) : ts)
       | n `elem` withSig = generateSignatures withSig ts
       | Just (loc, p1) <- holes ty = throwError $ HoleInValType loc p1 p
-      | otherwise = ((AST.TopLevel False (AST.Val usage name ty :@ p) :@ p) :) <$> generateSignatures withSig ts
-    generateSignatures withSig ((AST.TopLevel _ (AST.Import {} :@ _) :@ _) : ts) = generateSignatures withSig ts
+      | otherwise = ((AST.TopLevel False metas (AST.Val usage name ty :@ p) :@ p) :) <$> generateSignatures withSig ts
+    generateSignatures withSig ((AST.TopLevel _ _ (AST.Import {} :@ _) :@ _) : ts) = generateSignatures withSig ts
 
     desugarToplevel' :: forall m. MonadDesugar m => [Located CST.TopLevelDefinition] -> m [Located AST.TopLevel]
     desugarToplevel' [] = pure []
     desugarToplevel' ((CST.TopLevel _ _ (CST.Assume _ :@ p) :@ _) : _) = throwError $ AssumptionsInMutualBlock p
     desugarToplevel' (t : ts) = (<>) <$> desugarToplevel t <*> desugarToplevel' ts
+
+desugarMetaAttribute :: forall m. MonadDesugar m => Located CST.MetaAttribute -> m (Maybe (Located AST.MetaAttribute))
+desugarMetaAttribute (CST.Inline :@ p) = pure . Just $ AST.Inline :@ p
+desugarMetaAttribute (CST.Foreign conv name :@ p) = do
+  pure $ desugarCallingConvention conv <&> \c -> AST.Foreign c name :@ p
+  where
+    desugarCallingConvention (CST.CCall :@ p) = Just $ AST.CCall :@ p
+    desugarCallingConvention (CST.UnknownCall _ :@ _) = Nothing
 
 holes :: Located AST.Expression -> Maybe (AST.HoleLocation, Position)
 holes (AST.EHole loc :@ p) = Just (loc, p)
@@ -224,13 +270,11 @@ desugarExpression' (CST.ELet def ret :@ p) = do
   ret' <- desugarExpression ret
   (,[]) <$> foldrM mkLocal ret' defs'
   where
-    mkLocal (d, binds) r =
-      case binds of
-        [] -> pure $ AST.ELocal d r :@ p
-        binds -> do
-          let AST.Let _ mult name _ m :@ _ = d
-          elims <- mkMultiplicativeElims (binds <> [name]) mult m p
-          pure (foldr mkLet r elims)
+    mkLocal (d, []) r = pure $ AST.ELocal d r :@ p
+    mkLocal (d, binds) r = do
+      let AST.Let _ mult name _ m :@ _ = d
+      elims <- mkMultiplicativeElims (binds <> [name]) mult m p
+      pure (foldr mkLet r elims)
 
     mkLet (z, m, x, y, e) f = AST.EMultiplicativePairElim z m x y e f :@ p
 desugarExpression' (CST.EImport imp ret :@ p) = do

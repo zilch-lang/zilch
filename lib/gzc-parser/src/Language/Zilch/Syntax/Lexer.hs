@@ -64,7 +64,7 @@ lexProgram = removeFrontSpace *> ((<>) <$> MP.many (lexeme token) <*> (pure <$> 
     removeFrontSpace = lexeme (pure ())
 
 token :: forall m. MonadLexer m => m (Located Token)
-token = MP.choice ([MP.try character, comment, number, identifierOrReserved] :: [m (Located Token)])
+token = MP.choice ([MP.try character, string, comment, number, identifierOrReserved] :: [m (Located Token)])
 
 eof :: MonadLexer m => m (Located Token)
 eof = located (TkEOF <$ MP.eof)
@@ -74,14 +74,21 @@ character =
   lexeme $
     located $
       TkCharacter <$> do
-        MPC.char '\'' *> escapedChar <* MPC.char '\''
+        MPC.char '\'' *> escapedChar '\'' <* MPC.char '\''
 
-escapedChar :: forall m. MonadLexer m => m Text
-escapedChar =
+string :: forall m. MonadLexer m => m (Located Token)
+string =
+  lexeme $
+    located $
+      TkString <$> do
+        MPC.char '"' *> (mconcat <$> MP.many (escapedChar '"')) <* MPC.char '"'
+
+escapedChar :: forall m. MonadLexer m => Char -> m Text
+escapedChar delim =
   lexeme $
     MP.choice
       ( [ (<>) <$> MPC.string "\\" <*> (Text.pack . pure <$> MP.oneOf ("nrvt\\'\"0ab" :: String)),
-          Text.pack . pure <$> MP.anySingle
+          Text.pack . pure <$> MP.anySingleBut delim
         ] ::
           [m Text]
       )
@@ -156,6 +163,7 @@ anySymbol = toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v" :: Str
     toToken "then" = TkThen
     toToken "else" = TkElse
     toToken "mutual" = TkMutual
+    toToken "#attributes" = TkHashAttributes
     toToken s = TkSymbol (Text.pack s)
 
 number :: forall m. MonadLexer m => m (Located Token)
