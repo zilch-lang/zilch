@@ -18,7 +18,7 @@ import Control.Monad.Writer (MonadWriter, runWriterT, tell)
 import Data.Bifunctor (first, second)
 import Data.Foldable (fold, foldlM, foldrM)
 import Data.Functor ((<&>))
-import Data.List (foldl')
+import Data.List (foldl', nub)
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
@@ -52,8 +52,8 @@ desugarModule (CST.Mod defs :@ p) = do
   defs' <- mconcat <$> traverse desugarToplevel defs
   pure $ AST.Mod defs' :@ p
 
-checkConsistencyOfMetaAttributes :: forall m. MonadDesugar m => [Located AST.MetaAttribute] -> m ()
-checkConsistencyOfMetaAttributes l = do
+checkConsistencyOfMetaAttributes :: forall m. MonadDesugar m => [Located CST.MetaAttribute] -> Position -> m ()
+checkConsistencyOfMetaAttributes l p = do
   let (inlines, imports) = groupMetaAttrs l
   when (length inlines > 1) do
     -- when (... ?warnings) do
@@ -62,25 +62,42 @@ checkConsistencyOfMetaAttributes l = do
   when (length imports > 1) do
     -- when there are multiple of the same calling convention, error out
     let (c, other) = groupByConv imports
+    when (null c) do
+      throwError $ NoSupportedImportCallingConventions p (getPos . getCallConv <$> imports)
+
+    case nub c of
+      [] -> undefined
+      [_] ->
+        -- when (length c > 1) do
+        --   tell [RedundantMetaAttribute $ getPos <$> c]
+        pure ()
+      cs -> throwError $ ClashingForeignImports p cs
+
     pure ()
 
   pure ()
   where
     groupMetaAttrs [] = ([], [])
-    groupMetaAttrs (attr@(AST.Inline {} :@ _) : ls) = first (attr :) (groupMetaAttrs ls)
-    groupMetaAttrs (attr@(AST.Foreign {} :@ _) : ls) = second (attr :) (groupMetaAttrs ls)
+    groupMetaAttrs (attr@(CST.Inline {} :@ _) : ls) = first (attr :) (groupMetaAttrs ls)
+    groupMetaAttrs (attr@(CST.Foreign {} :@ _) : ls) = second (attr :) (groupMetaAttrs ls)
 
-    groupByConv = undefined
+    groupByConv [] = ([], [])
+    groupByConv ((CST.Foreign (CST.CCall :@ _) name :@ _) : ls) = first (name :) (groupByConv ls)
+    groupByConv ((CST.Foreign (CST.UnknownCall _ :@ _) name :@ _) : ls) = second (name :) (groupByConv ls)
+    groupByConv _ = undefined
+
+    getCallConv (CST.Foreign conv _ :@ _) = conv
+    getCallConv _ = undefined
 
 desugarToplevel :: forall m. MonadDesugar m => Located CST.TopLevelDefinition -> m [Located AST.TopLevel]
 desugarToplevel (CST.TopLevel _ True (CST.Assume _ :@ _) :@ p) = throwError $ PublicAssumptions p
 desugarToplevel (CST.TopLevel metas _ (CST.Assume _ :@ _) :@ p)
   | not (null metas) = throwError $ AssumptionWithMetaAttributes p
 desugarToplevel (CST.TopLevel metas isPublic def :@ p) = do
+  checkConsistencyOfMetaAttributes metas (getPos def)
+
   metas' <- catMaybes <$> traverse desugarMetaAttribute metas
   def' <- desugarDefinition True def
-
-  checkConsistencyOfMetaAttributes metas'
 
   case def' of
     [] -> pure []

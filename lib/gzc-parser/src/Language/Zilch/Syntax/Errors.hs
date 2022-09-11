@@ -7,7 +7,7 @@
 module Language.Zilch.Syntax.Errors where
 
 import Data.Functor ((<&>))
-import Data.Located (Located, Position, getPos, spanOf, unLoc)
+import Data.Located (Located ((:@)), Position, getPos, spanOf, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Debug.Trace (traceId, traceShow, traceShowId)
@@ -108,6 +108,14 @@ data DesugarError
     ImportAttributeOnlyAllowedOnVal
       Position
       Position
+  | -- | All the @import@s contain unknown calling conventions
+    NoSupportedImportCallingConventions
+      Position
+      [Position]
+  | -- | Multiple @import@s with the same calling convention have different imported elements
+    ClashingForeignImports
+      Position
+      [Located Text]
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -220,6 +228,26 @@ fromDesugarerError (ImportAttributeOnlyAllowedOnVal p p1) =
       (p1, Where "While checking that this attribute should not be here")
     ]
     []
+fromDesugarerError (NoSupportedImportCallingConventions p poss) =
+  Err
+    Nothing
+    "Cannot find a supported calling convention."
+    messages
+    []
+  where
+    messages =
+      (p, This "While checking that this foreign binding will be imported") :
+      ((,Where "This calling convention is unsupported") <$> poss)
+fromDesugarerError (ClashingForeignImports p names) =
+  Err
+    Nothing
+    "Clashing imports for calling convention."
+    messages
+    []
+  where
+    messages =
+      (p, This "While checking that this foreign binding is\nuniquely imported for each calling convention") :
+      (names <&> \(_ :@ p) -> (p, Where "Those names should all be the same"))
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =
