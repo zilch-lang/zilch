@@ -10,33 +10,28 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Language.Zilch.Typecheck.Checker
-      Language.Zilch.Typecheck.Context
-      Language.Zilch.Typecheck.Defaults
-      Language.Zilch.Typecheck.Driver
-      Language.Zilch.Typecheck.Elaborator
-      Language.Zilch.Typecheck.Environment
-      Language.Zilch.Typecheck.Errors
-      Language.Zilch.Typecheck.Evaluator
-      Language.Zilch.Typecheck.Imports
-      Language.Zilch.Typecheck.Metavars
-      Language.Zilch.Typecheck.Monomorphiser
-      Language.Zilch.Typecheck.Simplifier
-      Language.Zilch.Typecheck.Unification
-      Language.Zilch.Typecheck.Usage
+      MAlonzo.Code.Agda.Builtin.Equality
+      MAlonzo.Code.Agda.Builtin.Equality.Erase
+      MAlonzo.Code.Agda.Builtin.TrustMe
+      MAlonzo.Code.Agda.Primitive
+      MAlonzo.Code.Data.Located
+      MAlonzo.Code.Prelude.Decidable
+      MAlonzo.Code.Prelude.Empty
+      MAlonzo.Code.Prelude.Equality
+      MAlonzo.Code.Prelude.Equality.Unsafe
+      MAlonzo.Code.Prelude.Erased
+      MAlonzo.RTE
+      MAlonzo.RTE.Float
   other-modules:
       Paths_gzc_typechecker
   hs-source-dirs:
       src
   default-extensions:
-      LambdaCase
-      OverloadedStrings
-      OverloadedLists
-      BlockArguments
-      ImplicitParams
-  ghc-options: -Wall -Wextra
+      NoOverloadedLists
+  ghc-options: -Wall -Wextra -Wno-unused-imports -Wno-unused-matches -Wno-missing-signatures -Wno-name-shadowing -Wno-type-defaults -Wno-missing-pattern-synonym-signatures
   build-depends:
       base >=4.7 && <5
+    , bytestring >=0.10
     , containers ==0.6.*
     , diagnose >=2
     , gzc-core

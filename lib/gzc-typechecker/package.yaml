@@ -6,8 +6,16 @@ library:
   ghc-options:
   - -Wall
   - -Wextra
+  - -Wno-unused-imports
+  - -Wno-unused-matches
+  - -Wno-missing-signatures
+  - -Wno-name-shadowing
+  - -Wno-type-defaults
+  - -Wno-missing-pattern-synonym-signatures
 
-default-extensions: !include "../../default-extensions.yaml"
+# default-extensions: !include "../../default-extensions.yaml"
+default-extensions:
+- NoOverloadedLists
 
 dependencies:
 - base >=4.7 && <5
@@ -20,3 +28,4 @@ dependencies:
 - gzc-pretty
 - containers ==0.6.*
 - gzc-flags
+- bytestring >=0.10

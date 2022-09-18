@@ -1,0 +1,12 @@
+### Agda ###
+*.agdai
+*.hi
+*.o
+*.agda#
+*.agda~
+.#*.agda
+./agda-stdlib
+_build/
+
+### Do NOT push the generated Haskell files ###
+src/MAlonzo
