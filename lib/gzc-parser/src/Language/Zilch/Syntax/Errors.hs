@@ -116,6 +116,9 @@ data DesugarError
     ClashingForeignImports
       Position
       [Located Text]
+  | -- | Type is not a sort
+    NotASort
+      Position
 
 data DesugarWarning
   = SingletonAdditivePair
@@ -248,6 +251,12 @@ fromDesugarerError (ClashingForeignImports p names) =
     messages =
       (p, This "While checking that this foreign binding is\nuniquely imported for each calling convention") :
       (names <&> \(_ :@ p) -> (p, Where "Those names should all be the same"))
+fromDesugarerError (NotASort p) =
+  Err
+    Nothing
+    "This type must be a sort."
+    [(p, This "This expression must be a sort to be present here.")]
+    []
 
 fromDesugarerWarning :: DesugarWarning -> Report String
 fromDesugarerWarning (SingletonAdditivePair p) =

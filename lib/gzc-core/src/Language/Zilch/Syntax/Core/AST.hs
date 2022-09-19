@@ -1,6 +1,7 @@
 module Language.Zilch.Syntax.Core.AST where
 
 import Data.Located (Located)
+import Data.Map (Map)
 import Data.Text (Text)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity)
 
@@ -162,6 +163,12 @@ data Expression
       (Located Multiplicity)
       (Located Expression)
       (Located Expression)
+  | -- | A record value
+    ERecordLiteral
+      (Map (Located Text) (Located Multiplicity, Located Expression))
+  | -- | A record type
+    EComposite
+      (Map (Located Text) (Located Multiplicity, Located Expression))
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

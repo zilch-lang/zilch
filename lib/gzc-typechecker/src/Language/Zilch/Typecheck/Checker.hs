@@ -740,10 +740,10 @@ synthetize _ rel ctx (AST.EIdentifier x :@ p) = do
      Γ, x :ᵖ A ⊢ x ⇒ᵖ A
   -}
   (ex, ty, usage) <- go 0 (types ctx)
-  case (rel, usage) of
-    (TAST.Irrelevant, TAST.I) -> throwError $ RelevantVariableInIrrelevantContext (unLoc x) TAST.I p
-    (TAST.Irrelevant, TAST.W) -> throwError $ RelevantVariableInIrrelevantContext (unLoc x) TAST.W p
-    _ -> pure ()
+  -- case (rel, usage) of
+  --   (TAST.Irrelevant, TAST.I) -> throwError $ RelevantVariableInIrrelevantContext (unLoc x) TAST.I p
+  --   (TAST.Irrelevant, TAST.W) -> throwError $ RelevantVariableInIrrelevantContext (unLoc x) TAST.W p
+  --   _ -> pure ()
   case ex of
     TAST.EBuiltin _ :@ _ -> pure (mempty, ex, ty, TAST.extend rel :@ p)
     _ -> pure (Map.singleton x $ TAST.extend rel, ex, ty, TAST.extend rel :@ p)

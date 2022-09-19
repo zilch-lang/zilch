@@ -58,6 +58,13 @@ data Definition
       -- ^ Is the import @open@ed
       (Located ImportSpine)
       -- ^ Import list
+  | -- | The definition of a record
+    Record
+      (Located Text)
+      [Located Parameter]
+      (Located Expression)
+      (Maybe (Bool, Located Text))
+      [Located TopLevelDefinition]
   deriving (Show)
 
 data ImportSpine

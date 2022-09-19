@@ -7,9 +7,10 @@ module Language.Zilch.Pretty.AST where
 import Data.Foldable (fold)
 import Data.Functor ((<&>))
 import Data.Located (Located ((:@)), unLoc)
+import qualified Data.Map as Map
 import Language.Zilch.Syntax.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
-import Prettyprinter (Doc, Pretty (pretty), align, braces, comma, concatWith, dquote, emptyDoc, enclose, hardline, indent, line, lparen, parens, rparen, space, surround, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, flatAlt, group, hardline, indent, lbrace, line, lparen, parens, rbrace, rparen, space, squote, surround, vsep)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -85,7 +86,7 @@ instance Pretty (Located Parameter) where
         <> space
         <> ":"
         <> space
-        <> pretty ty
+        <> group (pretty ty)
 
 instance Pretty (Located Multiplicity) where
   pretty (Unrestricted :@ _) = "ω"
@@ -106,9 +107,8 @@ instance Pretty (Located Expression) where
       <> pretty param
       <> space
       <> "⇒"
-      <> space
-      <> hardline
-      <> indent 2 (pretty ret)
+      <> line
+      <> flatAlt (indent 2 $ pretty ret) (pretty ret)
   pretty (ELocal def ret :@ _) =
     pretty def
       <> line
@@ -193,6 +193,42 @@ instance Pretty (Located Expression) where
     parens (pretty e)
       <> "∷"
       <> pretty (unLoc x)
+  pretty (ERecordLiteral fields :@ _) =
+    "@"
+      <> lbrace
+      <> space
+      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> Map.toList fields))
+      <> space
+      <> rbrace
+    where
+      pretty' (name, (mult, val)) =
+        "let"
+          <> space
+          <> pretty mult
+          <> space
+          <> pretty (unLoc name)
+          <> space
+          <> "≔"
+          <> space
+          <> pretty val
+  pretty (EComposite fields :@ _) =
+    squote
+      <> lbrace
+      <> space
+      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> Map.toList fields))
+      <> space
+      <> rbrace
+    where
+      pretty' (name, (mult, val)) =
+        "val"
+          <> space
+          <> pretty mult
+          <> space
+          <> pretty (unLoc name)
+          <> space
+          <> colon
+          <> space
+          <> pretty val
 
 prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =

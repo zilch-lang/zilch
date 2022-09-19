@@ -20,6 +20,7 @@ import Data.Foldable (fold, foldlM, foldrM)
 import Data.Functor ((<&>))
 import Data.List (foldl', nub)
 import Data.Located (Located ((:@)), Position, getPos, spanOf)
+import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -175,6 +176,7 @@ holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EMultiplicativeUnitElim _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EFieldAccess e _ :@ _) = holes e
+holes (AST.ERecordLiteral fields :@ _) = traverse (\(_, e) -> holes e) fields >>= fmap snd . Map.lookupMin
 
 desugarDefinition :: forall m. MonadDesugar m => Bool -> Located CST.Definition -> m [(Located AST.Definition, [Located Text])]
 desugarDefinition isTopLevel (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -236,6 +238,51 @@ desugarDefinition _ (CST.Import opened spine :@ p) = do
       [] -> [[mod]]
       mods -> ([mod] <>) <$> mods
     flattenBranches (CST.Branch mods :@ _) = mods >>= flattenBranches
+desugarDefinition _ (CST.Record name params ty ctor fields :@ p1) = do
+  (cParams, aParams, _) <- get
+  params' <- (aParams <>) . fold <$> traverse desugarParameter params
+  fields' <- fold <$> traverse desugarToplevel fields
+  let fields'' = Map.fromList $ flip map fields' \case
+        AST.TopLevel _ _ (AST.Val mult name ty :@ _) :@ _ -> (name, (mult, ty))
+        _ -> undefined
+
+  ty <- desugarExpression ty
+  case ty of
+    AST.EType :@ _ -> pure ()
+    _ :@ p -> throwError $ NotASort p
+
+  ctor' <-
+    maybe [] pure <$> flip traverse ctor \(isPublic, name@(_ :@ p)) -> do
+      -- TODO: pass multiplicity within constructor with 'constructor ρ name' instead of just 'constructor name'
+      mult <- desugarMultiplicity Nothing W p
+
+      let params = fmap toImplicit params' <> fmap mkParam (Map.toList fields'')
+
+      let ty' = foldl' mkApp ty aParams
+      let ty'' = foldr mkPi ty' params
+
+      let reclit = AST.ERecordLiteral (Map.mapWithKey toValue fields'') :@ p
+      let val = foldr mkLam reclit params
+      pure (AST.Let False mult name ty'' val :@ p, [])
+  -- undefined
+
+  let ty' = foldr mkPi ty params'
+      complit = AST.EComposite fields'' :@ p1
+      val' = foldr mkLam complit params'
+
+  -- TODO: generate eliminator
+  pure $ (AST.Let False (O :@ getPos name) name ty' val' :@ p1, []) : ctor'
+  where
+    mkApp ty@(_ :@ p1) (AST.Parameter isImp _ name _ :@ p2) = AST.EApplication ty isImp (AST.EIdentifier name :@ p2) :@ spanOf p1 p2
+
+    toImplicit (AST.Parameter _ mult name ty :@ p) = AST.Parameter True mult name ty :@ p
+
+    mkParam (name@(_ :@ p), (mult, ty@(_ :@ p2))) = AST.Parameter False mult name ty :@ spanOf p p2
+
+    mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
+    mkLam param expr = AST.ELam param expr :@ spanOf (getPos param) (getPos expr)
+
+    toValue name@(_ :@ p) (mult, _) = (mult, AST.EIdentifier name :@ p)
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m [Located AST.Parameter]
 desugarParameter (CST.Implicit args :@ p) = do

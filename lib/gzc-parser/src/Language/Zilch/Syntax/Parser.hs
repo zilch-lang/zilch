@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoOverloadedLists #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
@@ -108,6 +109,17 @@ indentBlock p = do
   pos <- whitespace *> MPL.indentLevel
   (p <* whitespace) `MP.sepBy1` indentGuard EQ pos
 
+-- | Same as 'indentBlock', but allows parsing a single element before all the others.
+--
+--   Note that the first element must be indented the same as all the others.
+indentBlock1 :: forall m a b. MonadParser m => m a -> m b -> m (a, [b])
+indentBlock1 p q = do
+  pos <- whitespace *> MPL.indentLevel
+  r1 <- p <* whitespace
+  indentGuard EQ pos
+  rs <- (q <* whitespace) `MP.sepBy1` indentGuard EQ pos
+  pure (r1, rs)
+
 -- | See @'MPL.lineFold'@.
 lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
 lineFold p = MPL.lineFold whitespace \s -> p (MP.try s)
@@ -144,7 +156,7 @@ parseTopLevelDefinition = located $ lineFold \s -> do
   TopLevel
     <$> MP.option [] (parseAttributes s)
     <*> (isJust <$> MP.optional (lexeme (token TkPublic)))
-    <*> MP.choice [parseLet s, parseAssume s, parseVal s, parseImport s]
+    <*> MP.choice [parseLet s, parseAssume s, parseVal s, parseImport s, parseRecord s]
 
 parseAttributes :: forall m. MonadParser m => m () -> m [Located MetaAttribute]
 parseAttributes s = do
@@ -240,6 +252,28 @@ parseImport s = lexeme $ located do
             pure $ base <=< spine,
           pure base
         ]
+
+parseRecord :: forall m. MonadParser m => m () -> m (Located Definition)
+parseRecord s = lexeme $ located do
+  lexeme (token TkRecord) <* s
+  name <- parseIdentifier <* s
+  params <- parseParameter s `MP.sepBy` s
+  lexeme (token TkColon) <* s
+  ty <- parseExpression s <* s
+  lexeme (token TkColonEquals <|> token TkUniColonEquals)
+  (constr, defs) <- indentBlock1 (lineFold parseConstructor) (lineFold parseField)
+  pure $ Record name params ty constr defs
+  where
+    parseConstructor s = MP.optional do
+      isPublic <- isJust <$> MP.optional (lexeme (token TkPublic))
+      lexeme (token $ TkSymbol "constructor") <* s
+      (isPublic,) <$> parseIdentifier
+
+    parseField s = located do
+      TopLevel
+        <$> MP.option [] (parseAttributes s)
+        <*> (isJust <$> MP.optional (lexeme (token TkPublic)))
+        <*> MP.choice [parseVal s]
 
 parseParameter :: forall m. MonadParser m => m () -> m (Located Parameter)
 parseParameter s =
