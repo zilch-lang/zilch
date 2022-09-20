@@ -165,10 +165,10 @@ data Expression
       (Located Expression)
   | -- | A record value
     ERecordLiteral
-      (Map (Located Text) (Located Multiplicity, Located Expression))
+      [(Located Multiplicity, Located Text, Located Expression)]
   | -- | A record type
     EComposite
-      (Map (Located Text) (Located Multiplicity, Located Expression))
+      [(Located Multiplicity, Located Text, Located Expression)]
   deriving (Show)
 
 data HoleLocation = SourceHole | InsertedHole

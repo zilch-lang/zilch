@@ -129,6 +129,14 @@ data ElabError
     FieldNotFound
       (Located Text)
       Position
+  | -- | There are some fields missing in the record literal.
+    RecordMissingFields
+      [Located Text]
+      Position
+  | -- | Record literal has fields which should not be here.
+    RecordHasTooManyFields
+      [Located Text]
+      Position
 
 data ElabWarning
   = -- | A recursive binding isn't used recursively.

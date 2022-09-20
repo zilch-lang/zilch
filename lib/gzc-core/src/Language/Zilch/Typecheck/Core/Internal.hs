@@ -137,10 +137,13 @@ data Expression
       -- ^ @N@
   | -- | @'{ p x : τ }@
     EComposite
+      [(Located Multiplicity, Located Text, Located Expression)]
+  | -- | @MODULE { p x : τ }@
+    EModule
       (Map (Located Text) (Located Multiplicity, Located Expression))
   | -- | @\@{p x : t := e }@
-    ERecord
-      (Map (Located Text) (Located Multiplicity, Located Expression, Located Expression))
+    ERecordLiteral
+      [(Located Multiplicity, Located Text, Located Expression, Located Expression)]
   | ERecordAccess
       (Located Expression)
       (Located Text)
@@ -255,10 +258,13 @@ data Value
   | VUndefined
   | -- | @'{ p x : τ }@
     VComposite
+      [(Located Multiplicity, Located Text, Closure)]
+  | -- | @MODULE { p x : τ }@
+    VModule
       (Map (Located Text) (Located Multiplicity, Located Value))
   | -- | @\@{p x : t := e }@
     VRecord
-      (Map (Located Text) (Located Multiplicity, Located Value, Located Value))
+      [(Located Multiplicity, Located Text, Located Value, Located Value)]
   | VRecordAccess
       (Located Value)
       (Located Text)

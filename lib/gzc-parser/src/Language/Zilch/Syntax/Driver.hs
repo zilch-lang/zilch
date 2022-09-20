@@ -590,10 +590,10 @@ patchImports ((path, mod, ast) : fs) sys = do
       e2' <- patchExpression e2 sys
       pure $ AST.EMultiplicativeUnitElim z mult e1' e2' :@ p
     patchExpression (AST.ERecordLiteral fields :@ p) sys = do
-      fields' <- Map.traverseWithKey (\_ (mult, e) -> (mult,) <$> patchExpression e sys) fields
+      fields' <- traverse (\(mult, k, e) -> (mult,k,) <$> patchExpression e sys) fields
       pure $ AST.ERecordLiteral fields' :@ p
     patchExpression (AST.EComposite fields :@ p) sys = do
-      fields' <- Map.traverseWithKey (\_ (mult, e) -> (mult,) <$> patchExpression e sys) fields
+      fields' <- traverse (\(mult, k, e) -> (mult,k,) <$> patchExpression e sys) fields
       pure $ AST.EComposite fields' :@ p
 
     patchParameter (AST.Parameter isImp mult name ty :@ p) sys = do

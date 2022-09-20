@@ -9,20 +9,23 @@
 
 module Language.Zilch.Typecheck.Unification where
 
+import Control.Monad (when)
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad.State (get, modify')
 import Data.Bifunctor (second)
+import Data.Foldable (foldlM)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
-import Data.Located (Located ((:@)), Position)
+import Data.Located (Located ((:@)), Position, getPos)
 import Data.Text (Text)
-import Language.Zilch.Typecheck.Context (Context, bind, emptyContext, lvl)
+import Debug.Trace (trace, traceShow)
+import Language.Zilch.Typecheck.Context (Context, bind, emptyContext, env, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Implicitness, MetaEntry (Solved, Unsolved), Spine, Value (..), explicit)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
-import Language.Zilch.Typecheck.Evaluator (apply, applyVal, debruijnLevelToIndex, eval, force, quote)
+import Language.Zilch.Typecheck.Evaluator (apply, apply', applyVal, debruijnLevelToIndex, eval, force, quote)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
 
@@ -217,10 +220,27 @@ unify' ctx lvl t u = do
     (VTop :@ _, VTop :@ _) -> pure ()
     (VAdditiveUnit :@ _, VAdditiveUnit :@ _) -> pure ()
     (VMultiplicativeUnit :@ _, VMultiplicativeUnit :@ _) -> pure ()
+    (VComposite f1 :@ _, VComposite f2 :@ _) -> do
+      foldlM unifyField (lvl, mempty) (zip f1 f2)
+      pure ()
+      where
+        unifyField (lvl, env) ((m1, x1, t1), (m2, x2, t2)) = do
+          when (x1 /= x2) do
+            throwError UnificationError
+          when (m1 /= m2) do
+            throwError UnificationError
+
+          (v1, v2) <-
+            (,)
+              <$> apply' ctx t1 env
+              <*> apply' ctx t2 env
+
+          unify' ctx lvl v1 v2
+          pure (lvl + 1, (VVariable x1 lvl :@ getPos x1) : env)
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()
-unify ctx v1 v2 =
+unify ctx v1 v2 = do
   unify' ctx (lvl ctx) v1 v2
     `catchError` \UnificationError -> do
       (v1, v2) <-

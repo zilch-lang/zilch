@@ -176,7 +176,7 @@ holes (AST.EAdditiveTupleAccess e _ :@ _) = holes e
 holes (AST.EMultiplicativePairElim _ _ _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EMultiplicativeUnitElim _ _ m n :@ _) = holes m <|> holes n
 holes (AST.EFieldAccess e _ :@ _) = holes e
-holes (AST.ERecordLiteral fields :@ _) = traverse (\(_, e) -> holes e) fields >>= fmap snd . Map.lookupMin
+holes (AST.ERecordLiteral fields :@ _) = head <$> traverse (\(_, _, e) -> holes e) fields
 
 desugarDefinition :: forall m. MonadDesugar m => Bool -> Located CST.Definition -> m [(Located AST.Definition, [Located Text])]
 desugarDefinition isTopLevel (CST.Let usage name@(_ :@ p2) params retTy ret@(_ :@ p1) :@ p) = do
@@ -242,9 +242,11 @@ desugarDefinition _ (CST.Record name params ty ctor fields :@ p1) = do
   (cParams, aParams, _) <- get
   params' <- (aParams <>) . fold <$> traverse desugarParameter params
   fields' <- fold <$> traverse desugarToplevel fields
-  let fields'' = Map.fromList $ flip map fields' \case
-        AST.TopLevel _ _ (AST.Val mult name ty :@ _) :@ _ -> (name, (mult, ty))
+  let fields'' = flip map fields' \case
+        AST.TopLevel _ _ (AST.Val mult name ty :@ _) :@ _ -> (mult, name, ty)
         _ -> undefined
+
+  -- TODO: check that no field is duplicated
 
   ty <- desugarExpression ty
   case ty of
@@ -252,18 +254,18 @@ desugarDefinition _ (CST.Record name params ty ctor fields :@ p1) = do
     _ :@ p -> throwError $ NotASort p
 
   ctor' <-
-    maybe [] pure <$> flip traverse ctor \(isPublic, name@(_ :@ p)) -> do
+    maybe [] pure <$> flip traverse ctor \(isPublic, name2@(_ :@ p)) -> do
       -- TODO: pass multiplicity within constructor with 'constructor ρ name' instead of just 'constructor name'
       mult <- desugarMultiplicity Nothing W p
 
-      let params = fmap toImplicit params' <> fmap mkParam (Map.toList fields'')
+      let params = fmap toImplicit params' <> fmap mkParam fields''
 
-      let ty' = foldl' mkApp ty aParams
+      let ty' = foldl' mkApp (AST.EIdentifier name :@ getPos name) params'
       let ty'' = foldr mkPi ty' params
 
-      let reclit = AST.ERecordLiteral (Map.mapWithKey toValue fields'') :@ p
+      let reclit = AST.ERecordLiteral (toValue <$> fields'') :@ p
       let val = foldr mkLam reclit params
-      pure (AST.Let False mult name ty'' val :@ p, [])
+      pure (AST.Let False mult name2 ty'' val :@ p, [])
   -- undefined
 
   let ty' = foldr mkPi ty params'
@@ -277,12 +279,12 @@ desugarDefinition _ (CST.Record name params ty ctor fields :@ p1) = do
 
     toImplicit (AST.Parameter _ mult name ty :@ p) = AST.Parameter True mult name ty :@ p
 
-    mkParam (name@(_ :@ p), (mult, ty@(_ :@ p2))) = AST.Parameter False mult name ty :@ spanOf p p2
+    mkParam (mult, name@(_ :@ p), ty@(_ :@ p2)) = AST.Parameter False mult name ty :@ spanOf p p2
 
     mkPi param expr = AST.EPi param expr :@ spanOf (getPos param) (getPos expr)
     mkLam param expr = AST.ELam param expr :@ spanOf (getPos param) (getPos expr)
 
-    toValue name@(_ :@ p) (mult, _) = (mult, AST.EIdentifier name :@ p)
+    toValue (mult, name@(_ :@ p), _) = (mult, name, AST.EIdentifier name :@ p)
 
 desugarParameter :: forall m. MonadDesugar m => Located CST.Parameter -> m [Located AST.Parameter]
 desugarParameter (CST.Implicit args :@ p) = do

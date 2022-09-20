@@ -23,6 +23,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Debug.Trace (trace, traceShow)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -32,7 +33,7 @@ import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Environment, MetaEntr
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
-import Language.Zilch.Typecheck.Evaluator (apply, eval, force, quote)
+import Language.Zilch.Typecheck.Evaluator (apply, apply', eval, force, quote)
 import Language.Zilch.Typecheck.Imports (ImportCache, ModuleInterface (..), Namespace (..))
 import qualified Language.Zilch.Typecheck.Imports as ImportCache
 import Language.Zilch.Typecheck.Metavars (freshMeta)
@@ -217,11 +218,11 @@ resolveImport cache isOpen mod access path p5 = case ImportCache.lookup (path, m
     insertName (x, SingleNS m ty ex) = (m, x, ty, ex)
     insertName (x, MultipleNS m ty (Iface pub _)) = (m, x, ty, mkRecord pub :@ getPos x)
 
-    mkComposite fields = VComposite $ Map.mapWithKey mkCompositeFieldFromNS fields
+    mkComposite fields = VModule $ Map.mapWithKey mkCompositeFieldFromNS fields
     mkCompositeFieldFromNS _ (SingleNS mult ty _) = (mult, ty)
     mkCompositeFieldFromNS _ (MultipleNS mult ty _) = (mult, ty)
 
-    mkRecord fields = VRecord $ Map.mapWithKey mkRecordFieldFromNS fields
+    mkRecord fields = VRecord $ undefined -- TODO: Map.mapWithKey mkRecordFieldFromNS fields
     mkRecordFieldFromNS _ (SingleNS mult ty ex) = (mult, ty, ex)
     mkRecordFieldFromNS (_ :@ p) (MultipleNS mult ty (Iface pub _)) = (mult, ty, mkRecord pub :@ p)
 
@@ -496,7 +497,7 @@ check cache rel ctx expr ty = do
                Γ₁ ⊢ M ⇐¹ A            Γ₂ ⊢ N ⇐ᵖ B
               ──────────────────────────────────── [⇐ ⊗-I₁]
                ipΓ₁ + Γ₂ ⊢ (M, N) ⇐ᵖ (x :ⁱ A) ⊗ B
-      ────  -}
+      -}
       case TAST.extend rel * m1 of
         TAST.O -> do
           -- apply [⇐ ⊗-I₀]
@@ -614,7 +615,14 @@ check cache rel ctx expr ty = do
       -}
       (qs, r, t, _) <- synthetize cache rel ctx r
       case t of
-        VComposite fields :@ _ -> case Map.lookup x fields of
+        VComposite fields :@ _ -> case lookup (lvl ctx) [] x fields of
+          (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
+          (subst, Just (m, _, ty1)) -> do
+            -- TODO: substitute in 'ty1'
+            ty1 <- apply' ctx ty1 subst
+            unify ctx ty ty1
+            pure (qs, TAST.ERecordAccess r x :@ p)
+        VModule fields :@ _ -> case Map.lookup x fields of
           Nothing -> throwError $ FieldNotFound x (getPos r)
           Just (m, ty1) -> do
             unify ctx ty ty1
@@ -622,6 +630,68 @@ check cache rel ctx expr ty = do
         _ -> do
           t <- quote ctx (lvl ctx) t
           throwError $ ExpectedRecordOrModule t (getPos r)
+      where
+        lookup _ env _ [] = (env, Nothing)
+        lookup lvl env x ((m, y, ty) : fs)
+          | x == y = (env, Just (m, x, ty))
+          | otherwise = lookup (lvl + 1) ((VVariable y lvl :@ getPos y) : env) x fs
+    (AST.EComposite fields :@ p, VType :@ _) -> do
+      when (rel /= TAST.Irrelevant) do
+        throwError $ MultiplicityMismatch (TAST.extend rel :@ p) (TAST.O :@ p)
+      {-
+         0Γ, xₖ :⁰ τₖ ⊢ τᵢ ⇐⁰ type where k < i
+        ─────────────────────────────────────── [⇐ '{}-F]
+           0Γ ⊢ '{ val ρᵢ xᵢ : τᵢ } ⇐⁰ type
+      -}
+      (_, fields) <- foldlM checkField (ctx, mempty) fields
+      pure (mempty, TAST.EComposite (reverse fields) :@ p)
+      where
+        checkField (ctx, fields) (mult, name, ty) = do
+          (_, ty) <- check cache TAST.Irrelevant ctx ty (VType :@ getPos ty)
+          ty' <- eval ctx ty
+          pure (bind TAST.O name ty' ctx, (mult, name, ty) : fields)
+    (AST.ERecordLiteral f1 :@ p, VComposite f2 :@ _) -> do
+      {-
+                             Γᵢ ⊢ eᵢ ⇐¹ τᵢ
+        ──────────────────────────────────────────────────────── [⇐ @{}-I₁]
+         m∑ᵢ(ρᵢΓᵢ) ⊢ @{ let ρᵢ xᵢ ≔ eᵢ } ⇐ᵐ '{ val ρᵢ xᵢ : τᵢ }
+      -}
+      let dom1 = domain f1
+          dom2 = domain f2
+      when (dom1 /= dom2) do
+        let diff1 = dom1 List.\\ dom2
+        unless (null diff1) do
+          throwError $ RecordMissingFields diff1 p
+        let diff2 = dom2 List.\\ dom1
+        unless (null diff2) do
+          throwError $ RecordHasTooManyFields diff2 p
+
+      (qs, fields, _) <- checkFields (mempty, mempty, mempty) f2
+      pure (Usage.scale (TAST.extend rel) qs, TAST.ERecordLiteral (reverse fields) :@ p)
+      where
+        checkFields (qs, fields, env) [] = pure (qs, fields, env)
+        checkFields (qs, fields, env) ((mult, k, ty@(Clos _ t)) : fs) = do
+          let Just (mult2, _, val) = lookup k f1
+          when (mult /= mult2) do
+            throwError $ MultiplicityMismatch mult2 mult
+
+          ty <- apply' ctx ty env
+
+          (qs', val) <- check cache rel ctx val ty
+          let qs'' = Usage.scale (unLoc mult) qs'
+          ty' <- quote ctx (lvl ctx) ty
+          val' <- eval ctx val
+
+          (qs, fields, env) <- checkFields (qs `Usage.concat` qs'', (mult, k, ty', val) : fields, val' : env) fs
+          pure (qs, fields, env)
+
+        domain [] = []
+        domain ((_, k, _) : fs) = k : domain fs
+
+        lookup _ [] = Nothing
+        lookup x ((m, y, v) : fs)
+          | x == y = Just (m, x, v)
+          | otherwise = lookup x fs
     (AST.EHole loc :@ p1, ty) -> do
       meta <- freshMeta ctx (TAST.extend rel) ty p1 loc
       pure (mempty, meta :@ p1)
@@ -1004,12 +1074,22 @@ synthetize cache rel ctx (AST.EFieldAccess r x :@ p) = do
   -}
   (qs, r, t, u) <- synthetize cache rel ctx r
   case t of
-    VComposite fields :@ _ -> case Map.lookup x fields of
+    VComposite fields :@ _ -> case lookup (lvl ctx) x [] fields of
+      (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
+      (subst, Just (m, x, ty)) -> do
+        ty <- apply' ctx ty subst
+        pure (qs, TAST.ERecordAccess r x :@ p, ty, (* unLoc m) <$> u)
+    VModule fields :@ _ -> case Map.lookup x fields of
       Nothing -> throwError $ FieldNotFound x (getPos r)
       Just (m, ty) -> pure (qs, TAST.ERecordAccess r x :@ p, ty, (* unLoc m) <$> u)
     _ -> do
       t <- quote ctx (lvl ctx) t
       throwError $ ExpectedRecordOrModule t (getPos r)
+  where
+    lookup _ _ subst [] = (subst, Nothing)
+    lookup lvl x subst ((m, y, ty) : fs)
+      | x == y = (subst, Just (m, y, ty))
+      | otherwise = lookup (lvl + 1) x ((VVariable x lvl :@ getPos x) : subst) fs
 synthetize _ _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

@@ -6,13 +6,16 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Typecheck.Evaluator (eval, apply, quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
+module Language.Zilch.Typecheck.Evaluator (eval, apply, apply', quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
 
+import Data.Functor ((<&>))
+import Data.List (foldl')
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Language.Zilch.Typecheck.Context (Context (env), emptyContext)
+import Debug.Trace (traceShow)
+import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
@@ -117,23 +120,34 @@ eval ctx (TAST.EMultiplicativeUnitElim _ _ m n :@ _) = do
   eval ctx m -- << this will not be evaluated
   eval ctx n
 eval ctx (TAST.EComposite fields :@ p) = do
-  fields' <- traverse (\(m, ty) -> (m,) <$> eval ctx ty) fields
+  let fields' = fields <&> \(m, name, ty) -> (m, name, Clos (env ctx) ty)
   pure $ VComposite fields' :@ p
-eval ctx (TAST.ERecord fields :@ p) = do
-  fields' <- traverse (\(m, ty, ex) -> (m,,) <$> eval ctx ty <*> eval ctx ex) fields
+eval ctx (TAST.EModule fields :@ p) = do
+  fields' <- traverse (\(m, ty) -> (m,) <$> eval ctx ty) fields
+  pure $ VModule fields' :@ p
+eval ctx (TAST.ERecordLiteral fields :@ p) = do
+  fields' <- traverse (\(m, k, ty, ex) -> (m,k,,) <$> eval ctx ty <*> eval ctx ex) fields
   pure $ VRecord fields' :@ p
 eval ctx (TAST.ERecordAccess r x :@ p) =
   eval ctx r >>= \case
-    VRecord fields :@ _ -> case Map.lookup x fields of
+    VRecord fields :@ _ -> case lookup x fields of
       Nothing -> undefined
-      Just (_, _, ex) -> pure ex
+      Just (_, _, _, ex) -> pure ex
     r -> pure $ VRecordAccess r x :@ p
+  where
+    lookup _ [] = Nothing
+    lookup x ((m, y, ty, ex) : fs)
+      | x == y = Just (m, x, ty, ex)
+      | otherwise = lookup x fs
 eval _ e = error $ "unhandled case " <> show e
 
 apply :: forall m. MonadElab m => Context -> Closure -> Located Value -> m (Located Value)
-apply _ (Clos env expr) val =
-  let env' = Env.extend env val
-   in eval (emptyContext {env = env'}) expr
+apply ctx clos val = apply' ctx clos [val]
+
+apply' :: forall m. MonadElab m => Context -> Closure -> [Located Value] -> m (Located Value)
+apply' _ (Clos env expr) vals = do
+  let env' = foldl' Env.extend env vals
+  eval (emptyContext {env = env'}) expr
 
 destroyClosure :: forall m. MonadElab m => Closure -> m (Located Value)
 destroyClosure (Clos env expr) = eval (emptyContext {env}) expr
@@ -245,11 +259,19 @@ quote ctx level val = do
       e' <- quote ctx level e
       pure $ TAST.ESnd e' :@ p
     VComposite fields :@ p -> do
+      (_, fields') <- quoteFields (level, mempty) fields -- traverse (\(m, ty) -> (m,) <$> quote ctx level ty) fields
+      pure $ TAST.EComposite (reverse $ fields' <&> \(m, k, _, t) -> (m, k, t)) :@ p
+      where
+        quoteFields (level, fields) [] = pure (level, fields)
+        quoteFields (level, fields) ((m, k, clos) : fs) = do
+          ty <- quote ctx level =<< apply' ctx clos (fields <&> \(_, k, lvl, _) -> VVariable k lvl :@ p)
+          quoteFields (level + 1, (m, k, level, ty) : fields) fs
+    VModule fields :@ p -> do
       fields' <- traverse (\(m, ty) -> (m,) <$> quote ctx level ty) fields
-      pure $ TAST.EComposite fields' :@ p
+      pure $ TAST.EModule fields' :@ p
     VRecord fields :@ p -> do
-      fields' <- traverse (\(m, ty, ex) -> (m,,) <$> quote ctx level ty <*> quote ctx level ex) fields
-      pure $ TAST.ERecord fields' :@ p
+      fields' <- traverse (\(m, k, ty, ex) -> (m,k,,) <$> quote ctx level ty <*> quote ctx level ex) fields
+      pure $ TAST.ERecordLiteral fields' :@ p
     VRecordAccess r x :@ p -> do
       r' <- quote ctx level r
       pure $ TAST.ERecordAccess r' x :@ p

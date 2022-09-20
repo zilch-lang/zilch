@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -12,7 +13,7 @@ import qualified Data.Text as Text
 import Language.Zilch.Pretty.AST ()
 import Language.Zilch.Typecheck.Core.AST
 import Language.Zilch.Typecheck.Core.Multiplicity
-import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, hardline, indent, line, lparen, parens, rparen, space, surround, vsep)
+import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, hardline, indent, line, lparen, parens, rparen, space, surround, vsep, group, flatAlt)
 
 instance Pretty (Located Module) where
   pretty (Mod defs :@ _) =
@@ -114,13 +115,13 @@ instance Pretty (Located Parameter) where
         <> space
         <> ":"
         <> space
-        <> pretty ty
+        <> group (pretty ty)
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
   pretty (EInteger val ty :@ _) = pretty (unLoc val) <> pretty ty
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
-  pretty (EIdentifier (name :@ _) _ :@ _) = pretty name
+  pretty (EIdentifier (name :@ _) idx :@ _) = pretty name -- <> "@" <> pretty (fromIntegral @_ @Integer idx)
   pretty (ELam name ret :@ _) =
     "λ"
       <> space
@@ -128,7 +129,7 @@ instance Pretty (Located Expression) where
       <> space
       <> "⇒"
       <> line
-      <> indent 2 (pretty ret)
+      <> flatAlt (indent 2 (pretty ret)) (pretty ret)
   pretty (ELet def ret :@ _) =
     pretty def
       <> line
@@ -221,6 +222,27 @@ instance Pretty (Located Expression) where
       <> align
         ( "{"
             <> space
+            <> concatWith (surround $ line <> "," <> space) (prettyField <$> fields)
+            <> space
+            <> "}"
+        )
+    where
+      prettyField (p, x, t) =
+        "val"
+          <> space
+          <> pretty p
+          <> space
+          <> pretty (unLoc x)
+          <> space
+          <> colon
+          <> space
+          <> pretty t
+  pretty (EModule fields :@ _) =
+    "MODULE"
+      <> space
+      <> align
+        ( "{"
+            <> space
             <> concatWith (surround $ line <> "," <> space) (prettyField <$> Map.toList fields)
             <> space
             <> "}"
@@ -234,25 +256,27 @@ instance Pretty (Located Expression) where
           <> colon
           <> space
           <> pretty t
-  pretty (ERecord fields :@ _) =
+  pretty (ERecordLiteral fields :@ _) =
     "@"
       <> align
         ( "{"
             <> space
-            <> concatWith (surround $ line <> "," <> space) (prettyField <$> Map.toList fields)
+            <> concatWith (surround $ line <> "," <> space) (prettyField <$> fields)
             <> space
             <> "}"
         )
     where
-      prettyField (x, (p, t, e)) =
-        pretty p
+      prettyField (p, x, t, e) =
+        "let"
+          <> space
+          <> pretty p
           <> space
           <> pretty (unLoc x)
           <> space
           <> colon
           <> space
           <> pretty t
-          <> line
+          <> space
           <> indent 2 ("≔" <> space <> pretty e)
   pretty (ERecordAccess r x :@ _) =
     parensIfNeeded r
@@ -260,7 +284,7 @@ instance Pretty (Located Expression) where
       <> pretty (unLoc x)
     where
       parensIfNeeded e@(EIdentifier _ _ :@ _) = pretty e
-      parensIfNeeded e@(ERecord _ :@ _) = pretty e
+      parensIfNeeded e@(ERecordLiteral _ :@ _) = pretty e
       parensIfNeeded e@(ERecordAccess _ _ :@ _) = pretty e
       parensIfNeeded e = parens (pretty e)
 

@@ -197,11 +197,11 @@ instance Pretty (Located Expression) where
     "@"
       <> lbrace
       <> space
-      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> Map.toList fields))
+      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> fields))
       <> space
       <> rbrace
     where
-      pretty' (name, (mult, val)) =
+      pretty' (mult, name, val) =
         "let"
           <> space
           <> pretty mult
@@ -215,11 +215,11 @@ instance Pretty (Located Expression) where
     squote
       <> lbrace
       <> space
-      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> Map.toList fields))
+      <> align (concatWith (surround $ "," <> hardline) (pretty' <$> fields))
       <> space
       <> rbrace
     where
-      pretty' (name, (mult, val)) =
+      pretty' (mult, name, val) =
         "val"
           <> space
           <> pretty mult
