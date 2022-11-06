@@ -280,6 +280,7 @@ data DriverError
   | UnresolvedImport [Located Text] [FilePath]
   | CannotImportPrivateMember (Located Text) [Located Text]
   | CyclicModuleImports [([Located Text], FilePath)]
+  | UnknownEntity [Located Text]
 
 data DriverWarning
 
@@ -339,6 +340,14 @@ fromDriverError (CyclicModuleImports mods) =
   where
     messages = mods <&> \(mod, _) -> (foldr1 spanOf (getPos <$> mod), Where $ "'" <> show' mod <> "' is included here")
 
+    show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
+fromDriverError (UnknownEntity m) =
+  Err
+    Nothing
+    ("Entity " <> show' m <> " is unknown")
+    []
+    []
+  where
     show' = Text.unpack . Text.intercalate "∷" . fmap unLoc
 fromDriverError _ = undefined
 

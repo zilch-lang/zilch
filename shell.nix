@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { } }:
 
 pkgs.mkShell {
   name = "gzc-shell";
@@ -6,6 +6,9 @@ pkgs.mkShell {
 
   buildInputs = with pkgs; [
     stack
+    (haskell-language-server.override {
+      supportedGhcVersions = [ "8107" ];
+    })
 
     haskellPackages.hoogle
 

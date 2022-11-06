@@ -128,7 +128,7 @@ identifierOrReserved =
         )
 
 anySymbol :: forall m. MonadLexer m => m Token
-anySymbol = toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v" :: String))
+anySymbol = toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v∷" :: String))
   where
     toToken "forall" = TkForall
     toToken "∀" = TkUniForall

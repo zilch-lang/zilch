@@ -33,6 +33,7 @@ import Data.Maybe (catMaybes, fromJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import Debug.Trace (trace, traceShow)
 import Error.Diagnose (Diagnostic, addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
 import GHC.Stack (HasCallStack)
 import Language.Zilch.CLI.Flags (WarningFlags (..))
@@ -399,7 +400,9 @@ resolveNamespace mod asts cache = solveConstraintFor mod asts cache
 solveConstraintFor :: forall m. MonadDriver m => ModName -> ParsedFiles -> [(FilePath, ModName, Interface)] -> [FilePath] -> m (Resolved, [(FilePath, ModName, Interface)])
 solveConstraintFor mod asts cache filteredPaths = do
   constr <- gets snd
-  let Just ((mod', c), cs) = findElem ((== mod) . fst) constr
+  ((mod', c), cs) <- case findElem ((== mod) . fst) constr of
+    Nothing -> throwError $ UnknownEntity mod
+    Just m -> pure m
 
   -- - try to solve each file constraint independently
   --   however, there is a small "problem" regarding errors:
