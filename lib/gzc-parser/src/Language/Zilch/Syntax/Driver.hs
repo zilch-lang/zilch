@@ -33,7 +33,6 @@ import Data.Maybe (catMaybes, fromJust)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import Debug.Trace (trace, traceShow)
 import Error.Diagnose (Diagnostic, addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
 import GHC.Stack (HasCallStack)
 import Language.Zilch.CLI.Flags (WarningFlags (..))
@@ -137,7 +136,6 @@ parseModules modules = do
           modules'' = constr <&> \(mod, [(f, _)]) -> (mod, f)
           graph'' = flip Cyclic.gmap graph' \mod -> (mod, fromJust $ lookup mod modules'')
       -- - check if the remaining graph contains cycles via a simple DFS
-      traceShow graph'' $ pure ()
       topsort <- case Graph.topSort (Cyclic.transpose graph'') of
         -- transpose the graph in order not to reverse the topsort afterwards
         Left (NonEmpty.toList -> cycle) -> throwError $ CyclicModuleImports (second unUnit <$> cycle)
