@@ -137,6 +137,7 @@ parseModules modules = do
           modules'' = constr <&> \(mod, [(f, _)]) -> (mod, f)
           graph'' = flip Cyclic.gmap graph' \mod -> (mod, fromJust $ lookup mod modules'')
       -- - check if the remaining graph contains cycles via a simple DFS
+      traceShow graph'' $ pure ()
       topsort <- case Graph.topSort (Cyclic.transpose graph'') of
         -- transpose the graph in order not to reverse the topsort afterwards
         Left (NonEmpty.toList -> cycle) -> throwError $ CyclicModuleImports (second unUnit <$> cycle)
@@ -301,7 +302,7 @@ parseAllFiles graph asts sys = do
                   ((path', mod', Left ast) : cache', graph')
                   (mkMod <$> imports)
 
-              pure (cache'', graph'' `Cyclic.overlay` (Cyclic.edges $ (mod,) <$> imports) `Cyclic.overlay` Cyclic.vertex mod')
+              pure (cache'', graph'' `Cyclic.overlay` (Cyclic.edges $ (mod',) <$> imports) `Cyclic.overlay` Cyclic.vertex mod')
             Just _ -> pure (cache', graph')
 
     mkMod :: [Located Text] -> Located Text
