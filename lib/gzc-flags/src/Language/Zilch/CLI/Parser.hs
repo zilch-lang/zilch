@@ -37,7 +37,8 @@ pDebug = do
   -- otherwise GHC infers a @Monad m1@ constraint for the whole @do@ expression
   --
   -- see https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/applicative_do.html#strict-patterns
-  pure $ DebugFlags ast tast dir
+  buildProgress <- switch (long "build-progress" <> help "Turns on progress logging" <> hidden)
+  pure $ DebugFlags ast tast dir buildProgress
   where
     debug "dump-ast" = Right (True, False, Nothing)
     debug "dump-tast" = Right (False, True, Nothing)

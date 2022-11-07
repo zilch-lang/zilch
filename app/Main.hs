@@ -41,6 +41,7 @@ main = do
   let ?warnings = warnings flags
   idirs <- nub <$> traverse makeAbsolute (includeDirs $ input flags)
   let ?includeDirs = idirs
+      ?buildProgress = buildProgress (debug flags)
 
   filesRef <- newIORef []
   res <- runExceptT do
@@ -50,12 +51,10 @@ main = do
     (allASTs, warns) <- liftEither res
     liftIO $ doOutputWarnings files warns
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
-    liftIO $ putStrLn $ "✅ Modules parsed!"
 
-    (allTASTs, warns) <- liftEither $ typecheckModules allASTs
+    (allTASTs, warns) <- liftEither =<< typecheckModules allASTs
     liftIO $ doOutputWarnings files warns
     liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
-    liftIO $ putStrLn $ "✅ Modules passed type-checking!"
 
     pure ()
 

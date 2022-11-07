@@ -58,7 +58,7 @@ type Files = [(FilePath, Text)]
 
 type ParsedFiles = [(FilePath, ModName, Either (Located AST.Module) Interface)]
 
-type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadState (Files, [DisSystem]) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m, HasCallStack)
+type MonadDriver m = (?warnings :: WarningFlags, ?includeDirs :: [FilePath], ?buildProgress :: Bool, MonadState (Files, [DisSystem]) m, MonadWriter [DriverWarning] m, MonadError DriverError m, MonadIO m, HasCallStack)
 
 data Interface
   = Iface
@@ -107,7 +107,7 @@ instance {-# OVERLAPPING #-} Show DisSystem where
 instance {-# OVERLAPPING #-} Show [DisSystem] where
   show sys = unlines (show <$> sys)
 
-parseModules :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], MonadIO m) => [Text] -> m ([(FilePath, Text)], Either (Diagnostic String) ([(FilePath, [Located Text], Located AST.Module)], Diagnostic String))
+parseModules :: (?warnings :: WarningFlags, ?includeDirs :: [FilePath], ?buildProgress :: Bool, MonadIO m) => [Text] -> m ([(FilePath, Text)], Either (Diagnostic String) ([(FilePath, [Located Text], Located AST.Module)], Diagnostic String))
 parseModules modules = do
   ((res, (files, _)), warns) <- runWriterT $
     flip runStateT ([], []) $ runExceptT do
@@ -281,6 +281,9 @@ parseAllFiles graph asts sys = do
 
           case lookup' (mod', path') cache' of
             Nothing -> do
+              when ?buildProgress do
+                liftIO . putStrLn $ "Parsing module " <> Text.unpack (unLoc $ mkMod mod') <> " (" <> path' <> ")…"
+              
               content <- liftIO $ Text.readFile path'
               modify $ first ((path', content) :)
 

@@ -15,7 +15,9 @@ data DebugFlags = DebugFlags
     -- | @-ddump-tast@
     dumpTAST :: Bool,
     -- | @-ddump-dir=DIR@
-    dumpDir :: Maybe FilePath
+    dumpDir :: Maybe FilePath,
+    -- | @--build-progress@
+    buildProgress :: Bool
   }
   deriving (Show)
 
@@ -58,3 +60,4 @@ data WarningFlags = WarningFlags
     all :: Bool
   }
   deriving (Show)
+
