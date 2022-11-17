@@ -11,6 +11,7 @@ import Control.Monad.Except (throwError)
 import Control.Monad.State (gets)
 import Data.Foldable (foldlM)
 import Data.Located (Located ((:@)), unLoc)
+import Debug.Trace (trace)
 import Language.Zilch.Typecheck.Context (Context, bind, define, emptyContext, env, lvl)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval (Closure (..), MetaEntry (..), Value (..))

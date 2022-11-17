@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.35.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -20,6 +20,7 @@ library
       Language.Zilch.Typecheck.Core.Eval
       Language.Zilch.Typecheck.Core.Internal
       Language.Zilch.Typecheck.Core.Multiplicity
+      Language.Zilch.Typecheck.IR
   other-modules:
       Paths_gzc_core
   hs-source-dirs:

@@ -20,3 +20,4 @@ dependencies:
 - gzc-pretty
 - containers ==0.6.*
 - gzc-flags
+- multimap >= 1.2

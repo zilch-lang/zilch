@@ -35,7 +35,7 @@ packages:
 - lib/gzc-pretty
 - lib/gzc-typechecker
 - lib/gzc-flags
-- lib/nstargen
+# - lib/nstargen
 
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as

@@ -10,26 +10,23 @@ module Language.Zilch.Typecheck.Checker (checkProgram, check) where
 
 import Control.Monad (forM, unless, void, when)
 import Control.Monad.Except (catchError, throwError)
-import Control.Monad.State (gets)
 import Control.Monad.Writer (tell)
 import Data.Bifunctor (Bifunctor (..), first, second)
 import Data.Foldable (foldl', foldlM)
 import Data.Functor ((<&>))
-import qualified Data.IntMap as IntMap
 import qualified Data.List as List
 import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Debug.Trace (trace, traceShow)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.Syntax.Core.AST (IntegerSuffix (..))
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Context
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
-import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Environment, MetaEntry (Solved, Unsolved), Value (..), explicit, implicit)
+import Language.Zilch.Typecheck.Core.Eval (Closure (Clos), Environment, Value (..), explicit, implicit)
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (..), ElabWarning (..))
@@ -48,8 +45,8 @@ checkProgram cache ctx mod = do
 
   mod <- inlineMetavariables mod ctx
 
-  checkAllDefined (types ctx) (env ctx)
   checkMutuallyRecursiveValues ctx (types ctx) usages
+  checkAllDefined (types ctx) (env ctx)
 
   pure (mod, iface)
   where
@@ -68,8 +65,8 @@ checkProgram cache ctx mod = do
 
     checkRecursivity _ stack@(_ : _ : _) x _
       | x == last stack =
-        let y = last stack
-         in throwError $ BindingWillEndUpCallingItself (unLoc y) (getPos y) (getPos x) (init stack)
+          let y = last stack
+           in throwError $ BindingWillEndUpCallingItself (unLoc y) (getPos y) (getPos x) (init stack)
     checkRecursivity ctx stack x usages = do
       usageX <- maybe (pure mempty) (removeFunctionals ctx) (Map.lookup x usages)
       let (_, _ :@ pos, _) = indexContext ctx x
@@ -136,7 +133,7 @@ checkToplevel cache ctx (AST.TopLevel isPublic metas (AST.Let isRec mult name@(_
 
       (,ty) <$> quote ctx (lvl ctx) ty
 
-  (!ex, ex', usage) <- mdo
+  (ex, ex', usage) <- mdo
     let ctx' = if isRec then define TAST.Unrestricted name (VThunk ex' :@ p3) ty' ctx else ctx
     (usage, ex') <-
       first (Usage.scale $ unLoc mult) <$> case unLoc mult of
@@ -151,9 +148,13 @@ checkToplevel cache ctx (AST.TopLevel isPublic metas (AST.Let isRec mult name@(_
         (_, VPi {} :@ _) -> pure ()
         _ -> throwError $ RecursiveValueBinding (unLoc name) p5
 
-    ex'' <- case ty of
-      TAST.EPi {} :@ _ -> eval ctx' ex'
-      _ -> pure $ VThunk ex' :@ getPos ex'
+    -- ex'' <- case ty of
+    --   TAST.EPi {} :@ _ -> eval ctx' ex'
+    --   TAST.ELam {} :@ _ -> eval ctx' ex'
+    --   TAST.EAdditiveProduct {} :@ _ -> eval ctx' ex'
+    --   TAST.EMultiplicativeProduct {} :@ _ -> eval ctx' ex'
+    --   _ -> pure $ VThunk ex' :@ getPos ex'
+    ex'' <- eval ctx ex'
     pure (ex', ex'', usage)
 
   let metas' = toTASTMetas <$> metas
@@ -182,8 +183,7 @@ checkToplevel cache ctx (AST.TopLevel isPublic _ (AST.Import isOpen mod access p
   top <- forM binds \(m, name, ty, ex) -> do
     ty <- quote ctx (lvl ctx) ty
     ex <- quote ctx (lvl ctx) ex
-    pure $ TAST.TopLevel [] isPublic (TAST.External m name ty ex (mod <> access <> if isOpen then [name] else []) path :@ p5) :@ p5
-
+    pure $ TAST.TopLevel [] isPublic (TAST.External m name ty ex (mod <> access <> [name | isOpen]) path :@ p5) :@ p5
   pure (top, ctx', Map.fromList $ binds <&> \(_, name, _, _) -> (name, mempty))
 
 toTASTMetas :: Located AST.MetaAttribute -> Located TAST.MetaAttribute
@@ -230,8 +230,8 @@ checkAlreadyBound :: forall m. MonadElab m => Located Text -> [(TAST.Multiplicit
 checkAlreadyBound _ [] [] _ = pure Nothing
 checkAlreadyBound x ((mult, x', origin, ty) : types) ((val :@ _) : env) p5
   | x == x' && origin == Source = case val of
-    VUndefined -> pure $ Just (mult <$ x', ty)
-    _ -> throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
+      VUndefined -> pure $ Just (mult <$ x', ty)
+      _ -> throwError $ IdentifierAlreadyBound (unLoc x') (getPos x') p5
   | otherwise = checkAlreadyBound x types env p5
 checkAlreadyBound _ _ _ _ = error "checkAlreadyDefined: impossible"
 

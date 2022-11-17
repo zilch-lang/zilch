@@ -31,7 +31,7 @@ data Definition
       (Located Expression)
       [Located Text]
       FilePath
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data Parameter
   = Parameter
@@ -43,7 +43,7 @@ data Parameter
       -- ^ The name of the parameter
       (Located Expression)
       -- ^ Its type
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 newtype DeBruijnIdx = Idx Int
   deriving (Show, Eq, Ord, Num, Integral, Enum, Real) via Int
@@ -147,7 +147,7 @@ data Expression
   | ERecordAccess
       (Located Expression)
       (Located Text)
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data BuiltinType
   = TyU64
@@ -159,7 +159,7 @@ data BuiltinType
   | TyS16
   | TyS8
   | TyBool
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 ---------------------------------------------
 
@@ -167,7 +167,7 @@ data Path
   = Here
   | Bind Path Multiplicity (Located Text) (Located Value)
   | Define Path Multiplicity (Located Text) (Located Value) (Located Value)
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 ---------------------------------------------
 
@@ -271,7 +271,7 @@ data Value
   | VFFI
       (Located Text)
       Spine
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 data MetaEntry
   = Solved Value Multiplicity (Located Value)
@@ -295,6 +295,7 @@ type Name = Text
 type Environment = [Located Value]
 
 data Closure = Clos Environment (Located Expression)
+  deriving (Eq, Ord)
 
 newtype DeBruijnLvl = Lvl Int
   deriving (Show, Eq, Ord, Num, Integral, Enum, Real) via Int

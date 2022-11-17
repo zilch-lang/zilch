@@ -13,6 +13,7 @@ import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Typecheck.Core.AST (Expression)
 import Language.Zilch.Typecheck.Core.Eval (Implicitness, explicit, implicit)
 import Language.Zilch.Typecheck.Core.Multiplicity (Multiplicity (..))
+import qualified Language.Zilch.Typecheck.IR as IR
 import Prettyprinter (group, pretty)
 
 data ElabError
@@ -361,6 +362,27 @@ fromElabError (UnresolvedNamespace mod x p) =
     ("Unresolved namespace.")
     [(p, This $ "Trying to import the unresolved namespace '" <> Text.unpack (Text.intercalate "∷" $ unLoc <$> (mod <> [x])) <> "'.")]
     []
+
+data MonomorphiserError
+  = AmbiguousMainOccurrence [[Located Text]]
+  | NoMainFunction
+  | MaximumMonomorphisationDepthReached (Located IR.Expression)
+
+fromMonomorphiserError :: MonomorphiserError -> Report String
+fromMonomorphiserError (AmbiguousMainOccurrence mains) =
+  Err
+    Nothing
+    "Ambiguous reference to function named 'main'."
+    [(getPos (last x), Where "This is a candidate") | x <- mains]
+    ["There can only be a single candidate for the entry point of a program."]
+fromMonomorphiserError NoMainFunction =
+  Err
+    Nothing
+    "No 'main' function found in any module."
+    []
+    ["A 'main' function is required to be the entry point of the program.\nIf this is intentional, pass '--no-main' in the command-line."]
+
+-----------------------------------
 
 ordinal :: Integral a => a -> String
 ordinal number

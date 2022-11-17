@@ -14,7 +14,7 @@ import Data.Located (Located ((:@)), Position, getPos, unLoc)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Debug.Trace (traceShow)
+import Debug.Trace (trace, traceShow)
 import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
@@ -38,7 +38,8 @@ eval ctx (TAST.EInteger e ty :@ p) = do
   pure $ VInteger (read $ unLoc e) ty :@ p
 eval _ (TAST.ECharacter (c :@ _) :@ p) = pure $ VCharacter (Text.head c) :@ p
 eval _ (TAST.EBoolean bool :@ p) = pure $ (if bool then VTrue else VFalse) :@ p
-eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ _) =
+eval ctx (TAST.EIdentifier _ (TAST.Idx i) :@ _) = do
+  -- trace ("evaluating identifier " <> show i) $ pure ()
   case lookup (env ctx) i of
     VThunk (expr :@ p) :@ _ -> eval ctx (expr :@ p)
     val -> pure val
@@ -186,6 +187,7 @@ force ctx t@(VFlexible m sp :@ p) = do
       v1 <- applySpine ctx (t :@ p) sp
       force ctx v1
     _ -> pure t
+force ctx (VThunk e :@ _) = eval ctx e
 force _ t = pure t
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx

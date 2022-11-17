@@ -1,0 +1,29 @@
+:set -XNoOverloadedLists
+
+:def demangle (\what -> pure $ what <> "\n:cmd pure $ \":! c++filt \" <> it")
+
+:add Data.Located Language.Zilch.Typecheck.Core.AST Language.Zilch.Typecheck.Core.Multiplicity Language.Zilch.Typecheck.Internal.Mangler
+
+import Data.Located 
+import Language.Zilch.Typecheck.Core.AST
+import Language.Zilch.Typecheck.Core.Multiplicity
+import Language.Zilch.Typecheck.Internal.Mangler (mangleInNS)
+import qualified Data.Text as Text
+
+:{
+-- val idk : (s8 → u64) → u64
+ex1 =
+  let p = Position (1, 1) (1, 1) "dummy"
+      typ = EPi (Parameter False (I :@ p) ("_" :@ p) (EPi (Parameter False (I :@ p) ("_" :@ p) (EBuiltin TyS8 :@ p) :@ p) (EBuiltin TyU64 :@ p) :@ p) :@ p) (EBuiltin TyU64 :@ p) :@ p
+      name = ["my" :@ p, "mod" :@ p, "idk" :@ p]
+   in Text.unpack (unLoc $ mangleInNS name [] typ)
+
+-- val idk[A ≔ u64, B ≔ s8] : (B -> A) -> A
+ex2 =
+  let p = Position (1, 1) (1, 1) "dummy"
+      typ = EPi (Parameter False (I :@ p) ("_" :@ p) (EPi (Parameter False (I :@ p) ("_" :@ p) (EIdentifier ("B" :@ p) 0 :@ p) :@ p) (EIdentifier ("A" :@ p) 1 :@ p) :@ p) :@ p) (EIdentifier ("A" :@ p) 1 :@ p) :@ p
+      name = ["my" :@ p, "mod" :@ p, "idk" :@ p]
+      spec = [("A" :@ p, EBuiltin TyU64 :@ p), ("B" :@ p, EBuiltin TyS8 :@ p)]
+   in Text.unpack (unLoc $ mangleInNS name spec typ)
+:}
+

@@ -38,12 +38,10 @@ indexContext ctx x = go (types ctx)
     go (_ : ts) = go ts
 
 unbind :: Context -> Context
-unbind (Context (_ : env) (_ : types) lvl path') = Context {env, types, lvl = lvl - 1, path}
-  where
-    path = case path' of
-      Here {} -> undefined
-      Define p _ _ _ _ -> p
-      Bind p _ _ _ -> p
+unbind (Context (_ : env) types lvl path') = case (types, path') of
+  (_, Here {}) -> undefined
+  (_ : types, Bind path _ _ _) -> Context {env, types, lvl = lvl - 1, path}
+  (_ : types, Define path _ _ _ _) -> Context {env, types, lvl = lvl - 1, path}
 
 setContext :: Context -> Located Name -> Multiplicity -> Context
 setContext ctx x usage = Context (env ctx) (go (types ctx)) (lvl ctx) (path ctx)
@@ -103,5 +101,5 @@ define usage f val ty ctx =
       | lvl < idx = e : env
       | lvl == idx = val : env
       | otherwise =
-        let env' = replaceAt (lvl - 1) idx env val
-         in e : env'
+          let env' = replaceAt (lvl - 1) idx env val
+           in e : env'

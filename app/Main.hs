@@ -15,15 +15,15 @@ import Data.Located (Located, unLoc)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, Report (..), addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
-import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), WarningFlags)
+import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), OutputFlags (..), WarningFlags)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.CLI.Parser (getFlags)
 import Language.Zilch.Pretty.AST ()
-import Language.Zilch.Pretty.TAST ()
+import Language.Zilch.Pretty.TIR ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Syntax.Driver (parseModules)
-import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Driver (typecheckModules)
+import qualified Language.Zilch.Typecheck.IR as IR
 import Prettyprinter (pretty)
 import System.Directory (createDirectoryIfMissing, makeAbsolute)
 import System.Exit (exitFailure)
@@ -38,10 +38,11 @@ main = do
     printDiagnostic stderr True True 4 defaultStyle $ addReport def $ Err Nothing ("No module specified on command-line." :: String) [] []
     exitFailure
 
-  let ?warnings = warnings flags
   idirs <- nub <$> traverse makeAbsolute (includeDirs $ input flags)
-  let ?includeDirs = idirs
+  let ?warnings = warnings flags
+      ?includeDirs = idirs
       ?buildProgress = buildProgress (debug flags)
+      ?noMain = noMain (output flags)
 
   filesRef <- newIORef []
   res <- runExceptT do
@@ -71,7 +72,7 @@ doOutputWarnings files diag = do
   let erroneous = W.areErrors ?warnings
   let diag' = if erroneous then warningsToErrors diag else diag
 
-  printDiagnostic stderr True True 4 defaultStyle (mkDiag diag' files) --addFile diag' path $ Text.unpack content)
+  printDiagnostic stderr True True 4 defaultStyle (mkDiag diag' files) -- addFile diag' path $ Text.unpack content)
   when (erroneous && hasReports diag') do
     exitFailure
 
@@ -81,19 +82,19 @@ mkDiag diag files = foldr (\(path, content) diag -> addFile diag path $ Text.unp
 doDumpAST :: Flags -> Located AST.Module -> FilePath -> IO ()
 doDumpAST flags mod path
   | dumpAST (debug flags) = do
-    let dir = getDumpBasePath flags
+      let dir = getDumpBasePath flags
 
-    createDirectoryIfMissing True (joinPath dir)
-    writeFile (joinPath $ dir <> [show (hash path) <> "-ast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
+      createDirectoryIfMissing True (joinPath dir)
+      writeFile (joinPath $ dir <> [show (hash path) <> "-ast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
   | otherwise = pure ()
 
-doDumpTAST :: Flags -> Located TAST.Module -> FilePath -> IO ()
+doDumpTAST :: Flags -> Located IR.Module -> FilePath -> IO ()
 doDumpTAST flags mod path
   | dumpTAST (debug flags) = do
-    let dir = getDumpBasePath flags
+      let dir = getDumpBasePath flags
 
-    createDirectoryIfMissing True (joinPath dir)
-    writeFile (joinPath $ dir <> [show (hash path) <> "-tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
+      createDirectoryIfMissing True (joinPath dir)
+      writeFile (joinPath $ dir <> [show (hash path) <> "-tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
   | otherwise = pure ()
 
 getDumpBasePath :: Flags -> [FilePath]
