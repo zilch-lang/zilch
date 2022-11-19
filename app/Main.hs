@@ -1,33 +1,32 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Eta reduce" #-}
 
 module Main (main) where
 
 import Control.Monad (forM_, when)
 import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Data.Functor ((<&>))
-import Data.Hashable (Hashable (hash))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (nub)
-import Data.Located (Located, unLoc)
+import Data.Located (Located)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, Report (..), addFile, addReport, def, defaultStyle, hasReports, printDiagnostic, warningsToErrors)
-import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), OutputFlags (..), WarningFlags)
+import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), OutputFlags (..), WarningFlags, doDump)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.CLI.Parser (getFlags)
+import Language.Zilch.Pretty.ANF ()
 import Language.Zilch.Pretty.AST ()
-import Language.Zilch.Pretty.TIR ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
 import Language.Zilch.Syntax.Driver (parseModules)
 import Language.Zilch.Typecheck.Driver (typecheckModules)
-import qualified Language.Zilch.Typecheck.IR as IR
 import Prettyprinter (pretty)
-import System.Directory (createDirectoryIfMissing, makeAbsolute)
+import System.Directory (makeAbsolute)
 import System.Exit (exitFailure)
-import System.FilePath (joinPath, splitPath, (<.>))
 import System.IO
 
 main :: IO ()
@@ -53,9 +52,8 @@ main = do
     liftIO $ doOutputWarnings files warns
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
 
-    (allTASTs, warns) <- liftEither =<< typecheckModules allASTs
+    (allTASTs, warns) <- liftEither =<< typecheckModules flags allASTs
     liftIO $ doOutputWarnings files warns
-    liftIO $ forM_ allTASTs \(path, _, tast) -> doDumpTAST flags tast path
 
     pure ()
 
@@ -77,25 +75,7 @@ doOutputWarnings files diag = do
     exitFailure
 
 mkDiag :: Diagnostic String -> [(FilePath, Text)] -> Diagnostic String
-mkDiag diag files = foldr (\(path, content) diag -> addFile diag path $ Text.unpack content) diag files
+mkDiag = foldr (\(path, content) diag -> addFile diag path $ Text.unpack content)
 
 doDumpAST :: Flags -> Located AST.Module -> FilePath -> IO ()
-doDumpAST flags mod path
-  | dumpAST (debug flags) = do
-      let dir = getDumpBasePath flags
-
-      createDirectoryIfMissing True (joinPath dir)
-      writeFile (joinPath $ dir <> [show (hash path) <> "-ast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
-  | otherwise = pure ()
-
-doDumpTAST :: Flags -> Located IR.Module -> FilePath -> IO ()
-doDumpTAST flags mod path
-  | dumpTAST (debug flags) = do
-      let dir = getDumpBasePath flags
-
-      createDirectoryIfMissing True (joinPath dir)
-      writeFile (joinPath $ dir <> [show (hash path) <> "-tast" <.> "dbg" <.> "zc"]) (show $ pretty mod)
-  | otherwise = pure ()
-
-getDumpBasePath :: Flags -> [FilePath]
-getDumpBasePath flags = maybe [".zilch", "dump"] splitPath $ dumpDir (debug flags)
+doDumpAST flags mod path = doDump flags "ast" (dumpAST . debug) (pretty mod) path

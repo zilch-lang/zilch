@@ -32,22 +32,26 @@ pCli = do
 
 pDebug :: Parser DebugFlags
 pDebug = do
-  ~(ast, tast, dir) <- go <$> many (option (eitherReader debug) (short 'd' <> hidden))
+  ~(ast, tast, anf, dir) <- go <$> many (option (eitherReader debug) (short 'd' <> hidden))
   -- here we have to use an irrefutable (lazy) pattern
   -- otherwise GHC infers a @Monad m1@ constraint for the whole @do@ expression
   --
   -- see https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/applicative_do.html#strict-patterns
   buildProgress <- switch (long "build-progress" <> help "Turns on progress logging" <> hidden)
-  pure $ DebugFlags ast tast dir buildProgress
+  pure $ DebugFlags ast tast anf dir buildProgress
   where
-    debug "dump-ast" = Right (True, False, Nothing)
-    debug "dump-tast" = Right (False, True, Nothing)
+    debug "dump-ast" = Right (True, False, False, Nothing)
+    debug "dump-tast" = Right (False, True, False, Nothing)
+    debug "dump-anf" = Right (False, False, True, Nothing)
     debug "dump-dir=" = Left "dump-dir: Missing directory"
     debug "dump-dir" = Left "dump-dir: Missing directory"
-    debug ('d' : 'u' : 'm' : 'p' : '-' : 'd' : 'i' : 'r' : '=' : dir) = Right (False, False, Just dir)
+    debug ('d' : 'u' : 'm' : 'p' : '-' : 'd' : 'i' : 'r' : '=' : dir) = Right (False, False, False, Just dir)
     debug spec = Left $ "Invalid command '" <> spec <> "'"
 
-    go = foldr (\(ast1, tast1, dir1) (ast2, tast2, dir2) -> (ast1 || ast2, tast1 || tast2, dir1 <|> dir2)) (False, False, Nothing)
+    go =
+      foldr
+        (\(ast1, tast1, anf1, dir1) (ast2, tast2, anf2, dir2) -> (ast1 || ast2, tast1 || tast2, anf1 || anf2, dir1 <|> dir2))
+        (False, False, False, Nothing)
 
 pConfig :: Parser ConfigFlags
 pConfig =

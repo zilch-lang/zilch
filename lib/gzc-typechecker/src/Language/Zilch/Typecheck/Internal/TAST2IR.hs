@@ -16,6 +16,8 @@ import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import qualified Language.Zilch.Typecheck.IR as IR
+import Debug.Trace (traceShow)
+import Control.Monad (when)
 
 type MonadTranslator m = MonadState (Map (Located Text) [Located Text]) m
 
@@ -50,21 +52,22 @@ translateMod modName (TAST.Mod bs :@ p) = do
 
 translateToplevel :: MonadTranslator m => [Located Text] -> Located TAST.TopLevel -> m (Maybe (Located IR.TopLevel))
 translateToplevel modName (TAST.TopLevel attrs isPublic def :@ p) = do
-  def <- translateDefinition modName isPublic def
+  def <- translateDefinition modName isPublic True def
   pure $ def <&> \def -> IR.TopLevel attrs isPublic def :@ p
 
-translateDefinition :: MonadTranslator m => [Located Text] -> Bool -> Located TAST.Definition -> m (Maybe (Located IR.Definition))
-translateDefinition modName isPub (TAST.Let isRec mult name ty ex :@ p) = do
+translateDefinition :: MonadTranslator m => [Located Text] -> Bool -> Bool -> Located TAST.Definition -> m (Maybe (Located IR.Definition))
+translateDefinition modName isPub isTop (TAST.Let isRec mult name ty ex :@ p) = do
   ty <- locally id (translateExpression modName ty)
-  let modName' = if isPub then modName else modName <> ["/priv" :@ getPos name]
+  let modName' = if not isPub && isTop then modName <> ["/priv" :@ getPos name] else modName
   ex <- (if isRec then locally (Map.insert name modName') else id) do
     -- this has as effect to scope any new `external` definitions
     translateExpression (modName <> [name]) ex
+  modify (Map.insert name modName')
   pure $ Just (IR.Let isRec mult name ty ex :@ p)
-translateDefinition modName _ (TAST.Val mult name ty :@ p) = do
+translateDefinition modName _ _ (TAST.Val mult name ty :@ p) = do
   ty <- locally id (translateExpression modName ty)
   pure $ Just (IR.Val mult name ty :@ p)
-translateDefinition _ _ (TAST.External _ name _ _ (init -> mod) _ :@ _) = do
+translateDefinition _ _ _ (TAST.External _ name _ _ (init -> mod) _ :@ _) = do
   modify (Map.insert name mod)
   pure Nothing
 
@@ -96,7 +99,7 @@ translateExpression modName (TAST.EMultiplicativeProduct param ex :@ p) = locall
   ex <- translateExpression modName ex
   pure $ IR.EMultiplicativeProduct param ex :@ p
 translateExpression modName (TAST.ELet def ex :@ p) = do
-  def <- translateDefinition modName False def
+  def <- translateDefinition modName False False def
   ex <- locally id (translateExpression modName ex)
   pure case def of
     Nothing -> ex
@@ -106,6 +109,7 @@ translateExpression modName (TAST.EApplication f _ x :@ p) = do
   x <- locally id (translateExpression modName x)
   pure $ IR.EApplication f x :@ p
 translateExpression _ (TAST.EIdentifier name _ :@ p) = do
+  -- traceShow name $ pure ()
   mod <- gets (Map.! name)
   pure $ IR.EIdentifier (mod <> [name]) :@ p
 translateExpression _ (TAST.EInteger i ty :@ p) = pure $ IR.EInteger i ty :@ p

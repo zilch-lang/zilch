@@ -42,7 +42,10 @@ simplify :: forall m. MonadElab m => [Located TAST.TopLevel] -> m [Located TAST.
 simplify = fmap snd . foldlM simp (emptyContext, [])
   where
     simp (ctx, ts) (TAST.TopLevel attrs isOpen def :@ p) = do
-      (ctx, def) <- case def of
+      (ctx, def) <- simplifyDef ctx def
+      pure (ctx, (TAST.TopLevel attrs isOpen def :@ p) : ts)
+
+    simplifyDef ctx def = case def of
         TAST.Let isRec mult name ty val :@ p -> do
           let ctx' = define (unLoc mult) name (VVariable name (lvl ctx) :@ p) (VVariable name (lvl ctx) :@ p) ctx
           ty <- simplify' (if isRec then ctx' else ctx) ty
@@ -57,9 +60,12 @@ simplify = fmap snd . foldlM simp (emptyContext, [])
           ty <- simplify' ctx ty
           val <- simplify' ctx val
           pure (ctx', TAST.External mult name ty val mod path :@ p)
-      pure (ctx, (TAST.TopLevel attrs isOpen def :@ p) : ts)
 
-    simplify' ctx = eval ctx >=> resimplify' ctx >=> quote ctx (lvl ctx)
+    simplify' ctx (TAST.ELet def val :@ p) = do
+      (ctx, def) <- simplifyDef ctx def
+      val <- simplify' ctx val
+      pure (TAST.ELet def val :@ p)
+    simplify' ctx expr = eval ctx expr >>= resimplify' ctx >>= quote ctx (lvl ctx)
 
     resimplify' ctx =
       force ctx >=> \case

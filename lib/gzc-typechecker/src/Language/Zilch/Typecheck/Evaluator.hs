@@ -187,7 +187,6 @@ force ctx t@(VFlexible m sp :@ p) = do
       v1 <- applySpine ctx (t :@ p) sp
       force ctx v1
     _ -> pure t
-force ctx (VThunk e :@ _) = eval ctx e
 force _ t = pure t
 
 debruijnLevelToIndex :: DeBruijnLvl -> DeBruijnLvl -> TAST.DeBruijnIdx

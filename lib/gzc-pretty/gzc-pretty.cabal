@@ -10,10 +10,10 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Language.Zilch.Pretty.ANF
       Language.Zilch.Pretty.AST
       Language.Zilch.Pretty.CST
       Language.Zilch.Pretty.TAST
-      Language.Zilch.Pretty.TIR
   other-modules:
       Paths_gzc_pretty
   hs-source-dirs:

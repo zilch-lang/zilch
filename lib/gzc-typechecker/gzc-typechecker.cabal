@@ -19,9 +19,8 @@ library
       Language.Zilch.Typecheck.Errors
       Language.Zilch.Typecheck.Evaluator
       Language.Zilch.Typecheck.Imports
+      Language.Zilch.Typecheck.Internal.IR2ANF
       Language.Zilch.Typecheck.Internal.Mangler
-      Language.Zilch.Typecheck.Internal.Monomorphiser
-      Language.Zilch.Typecheck.Internal.Monomorphiser.Class
       Language.Zilch.Typecheck.Internal.TAST2IR
       Language.Zilch.Typecheck.Metavars
       Language.Zilch.Typecheck.Monomorphiser

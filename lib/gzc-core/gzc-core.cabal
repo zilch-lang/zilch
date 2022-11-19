@@ -15,6 +15,7 @@ library
       Language.Zilch.Syntax.Core.AST
       Language.Zilch.Syntax.Core.CST
       Language.Zilch.Syntax.Core.Lexeme
+      Language.Zilch.Typecheck.ANF
       Language.Zilch.Typecheck.Core
       Language.Zilch.Typecheck.Core.AST
       Language.Zilch.Typecheck.Core.Eval

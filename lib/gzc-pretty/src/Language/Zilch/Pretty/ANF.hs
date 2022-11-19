@@ -3,7 +3,7 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Zilch.Pretty.TIR where
+module Language.Zilch.Pretty.ANF where
 
 import Data.Foldable (fold)
 import Data.Functor ((<&>))
@@ -12,7 +12,7 @@ import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Language.Zilch.Pretty.TAST ()
 import Language.Zilch.Typecheck.Core.Multiplicity
-import Language.Zilch.Typecheck.IR
+import Language.Zilch.Typecheck.ANF
 import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, flatAlt, group, hardline, indent, line, lparen, parens, rparen, space, surround, vsep)
 
 instance Pretty (Located Module) where
@@ -20,14 +20,13 @@ instance Pretty (Located Module) where
     vsep (pretty <$> defs)
 
 instance Pretty (Located TopLevel) where
-  pretty (TopLevel attrs isPublic def :@ _) =
+  pretty (TopLevel attrs def :@ _) =
     "#attributes"
       <> lparen
       <> prettyAttrs attrs
       <> (if not (null attrs) then hardline else emptyDoc)
       <> rparen
       <> hardline
-      <> (if isPublic then "public" <> space else emptyDoc)
       <> pretty def
       <> hardline
     where
@@ -52,20 +51,19 @@ instance Pretty (Located Definition) where
             <> line
             <> pretty val
         )
-  pretty (Val usage name typ :@ _) =
-    "val"
-      <> space
-      <> pretty usage
-      <> space
-      <> pretty (unLoc name)
-      <> space
-      <> ":"
-      <> space
-      <> pretty typ
+  -- pretty (Val usage name typ :@ _) =
+  --   "val"
+  --     <> space
+  --     <> pretty usage
+  --     <> space
+  --     <> pretty (unLoc name)
+  --     <> space
+  --     <> ":"
+  --     <> space
+  --     <> pretty typ
 
 instance Pretty (Located Parameter) where
   pretty (Parameter usage name ty :@ _) =
-    enclose "(" ")" $
       pretty usage
         <> space
         <> pretty (unLoc name)
@@ -84,7 +82,7 @@ instance Pretty (Located Expression) where
   pretty (ELam name ret :@ _) =
     "λ"
       <> space
-      <> pretty name
+      <> parens (concatWith (surround comma) $ pretty <$> name)
       <> space
       <> "⇒"
       <> line
@@ -94,7 +92,7 @@ instance Pretty (Located Expression) where
       <> line
       <> pretty ret
   pretty (EApplication fun arg :@ _) =
-    pretty fun <> parens (pretty arg)
+    pretty fun <> parens (concatWith (surround comma) $ pretty <$> arg)
   pretty (EPi param val :@ _) = prettyDependent param "→" val
   pretty (EMultiplicativeProduct param val :@ _) = prettyDependent param "⊗" val
   pretty (EAdditiveProduct param val :@ _) = prettyDependent param "&" val
@@ -115,20 +113,10 @@ instance Pretty (Located Expression) where
         <> "else"
         <> space
         <> pretty e
-  pretty (EMultiplicativePair e1 e2 :@ _) =
-    enclose "(" ")" $
-      pretty e1
-        <> comma
-        <> space
-        <> pretty e2
-  pretty (EAdditivePair e1 e2 :@ _) =
-    enclose "⟨" "⟩" $
-      pretty e1
-        <> comma
-        <> space
-        <> pretty e2
-  pretty (EAdditiveUnit :@ _) = "⟨" <> "⟩"
-  pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
+  pretty (EMultiplicativePair es :@ _) =
+    parens $ concatWith (surround comma) $ pretty <$> es
+  pretty (EAdditivePair es :@ _) =
+    enclose "⟨" "⟩" $ concatWith (surround comma) $ pretty <$> es
   pretty (EOne :@ _) = "𝟏"
   pretty (ETop :@ _) = "⊤"
   pretty (EFst e :@ _) =
@@ -139,25 +127,12 @@ instance Pretty (Located Expression) where
     "SND"
       <> space
       <> pretty e
-  pretty (EMultiplicativePairElim z mult x y m n :@ _) =
+  pretty (EMultiplicativePairElim z mult xs m n :@ _) =
     "let"
       <> space
       <> pretty mult
       <> space
-      <> parens (pretty (unLoc x) <> comma <> space <> pretty (unLoc y))
-      <> maybe emptyDoc (\z -> space <> "as" <> space <> pretty (unLoc z)) z
-      <> space
-      <> "≔"
-      <> space
-      <> pretty m
-      <> hardline
-      <> pretty n
-  pretty (EMultiplicativeUnitElim z mult m n :@ _) =
-    "let"
-      <> space
-      <> pretty mult
-      <> space
-      <> parens emptyDoc
+      <> parens (concatWith (surround comma) $ pretty . unLoc <$> xs)
       <> maybe emptyDoc (\z -> space <> "as" <> space <> pretty (unLoc z)) z
       <> space
       <> "≔"
@@ -179,25 +154,6 @@ instance Pretty (Located Expression) where
         "val"
           <> space
           <> pretty p
-          <> space
-          <> pretty (unLoc x)
-          <> space
-          <> colon
-          <> space
-          <> pretty t
-  pretty (EModule fields :@ _) =
-    "MODULE"
-      <> space
-      <> align
-        ( "{"
-            <> space
-            <> concatWith (surround $ line <> "," <> space) (prettyField <$> Map.toList fields)
-            <> space
-            <> "}"
-        )
-    where
-      prettyField (x, (p, t)) =
-        pretty p
           <> space
           <> pretty (unLoc x)
           <> space
@@ -238,9 +194,9 @@ instance Pretty (Located Expression) where
       parensIfNeeded e@(ERecordAccess _ _ :@ _) = pretty e
       parensIfNeeded e = parens (pretty e)
 
-prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
+prettyDependent :: [Located Parameter] -> Doc ann -> Located Expression -> Doc ann
 prettyDependent param op val =
-  pretty param
+  parens (concatWith (surround comma) $ pretty <$> param)
     <> space
     <> op
     <> space

@@ -1,5 +1,9 @@
 module Language.Zilch.CLI.Flags where
 
+import Data.Hashable (hash)
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (joinPath, splitPath, (<.>))
+
 data Flags = Flags
   { debug :: DebugFlags,
     config :: ConfigFlags,
@@ -14,6 +18,8 @@ data DebugFlags = DebugFlags
     dumpAST :: Bool,
     -- | @-ddump-tast@
     dumpTAST :: Bool,
+    -- | @-ddump-anf@
+    dumpANF :: Bool,
     -- | @-ddump-dir=DIR@
     dumpDir :: Maybe FilePath,
     -- | @--build-progress@
@@ -61,3 +67,14 @@ data WarningFlags = WarningFlags
   }
   deriving (Show)
 
+getDumpBasePath :: Flags -> [FilePath]
+getDumpBasePath flags = maybe [".zilch", "dump"] splitPath $ dumpDir (debug flags)
+
+doDump :: Show a => Flags -> String -> (Flags -> Bool) -> a -> FilePath -> IO ()
+doDump flags prefix p x path
+  | p flags = do
+      let dir = getDumpBasePath flags
+
+      createDirectoryIfMissing True (joinPath dir)
+      writeFile (joinPath $ dir <> [show (hash path) <> "-" <> prefix <.> "dbg" <.> "zc"]) (show x)
+  | otherwise = pure ()
