@@ -25,7 +25,7 @@ import Language.Zilch.Typecheck.Core.Eval (DeBruijnLvl (Lvl), Implicitness, Meta
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
 import {-# SOURCE #-} Language.Zilch.Typecheck.Elaborator (MonadElab)
 import Language.Zilch.Typecheck.Errors (ElabError (CannotUnify, UnificationError))
-import Language.Zilch.Typecheck.Evaluator (apply, apply', applyVal, debruijnLevelToIndex, eval, force, quote)
+import Language.Zilch.Typecheck.Evaluator (apply, apply', applyVal, debruijnLevelToIndex, eval, force, metaType, quote)
 
 data PartialRenaming = Renaming DeBruijnLvl DeBruijnLvl (IntMap DeBruijnLvl)
 
@@ -54,12 +54,14 @@ rename ctx m ren v = go ren v
       force ctx t >>= \case
         VFlexible m' sp :@ p
           | m == m' -> throwError UnificationError
-          | otherwise -> goSpine ren (TAST.EMeta m' :@ p) sp
+          | otherwise -> do
+              ty <- metaType m'
+              fst <$> goSpine ren (TAST.EMeta m' :@ p) ty sp
         VRigid name (Lvl x) t sp :@ p -> do
           t' <- go ren t
           case IntMap.lookup x env of
             Nothing -> throwError UnificationError
-            Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') t' :@ p) sp
+            Just x' -> fst <$> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') t' :@ p) t sp
         VLam usage x isExplicit a t2 t :@ p -> do
           a' <- go ren a
           t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) isExplicit
@@ -84,12 +86,16 @@ rename ctx m ren v = go ren v
         -- this is merely to avoid duplicated code
         val -> quote ctx cod val
 
-    goSpine _ t [] = pure t
-    goSpine ren t@(_ :@ p) ((u, ty, i) : sp) = do
-      v1 <- goSpine ren t sp
+    goSpine _ t ty [] = do
+      ty <- go ren ty
+      pure (t, ty)
+    goSpine ren t@(_ :@ p) ty2 ((u, ty, i) : sp) = do
+      (v1, ty2) <- goSpine ren t ty2 sp
       ty <- go ren ty
       v2 <- go ren u
-      pure $ TAST.EApplication v1 (not i) ty v2 :@ p
+
+      let TAST.EPi _ _ ty3 :@ _ = ty2
+      pure (TAST.EApplication ty2 v1 (not i) ty v2 :@ p, ty3)
 
 solve :: forall m. MonadElab m => Context -> DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
 solve ctx' gamma m sp val = do

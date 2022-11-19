@@ -82,12 +82,12 @@ name spec n = case n of
 --  > <bare-function-type> ::= <signature type>+
 --  >      # return type (void if unit) then parameters in left to right order
 functionType :: TemplateSpecialisation -> Bool -> Located Expression -> Text
-functionType spec withRet t@(EPi _ _ :@ _) = Text.concat ((if withRet then (type' spec ret :) else id) (type' spec <$> params))
+functionType spec withRet t@(EPi _ _ _ :@ _) = Text.concat ((if withRet then (type' spec ret :) else id) (type' spec <$> params))
   where
     (params, ret) = mkTelescope t
 
     mkTelescope :: Located Expression -> ([Located Expression], Located Expression)
-    mkTelescope (EPi (Parameter _ _ pt :@ _) t :@ _) = first (pt :) (mkTelescope t)
+    mkTelescope (EPi (Parameter _ _ pt :@ _) _ t :@ _) = first (pt :) (mkTelescope t)
     mkTelescope t = ([], t)
 
 -- |
@@ -112,7 +112,7 @@ type' spec (EIdentifier [x] :@ _) = case keyIndex x spec of
     go n x ((y, _) : ys)
       | x == y = Just n
       | otherwise = go (n + 1) x ys
-type' spec ty@(EPi _ _ :@ _) = "P" <> "F" <> functionType spec True ty <> "E"
+type' spec ty@(EPi _ _ _ :@ _) = "P" <> "F" <> functionType spec True ty <> "E"
 
 -- box every function argument
 

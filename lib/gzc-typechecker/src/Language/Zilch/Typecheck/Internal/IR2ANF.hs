@@ -44,19 +44,19 @@ normalizeTerm t = runContT (normalizeExpression t) pure
 
 normalizeExpression :: MonadNormalizer m => Located IR.Expression -> ContT (Located ANF.Expression) m (Located ANF.Expression)
 normalizeExpression (IR.EType :@ p) = pure (ANF.EType :@ p)
-normalizeExpression (IR.ELam param val :@ p) = do
+normalizeExpression (IR.ELam param _ val :@ p) = do
   param <- normalizeParameter param
   val <- normalizeTerm val
   pure (ANF.ELam [param] val :@ p)
-normalizeExpression (IR.EPi param ty :@ p) = do
+normalizeExpression (IR.EPi param _ ty :@ p) = do
   param <- normalizeParameter param
   ty <- normalizeTerm ty
   pure (ANF.EPi [param] ty :@ p)
-normalizeExpression (IR.EAdditiveProduct param ty :@ p) = do
+normalizeExpression (IR.EAdditiveProduct param _ ty :@ p) = do
   param <- normalizeParameter param
   ty <- normalizeTerm ty
   pure (ANF.EAdditiveProduct [param] ty :@ p)
-normalizeExpression (IR.EMultiplicativeProduct param ty :@ p) = do
+normalizeExpression (IR.EMultiplicativeProduct param _ ty :@ p) = do
   param <- normalizeParameter param
   ty <- normalizeTerm ty
   pure (ANF.EMultiplicativeProduct [param] ty :@ p)
@@ -66,45 +66,45 @@ normalizeExpression (IR.ELet def val :@ p) = do
     Just def -> do
       val <- normalizeTerm val
       pure $ ANF.ELet def val :@ p
-normalizeExpression (IR.EApplication f x :@ p) = do
-  f <- normalizeName f
-  x <- normalizeName x
+normalizeExpression (IR.EApplication tf f tx x :@ p) = do
+  f <- normalizeName f tf
+  x <- normalizeName x tx
   pure (ANF.EApplication f [x] :@ p)
 normalizeExpression (IR.EIdentifier i :@ p) = pure (ANF.EIdentifier i :@ p)
 normalizeExpression (IR.EInteger i ty :@ p) = pure (ANF.EInteger i ty :@ p)
 normalizeExpression (IR.ECharacter c :@ p) = pure (ANF.ECharacter c :@ p)
 normalizeExpression (IR.EBuiltin bt :@ p) = pure (ANF.EBuiltin bt :@ p)
 normalizeExpression (IR.EBoolean b :@ p) = pure (ANF.EBoolean b :@ p)
-normalizeExpression (IR.EIfThenElse c t e :@ p) = do
-  c <- normalizeName c
+normalizeExpression (IR.EIfThenElse c t _ e _ :@ p) = do
+  c <- normalizeName c (IR.EBuiltin IR.TyBool :@ getPos c)
   t <- normalizeTerm t
   e <- normalizeTerm e
   pure (ANF.EIfThenElse c t e :@ p)
-normalizeExpression (IR.EAdditivePair x y :@ p) = do
-  x <- normalizeName x
-  y <- normalizeName y
+normalizeExpression (IR.EAdditivePair x tx y ty :@ p) = do
+  x <- normalizeName x tx
+  y <- normalizeName y ty
   pure (ANF.EAdditivePair [x, y] :@ p)
-normalizeExpression (IR.EMultiplicativePair x y :@ p) = do
-  x <- normalizeName x
-  y <- normalizeName y
+normalizeExpression (IR.EMultiplicativePair x tx y ty :@ p) = do
+  x <- normalizeName x tx
+  y <- normalizeName y ty
   pure (ANF.EMultiplicativePair [x, y] :@ p)
 normalizeExpression (IR.EMultiplicativeUnit :@ p) = pure (ANF.EMultiplicativePair [] :@ p)
 normalizeExpression (IR.EAdditiveUnit :@ p) = pure (ANF.EAdditivePair [] :@ p)
 normalizeExpression (IR.EOne :@ p) = pure (ANF.EOne :@ p)
 normalizeExpression (IR.ETop :@ p) = pure (ANF.ETop :@ p)
-normalizeExpression (IR.EFst x :@ p) = do
-  x <- normalizeName x
+normalizeExpression (IR.EFst ty x :@ p) = do
+  x <- normalizeName x ty
   pure (ANF.EFst x :@ p)
-normalizeExpression (IR.ESnd x :@ p) = do
-  x <- normalizeName x
+normalizeExpression (IR.ESnd ty x :@ p) = do
+  x <- normalizeName x ty
   pure (ANF.ESnd x :@ p)
-normalizeExpression (IR.EMultiplicativePairElim z mult x y e f :@ p) = do
-  e <- normalizeName e
-  f <- normalizeName f
+normalizeExpression (IR.EMultiplicativePairElim z mult x tx y ty e f :@ p) = do
+  e <- normalizeName e (IR.EMultiplicativeProduct (IR.Parameter mult ("_" :@ getPos tx) tx :@ getPos e) (IR.EType :@ getPos ty) ty :@ getPos e)
+  f <- normalizeTerm f
   pure (ANF.EMultiplicativePairElim z mult [x, y] e f :@ p)
 normalizeExpression (IR.EMultiplicativeUnitElim z mult e f :@ p) = do
-  e <- normalizeName e
-  f <- normalizeName f
+  e <- normalizeName e (IR.EMultiplicativeUnit :@ getPos e)
+  f <- normalizeTerm f
   pure (ANF.EMultiplicativePairElim z mult [] e f :@ p)
 normalizeExpression (IR.EComposite fields :@ p) = do
   fields <- for fields \(mult, name, ty) -> do
@@ -113,12 +113,12 @@ normalizeExpression (IR.EComposite fields :@ p) = do
   pure (ANF.EComposite fields :@ p)
 normalizeExpression (IR.ERecordLiteral fields :@ p) = do
   fields <- for fields \(mult, name, ty, val) -> do
+    val <- normalizeName val ty
     ty <- rawExpr ty
-    val <- normalizeName val
     pure (mult, name, ty, val)
   pure (ANF.ERecordLiteral fields :@ p)
-normalizeExpression (IR.ERecordAccess r x :@ p) = do
-  r <- normalizeName r
+normalizeExpression (IR.ERecordAccess r ty x :@ p) = do
+  r <- normalizeName r ty
   pure (ANF.ERecordAccess r x :@ p)
 normalizeExpression _ = undefined
 
@@ -127,8 +127,8 @@ normalizeParameter (IR.Parameter mult name ty :@ p) = do
   ty <- rawExpr ty
   pure $ ANF.Parameter mult name ty :@ p
 
-normalizeName :: MonadNormalizer m => Located IR.Expression -> ContT (Located ANF.Expression) m (Located ANF.Expression)
-normalizeName expr = do
+normalizeName :: MonadNormalizer m => Located IR.Expression -> Located IR.Expression -> ContT (Located ANF.Expression) m (Located ANF.Expression)
+normalizeName expr ty = do
   let f expr = do
         let pos = getPos expr
 
@@ -137,7 +137,7 @@ normalizeName expr = do
 
         flip mapContT (pure ident) \e -> do
           e <- e
-          let ty = ANF.EIdentifier ["_" :@ pos] :@ pos
+          ty <- rawExpr ty
           pure $ ANF.ELet (ANF.Let False (I :@ pos) name ty expr :@ pos) e :@ pos
 
   expr <- normalizeExpression expr
@@ -171,19 +171,19 @@ rawDefinition (IR.Val _ _ _ :@ _) = undefined
 
 rawExpr :: MonadNormalizer m => Located IR.Expression -> m (Located ANF.Expression)
 rawExpr (IR.EType :@ p) = pure (ANF.EType :@ p)
-rawExpr (IR.ELam (IR.Parameter mult name ty :@ p1) ex :@ p) = do
+rawExpr (IR.ELam (IR.Parameter mult name ty :@ p1) _ ex :@ p) = do
   ty <- rawExpr ty
   ex <- rawExpr ex
   pure $ ANF.ELam [ANF.Parameter mult name ty :@ p1] ex :@ p
-rawExpr (IR.EPi (IR.Parameter mult name ty :@ p1) ty2 :@ p) = do
+rawExpr (IR.EPi (IR.Parameter mult name ty :@ p1) _ ty2 :@ p) = do
   ty <- rawExpr ty
   ty2 <- rawExpr ty2
   pure $ ANF.EPi [ANF.Parameter mult name ty :@ p1] ty2 :@ p
-rawExpr (IR.EAdditiveProduct (IR.Parameter mult name ty :@ p1) ty2 :@ p) = do
+rawExpr (IR.EAdditiveProduct (IR.Parameter mult name ty :@ p1) _ ty2 :@ p) = do
   ty <- rawExpr ty
   ty2 <- rawExpr ty2
   pure $ ANF.EAdditiveProduct [ANF.Parameter mult name ty :@ p1] ty2 :@ p
-rawExpr (IR.EMultiplicativeProduct (IR.Parameter mult name ty :@ p1) ty2 :@ p) = do
+rawExpr (IR.EMultiplicativeProduct (IR.Parameter mult name ty :@ p1) _ ty2 :@ p) = do
   ty <- rawExpr ty
   ty2 <- rawExpr ty2
   pure $ ANF.EPi [ANF.Parameter mult name ty :@ p1] ty2 :@ p
@@ -191,7 +191,7 @@ rawExpr (IR.ELet def ex :@ p) = do
   def <- rawDefinition def
   ex <- rawExpr ex
   pure $ ANF.ELet def ex :@ p
-rawExpr (IR.EApplication f x :@ p) = do
+rawExpr (IR.EApplication _ f _ x :@ p) = do
   f <- rawExpr f
   x <- rawExpr x
   pure $ ANF.EApplication f [x] :@ p
@@ -200,16 +200,16 @@ rawExpr (IR.EInteger i ty :@ p) = pure (ANF.EInteger i ty :@ p)
 rawExpr (IR.ECharacter c :@ p) = pure (ANF.ECharacter c :@ p)
 rawExpr (IR.EBuiltin bt :@ p) = pure (ANF.EBuiltin bt :@ p)
 rawExpr (IR.EBoolean b :@ p) = pure (ANF.EBoolean b :@ p)
-rawExpr (IR.EIfThenElse c t e :@ p) = do
+rawExpr (IR.EIfThenElse c t _ e _ :@ p) = do
   c <- rawExpr c
   t <- rawExpr t
   e <- rawExpr e
   pure $ ANF.EIfThenElse c t e :@ p
-rawExpr (IR.EAdditivePair x y :@ p) = do
+rawExpr (IR.EAdditivePair x _ y _ :@ p) = do
   x <- rawExpr x
   y <- rawExpr y
   pure $ ANF.EAdditivePair [x, y] :@ p
-rawExpr (IR.EMultiplicativePair x y :@ p) = do
+rawExpr (IR.EMultiplicativePair x _ y _ :@ p) = do
   x <- rawExpr x
   y <- rawExpr y
   pure $ ANF.EMultiplicativePair [x, y] :@ p
@@ -217,13 +217,13 @@ rawExpr (IR.EMultiplicativeUnit :@ p) = pure (ANF.EMultiplicativePair [] :@ p)
 rawExpr (IR.EAdditiveUnit :@ p) = pure (ANF.EAdditivePair [] :@ p)
 rawExpr (IR.EOne :@ p) = pure (ANF.EOne :@ p)
 rawExpr (IR.ETop :@ p) = pure (ANF.ETop :@ p)
-rawExpr (IR.EFst x :@ p) = do
+rawExpr (IR.EFst _ x :@ p) = do
   x <- rawExpr x
   pure (ANF.EFst x :@ p)
-rawExpr (IR.ESnd x :@ p) = do
+rawExpr (IR.ESnd _ x :@ p) = do
   x <- rawExpr x
   pure (ANF.ESnd x :@ p)
-rawExpr (IR.EMultiplicativePairElim z mult x y e f :@ p) = do
+rawExpr (IR.EMultiplicativePairElim z mult x _ y _ e f :@ p) = do
   e <- rawExpr e
   f <- rawExpr f
   pure $ ANF.EMultiplicativePairElim z mult [x, y] e f :@ p
@@ -242,7 +242,7 @@ rawExpr (IR.ERecordLiteral fields :@ p) = do
     val <- rawExpr val
     pure (mult, x, ty, val)
   pure $ ANF.ERecordLiteral fields :@ p
-rawExpr (IR.ERecordAccess r x :@ p) = do
+rawExpr (IR.ERecordAccess r _ x :@ p) = do
   r <- rawExpr r
   pure $ ANF.ERecordAccess r x :@ p
 rawExpr _ = undefined

@@ -81,32 +81,38 @@ translateParameter modName (TAST.Parameter _ mult name ty :@ p) = do
 
 translateExpression :: MonadTranslator m => [Located Text] -> Located TAST.Expression -> m (Located IR.Expression)
 translateExpression _ (TAST.EType :@ p) = pure $ IR.EType :@ p
-translateExpression modName (TAST.ELam param _ ex :@ p) = locally id do
+translateExpression modName (TAST.ELam param ty ex :@ p) = locally id do
   param <- translateParameter modName param
+  ty <- locally id (translateExpression modName ty)
   ex <- translateExpression modName ex
-  pure $ IR.ELam param ex :@ p
-translateExpression modName (TAST.EPi param _ ex :@ p) = locally id do
+  pure $ IR.ELam param ty ex :@ p
+translateExpression modName (TAST.EPi param ty ex :@ p) = locally id do
   param <- translateParameter modName param
+  ty <- locally id (translateExpression modName ty)
   ex <- translateExpression modName ex
-  pure $ IR.EPi param ex :@ p
-translateExpression modName (TAST.EAdditiveProduct param _ ex :@ p) = locally id do
+  pure $ IR.EPi param ty ex :@ p
+translateExpression modName (TAST.EAdditiveProduct param ty ex :@ p) = locally id do
   param <- translateParameter modName param
+  ty <- locally id (translateExpression modName ty)
   ex <- translateExpression modName ex
-  pure $ IR.EAdditiveProduct param ex :@ p
-translateExpression modName (TAST.EMultiplicativeProduct param _ ex :@ p) = locally id do
+  pure $ IR.EAdditiveProduct param ty ex :@ p
+translateExpression modName (TAST.EMultiplicativeProduct param ty ex :@ p) = locally id do
   param <- translateParameter modName param
+  ty <- locally id (translateExpression modName ty)
   ex <- translateExpression modName ex
-  pure $ IR.EMultiplicativeProduct param ex :@ p
+  pure $ IR.EMultiplicativeProduct param ty ex :@ p
 translateExpression modName (TAST.ELet def ex :@ p) = do
   def <- translateDefinition modName False False def
   ex <- locally id (translateExpression modName ex)
   pure case def of
     Nothing -> ex
     Just def -> IR.ELet def ex :@ p
-translateExpression modName (TAST.EApplication f _ _ x :@ p) = do
+translateExpression modName (TAST.EApplication ty1 f _ ty2 x :@ p) = do
+  ty1 <- locally id (translateExpression modName ty1)
   f <- locally id (translateExpression modName f)
+  ty2 <- locally id (translateExpression modName ty2)
   x <- locally id (translateExpression modName x)
-  pure $ IR.EApplication f x :@ p
+  pure $ IR.EApplication ty1 f ty2 x :@ p
 translateExpression _ (TAST.EIdentifier name _ _ :@ p) = do
   -- traceShow name $ pure ()
   mod <- gets (Map.! name)
@@ -117,37 +123,47 @@ translateExpression _ (TAST.EMeta _ :@ _) = undefined
 translateExpression _ (TAST.EInsertedMeta _ _ :@ _) = undefined
 translateExpression _ (TAST.EBuiltin ty :@ p) = pure $ IR.EBuiltin ty :@ p
 translateExpression _ (TAST.EBoolean b :@ p) = pure $ IR.EBoolean b :@ p
-translateExpression modName (TAST.EIfThenElse c _ t _ e :@ p) = do
+translateExpression modName (TAST.EIfThenElse c t tt e te :@ p) = do
   c <- locally id (translateExpression modName c)
   t <- locally id (translateExpression modName t)
+  tt <- locally id (translateExpression modName tt)
   e <- locally id (translateExpression modName e)
-  pure $ IR.EIfThenElse c t e :@ p
-translateExpression modName (TAST.EAdditivePair e1 _ e2 _ :@ p) = do
+  te <- locally id (translateExpression modName te)
+  pure $ IR.EIfThenElse c t tt e te :@ p
+translateExpression modName (TAST.EAdditivePair e1 t1 e2 t2 :@ p) = do
   e1 <- locally id (translateExpression modName e1)
+  t1 <- locally id (translateExpression modName t1)
   e2 <- locally id (translateExpression modName e2)
-  pure $ IR.EAdditivePair e1 e2 :@ p
-translateExpression modName (TAST.EMultiplicativePair e1 _ e2 _ :@ p) = do
+  t2 <- locally id (translateExpression modName t2)
+  pure $ IR.EAdditivePair e1 t1 e2 t2 :@ p
+translateExpression modName (TAST.EMultiplicativePair e1 t1 e2 t2 :@ p) = do
   e1 <- locally id (translateExpression modName e1)
+  t1 <- locally id (translateExpression modName t1)
   e2 <- locally id (translateExpression modName e2)
-  pure $ IR.EMultiplicativePair e1 e2 :@ p
+  t2 <- locally id (translateExpression modName t2)
+  pure $ IR.EMultiplicativePair e1 t1 e2 t2 :@ p
 translateExpression _ (TAST.EMultiplicativeUnit :@ p) = pure $ IR.EMultiplicativeUnit :@ p
 translateExpression _ (TAST.EAdditiveUnit :@ p) = pure $ IR.EAdditiveUnit :@ p
 translateExpression _ (TAST.EOne :@ p) = pure $ IR.EOne :@ p
 translateExpression _ (TAST.ETop :@ p) = pure $ IR.ETop :@ p
-translateExpression modName (TAST.EFst ex :@ p) = do
+translateExpression modName (TAST.EFst ty ex :@ p) = do
   ex <- locally id (translateExpression modName ex)
-  pure $ IR.EFst ex :@ p
-translateExpression modName (TAST.ESnd ex :@ p) = do
+  ty <- locally id (translateExpression modName ty)
+  pure $ IR.EFst ty ex :@ p
+translateExpression modName (TAST.ESnd ty ex :@ p) = do
   ex <- locally id (translateExpression modName ex)
-  pure $ IR.ESnd ex :@ p
-translateExpression modName (TAST.EMultiplicativePairElim z m x _ y _ e1 e2 :@ p) = locally id do
+  ty <- locally id (translateExpression modName ty)
+  pure $ IR.ESnd ty ex :@ p
+translateExpression modName (TAST.EMultiplicativePairElim z m x tx y ty e1 e2 :@ p) = locally id do
+  tx <- locally id (translateExpression modName tx)
+  ty <- locally id (translateExpression modName ty)
   e1 <- locally id (translateExpression modName e1)
   modify (Map.insert x modName . Map.insert y modName)
   case z of
     Just z -> modify (Map.insert z modName)
     Nothing -> pure ()
   e2 <- translateExpression modName e2
-  pure $ IR.EMultiplicativePairElim z m x y e1 e2 :@ p
+  pure $ IR.EMultiplicativePairElim z m x tx y ty e1 e2 :@ p
 translateExpression modName (TAST.EMultiplicativeUnitElim z m e1 e2 :@ p) = locally id do
   e1 <- locally id (translateExpression modName e1)
   case z of
@@ -165,6 +181,7 @@ translateExpression modName (TAST.ERecordLiteral fields :@ p) = do
     ex <- locally id (translateExpression modName ex)
     pure (mult, name, ty, ex)
   pure $ IR.ERecordLiteral fields :@ p
-translateExpression modName (TAST.ERecordAccess r _ x :@ p) = do
+translateExpression modName (TAST.ERecordAccess r ty x :@ p) = do
   r <- locally id (translateExpression modName r)
-  pure $ IR.ERecordAccess r x :@ p
+  ty <- locally id (translateExpression modName ty)
+  pure $ IR.ERecordAccess r ty x :@ p

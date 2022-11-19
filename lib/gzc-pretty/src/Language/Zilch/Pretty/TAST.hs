@@ -142,10 +142,13 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun isImplicit ty arg :@ _) =
-    pretty fun
+  pretty (EApplication ty1 fun isImplicit ty2 arg :@ _) =
+    prettyTyIfNeeded fun ty1
       <> line
-      <> indent 2 ((if isImplicit then braces else parens) (pretty arg <> space <> colon <> space <> pretty ty))
+      <> indent 2 ((if isImplicit then braces else parens) (pretty arg <> space <> colon <> space <> pretty ty2))
+    where
+      prettyTyIfNeeded fun@(EIdentifier {} :@ _) _ = pretty fun
+      prettyTyIfNeeded fun ty = parens (pretty fun <> space <> colon <> space <> pretty ty)
   pretty (EPi param ty val :@ _) = prettyDependent param "→" val ty
   pretty (EMultiplicativeProduct param ty val :@ _) = prettyDependent param "⊗" val ty
   pretty (EAdditiveProduct param ty val :@ _) = prettyDependent param "&" val ty
@@ -208,14 +211,14 @@ instance Pretty (Located Expression) where
   pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
   pretty (EOne :@ _) = "𝟏"
   pretty (ETop :@ _) = "⊤"
-  pretty (EFst e :@ _) =
+  pretty (EFst ty e :@ _) =
     "FST"
       <> space
-      <> pretty e
-  pretty (ESnd e :@ _) =
+      <> parens (pretty e <> space <> colon <> space <> pretty ty)
+  pretty (ESnd ty e :@ _) =
     "SND"
       <> space
-      <> pretty e
+      <> parens (pretty e <> space <> colon <> space <> pretty ty)
   pretty (EMultiplicativePairElim z mult x tx y ty m n :@ _) =
     "let"
       <> space

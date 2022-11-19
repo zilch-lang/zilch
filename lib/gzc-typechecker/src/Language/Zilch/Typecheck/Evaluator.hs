@@ -6,7 +6,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Language.Zilch.Typecheck.Evaluator (eval, apply, apply', quote, applyVal, debruijnLevelToIndex, force, destroyClosure) where
+module Language.Zilch.Typecheck.Evaluator (eval, apply, apply', quote, applyVal, debruijnLevelToIndex, force, destroyClosure, metaType) where
 
 import Data.Functor ((<&>))
 import Data.List (foldl')
@@ -42,12 +42,12 @@ eval ctx (TAST.EIdentifier _ (TAST.Idx i) ty :@ _) = do
   case lookup (env ctx) i of
     VThunk (expr :@ p) :@ _ -> eval ctx (expr :@ p)
     val -> pure val
-eval ctx (TAST.EApplication e1 isImplicit ty e2 :@ _) = do
+eval ctx (TAST.EApplication _ e1 isImplicit ty2 e2 :@ _) = do
   v1 <- eval ctx e1
-  ty <- eval ctx ty
+  ty2 <- eval ctx ty2
   v2 <- eval ctx e2
 
-  applyVal ctx v1 ty v2 (not isImplicit)
+  applyVal ctx v1 ty2 v2 (not isImplicit)
 eval ctx (TAST.ELet (TAST.Let True _ _ _ val :@ _) u :@ _) = mdo
   let ctx' = ctx {env = Env.extend (env ctx) val'}
   val' <- eval ctx' val
@@ -113,19 +113,23 @@ eval _ (TAST.EMultiplicativeUnit :@ p) = pure $ VMultiplicativeUnit :@ p
 eval _ (TAST.EAdditiveUnit :@ p) = pure $ VAdditiveUnit :@ p
 eval _ (TAST.EOne :@ p) = pure $ VOne :@ p
 eval _ (TAST.ETop :@ p) = pure $ VTop :@ p
-eval ctx (TAST.EFst e :@ _) = do
+eval ctx (TAST.EFst ty e :@ p) = do
+  ty' <- eval ctx ty
   eval ctx e >>= \case
     VAdditivePair a _ _ _ :@ _ -> pure a
     VMultiplicativePair a _ _ _ :@ _ -> pure a
-    e -> pure $ VFst e :@ getPos e
-eval ctx (TAST.ESnd e :@ _) = do
+    e -> pure $ VFst ty' e :@ p
+eval ctx (TAST.ESnd ty e :@ p) = do
+  ty' <- eval ctx ty
   eval ctx e >>= \case
     VAdditivePair _ _ b _ :@ _ -> pure b
     VMultiplicativePair _ _ b _ :@ _ -> pure b
-    e -> pure $ VSnd e :@ getPos e
-eval ctx (TAST.EMultiplicativePairElim _ _ _ _ _ _ m n :@ _) = do
+    e -> pure $ VSnd ty' e :@ p
+eval ctx (TAST.EMultiplicativePairElim _ mult _ tx _ ty m n :@ _) = do
   m' <- eval ctx m
-  let env' = Env.extend (Env.extend (env ctx) (VFst m' :@ getPos m')) (VSnd m' :@ getPos m')
+  tx' <- eval ctx tx
+  let typ = VMultiplicativeProduct (unLoc mult) "_" tx' (VType :@ getPos ty) (Clos (env ctx) ty) :@ getPos m
+  let env' = Env.extend (Env.extend (env ctx) (VFst typ m' :@ getPos m')) (VSnd typ m' :@ getPos m')
   eval (ctx {env = env'}) n
 eval ctx (TAST.EMultiplicativeUnitElim _ _ m n :@ _) = do
   eval ctx m -- << this will not be evaluated
@@ -191,6 +195,12 @@ metaValue m pos =
     (Solved v _ _, _, _, _) -> pure $ v :@ pos
     (Unsolved _ _, _, _, _) -> pure $ VMeta m :@ pos
 
+metaType :: forall m. MonadElab m => Int -> m (Located Value)
+metaType m =
+  lookupMeta m >>= \case
+    (Solved _ _ ty, _, _, _) -> pure ty
+    (Unsolved _ ty, _, _, _) -> pure ty
+
 force :: forall m. MonadElab m => Context -> Located Value -> m (Located Value)
 force ctx t@(VFlexible m sp :@ p) = do
   lookupMeta m >>= \case
@@ -208,10 +218,12 @@ quote ctx level val = do
   v <- force ctx val
   case v of
     -- (VIdentifier name n :@ p) -> pure $ TAST.EIdentifier name (debruijnLevelToIndex level n) :@ p
-    VFlexible m sp :@ p -> quoteSpine ctx level (TAST.EMeta m :@ p) sp p
+    VFlexible m sp :@ p -> do
+      ty <- quote ctx (lvl ctx) =<< metaType m
+      fst <$> quoteSpine ctx level (TAST.EMeta m :@ p) ty sp p
     VRigid name m ty sp :@ p -> do
       ty' <- quote ctx level ty
-      quoteSpine ctx level (TAST.EIdentifier name (debruijnLevelToIndex level m) ty' :@ p) sp p
+      fst <$> quoteSpine ctx level (TAST.EIdentifier name (debruijnLevelToIndex level m) ty' :@ p) ty' sp p
     (VCharacter c :@ p) -> pure $ TAST.ECharacter (Text.singleton c :@ p) :@ p
     (VInteger n ty :@ p) -> do
       tmp <- quote ctx level (ty :@ p)
@@ -276,12 +288,14 @@ quote ctx level val = do
     VTop :@ p -> pure $ TAST.ETop :@ p
     VAdditiveUnit :@ p -> pure $ TAST.EAdditiveUnit :@ p
     VMultiplicativeUnit :@ p -> pure $ TAST.EMultiplicativeUnit :@ p
-    VFst e :@ p -> do
+    VFst ty e :@ p -> do
       e' <- quote ctx level e
-      pure $ TAST.EFst e' :@ p
-    VSnd e :@ p -> do
+      ty' <- quote ctx (lvl ctx) ty
+      pure $ TAST.EFst ty' e' :@ p
+    VSnd ty e :@ p -> do
       e' <- quote ctx level e
-      pure $ TAST.ESnd e' :@ p
+      ty' <- quote ctx (lvl ctx) ty
+      pure $ TAST.ESnd ty' e' :@ p
     VComposite fields :@ p -> do
       fields' <- quoteFields (level, mempty, mempty) fields -- traverse (\(m, ty) -> (m,) <$> quote ctx level ty) fields
       pure $ TAST.EComposite (reverse $ fields' <&> \(m, k, _, t) -> (m, k, t)) :@ p
@@ -304,13 +318,15 @@ quote ctx level val = do
     -- VThunk expr :@ _ -> pure expr
     v -> error $ "not yet handled " <> show v
 
-quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression)
-quoteSpine _ _ term [] _ = pure term
-quoteSpine ctx lvl term ((u, t, i) : sp) pos = do
+quoteSpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Located TAST.Expression -> Located TAST.Expression -> Spine -> Position -> m (Located TAST.Expression, Located TAST.Expression)
+quoteSpine _ _ term ty [] _ = pure (term, ty)
+quoteSpine ctx lvl term ty ((u, t, i) : sp) pos = do
   t1 <- quote ctx lvl u
-  t2 <- quoteSpine ctx lvl term sp pos
+  (t2, ty) <- quoteSpine ctx lvl term ty sp pos
   t3 <- quote ctx lvl t
-  pure $ TAST.EApplication t2 (not i) t3 t1 :@ pos
+
+  let TAST.EPi _ _ ty2 :@ _ = ty
+  pure (TAST.EApplication ty t2 (not i) t3 t1 :@ pos, ty2)
 
 ------------
 

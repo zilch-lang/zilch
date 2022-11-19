@@ -76,6 +76,7 @@ data Expression
       (Located Expression)
   | EApplication
       (Located Expression)
+      (Located Expression)
       Bool
       -- ^ Is it implicit
       (Located Expression)
@@ -120,8 +121,10 @@ data Expression
   | -- | @FST e@
     EFst
       (Located Expression)
+      (Located Expression)
   | -- | @SND e@
     ESnd
+      (Located Expression)
       (Located Expression)
   | -- | @let p (x, y) as z := M; N@
     EMultiplicativePairElim
@@ -203,6 +206,7 @@ data Value
       (Located Value)
       (Located Value)
       (Located Value)
+      (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
       Multiplicity
@@ -270,7 +274,9 @@ data Value
   | VTop
   | VFst
       (Located Value)
+      (Located Value)
   | VSnd
+      (Located Value)
       (Located Value)
   | -- builtin types
     VBuiltinU64

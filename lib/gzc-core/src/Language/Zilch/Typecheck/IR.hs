@@ -57,22 +57,28 @@ data Expression
     ELam
       (Located Parameter)
       (Located Expression)
+      (Located Expression)
   | -- | The function type @(_ x : A) → B@ or @{_ x : A} → B@
     EPi
       (Located Parameter)
+      (Located Expression)
       (Located Expression)
   | -- | The dependent additive product type @(_ x : A) & B@
     EAdditiveProduct
       (Located Parameter)
       (Located Expression)
+      (Located Expression)
   | -- | The dependent multiplicative product type @(_ x : A) ⊗ B@
     EMultiplicativeProduct
       (Located Parameter)
+      (Located Expression)
       (Located Expression)
   | ELet
       (Located Definition)
       (Located Expression)
   | EApplication
+      (Located Expression)
+      (Located Expression)
       (Located Expression)
       (Located Expression)
   | -- | Represents the fully qualified identifier from within a module
@@ -90,10 +96,16 @@ data Expression
       (Located Expression)
       (Located Expression)
       (Located Expression)
+      (Located Expression)
+      (Located Expression)
   | EAdditivePair
       (Located Expression)
       (Located Expression)
+      (Located Expression)
+      (Located Expression)
   | EMultiplicativePair
+      (Located Expression)
+      (Located Expression)
       (Located Expression)
       (Located Expression)
   | EMultiplicativeUnit
@@ -103,8 +115,10 @@ data Expression
   | -- | @FST e@
     EFst
       (Located Expression)
+      (Located Expression)
   | -- | @SND e@
     ESnd
+      (Located Expression)
       (Located Expression)
   | -- | @let p (x, y) as z := M; N@
     EMultiplicativePairElim
@@ -114,8 +128,10 @@ data Expression
       -- ^ @p@
       (Located Text)
       -- ^ @x@
+      (Located Expression)
       (Located Text)
       -- ^ @y@
+      (Located Expression)
       (Located Expression)
       -- ^ @M@
       (Located Expression)
@@ -140,6 +156,7 @@ data Expression
     ERecordLiteral
       [(Located Multiplicity, Located Text, Located Expression, Located Expression)]
   | ERecordAccess
+      (Located Expression)
       (Located Expression)
       (Located Text)
   deriving (Show, Eq, Ord)
