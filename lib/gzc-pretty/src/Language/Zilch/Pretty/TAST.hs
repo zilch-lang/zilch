@@ -119,11 +119,21 @@ instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
   pretty (EInteger val ty :@ _) = pretty (unLoc val) <> pretty ty
   pretty (ECharacter c :@ _) = enclose "'" "'" . pretty $ unLoc c
-  pretty (EIdentifier (name :@ _) idx :@ _) = pretty name -- <> "@" <> pretty (fromIntegral @_ @Integer idx)
-  pretty (ELam name ret :@ _) =
+  pretty (EIdentifier (name :@ _) idx ty :@ _) =
+    parens $
+      pretty name
+        <> space
+        <> colon
+        <> space
+        <> pretty ty
+  pretty (ELam name ty ret :@ _) =
     "λ"
       <> space
       <> pretty name
+      <> space
+      <> colon
+      <> space
+      <> pretty ty
       <> space
       <> "⇒"
       <> line
@@ -132,12 +142,13 @@ instance Pretty (Located Expression) where
     pretty def
       <> line
       <> pretty ret
-  pretty (EApplication fun isImplicit arg :@ _) =
+  pretty (EApplication fun isImplicit ty arg :@ _) =
     pretty fun
-      <> (if isImplicit then braces else parens) (pretty arg)
-  pretty (EPi param val :@ _) = prettyDependent param "→" val
-  pretty (EMultiplicativeProduct param val :@ _) = prettyDependent param "⊗" val
-  pretty (EAdditiveProduct param val :@ _) = prettyDependent param "&" val
+      <> line
+      <> indent 2 ((if isImplicit then braces else parens) (pretty arg <> space <> colon <> space <> pretty ty))
+  pretty (EPi param ty val :@ _) = prettyDependent param "→" val ty
+  pretty (EMultiplicativeProduct param ty val :@ _) = prettyDependent param "⊗" val ty
+  pretty (EAdditiveProduct param ty val :@ _) = prettyDependent param "&" val ty
   pretty (EInsertedMeta m path :@ _) =
     "?"
       <> pretty m
@@ -152,7 +163,7 @@ instance Pretty (Located Expression) where
     pretty ty
   pretty (EBoolean bool :@ _) =
     if bool then "true" else "false"
-  pretty (EIfThenElse cond t e :@ _) =
+  pretty (EIfThenElse cond t ty1 e ty2 :@ _) =
     align $
       "if"
         <> space
@@ -160,23 +171,39 @@ instance Pretty (Located Expression) where
         <> line
         <> "then"
         <> space
-        <> pretty t
+        <> parens (pretty t <> space <> colon <> space <> pretty ty1)
         <> line
         <> "else"
         <> space
-        <> pretty e
-  pretty (EMultiplicativePair e1 e2 :@ _) =
-    enclose "(" ")" $
+        <> parens (pretty e <> space <> colon <> space <> pretty ty2)
+  pretty (EMultiplicativePair e1 t1 e2 t2 :@ _) =
+    parens $
       pretty e1
+        <> space
+        <> colon
+        <> space
+        <> pretty t1
         <> comma
         <> space
         <> pretty e2
-  pretty (EAdditivePair e1 e2 :@ _) =
+        <> space
+        <> colon
+        <> space
+        <> pretty t2
+  pretty (EAdditivePair e1 t1 e2 t2 :@ _) =
     enclose "⟨" "⟩" $
       pretty e1
+        <> space
+        <> colon
+        <> space
+        <> pretty t1
         <> comma
         <> space
         <> pretty e2
+        <> space
+        <> colon
+        <> space
+        <> pretty t2
   pretty (EAdditiveUnit :@ _) = "⟨" <> "⟩"
   pretty (EMultiplicativeUnit :@ _) = "(" <> ")"
   pretty (EOne :@ _) = "𝟏"
@@ -189,12 +216,24 @@ instance Pretty (Located Expression) where
     "SND"
       <> space
       <> pretty e
-  pretty (EMultiplicativePairElim z mult x y m n :@ _) =
+  pretty (EMultiplicativePairElim z mult x tx y ty m n :@ _) =
     "let"
       <> space
       <> pretty mult
       <> space
-      <> parens (pretty (unLoc x) <> comma <> space <> pretty (unLoc y))
+      <> parens
+        ( pretty (unLoc x)
+            <> space
+            <> colon
+            <> space
+            <> pretty tx
+            <> comma
+            <> space
+            <> pretty (unLoc y)
+            <> space
+            <> colon
+            <> pretty ty
+        )
       <> maybe emptyDoc (\z -> space <> "as" <> space <> pretty (unLoc z)) z
       <> space
       <> "≔"
@@ -276,23 +315,24 @@ instance Pretty (Located Expression) where
           <> pretty t
           <> space
           <> indent 2 ("≔" <> space <> pretty e)
-  pretty (ERecordAccess r x :@ _) =
-    parensIfNeeded r
-      <> "∷"
-      <> pretty (unLoc x)
-    where
-      parensIfNeeded e@(EIdentifier _ _ :@ _) = pretty e
-      parensIfNeeded e@(ERecordLiteral _ :@ _) = pretty e
-      parensIfNeeded e@(ERecordAccess _ _ :@ _) = pretty e
-      parensIfNeeded e = parens (pretty e)
+  pretty (ERecordAccess r tr x :@ _) =
+    parens (pretty r <> space <> colon <> space <> pretty tr)
+      <> line
+      <> indent 2 ("∷" <> pretty (unLoc x))
 
-prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Doc ann
-prettyDependent param op val =
+prettyDependent :: Located Parameter -> Doc ann -> Located Expression -> Located Expression -> Doc ann
+prettyDependent param op val ty =
   pretty param
     <> space
     <> op
     <> space
-    <> pretty val
+    <> parens
+      ( pretty val
+          <> space
+          <> colon
+          <> space
+          <> pretty ty
+      )
 
 instance Pretty BuiltinType where
   pretty TyU64 = "u64"

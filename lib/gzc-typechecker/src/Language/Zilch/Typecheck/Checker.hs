@@ -239,16 +239,17 @@ insert' :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, 
 insert' ctx (qs, expr, ty, usage) = do
   ty <- force ctx ty
   case ty of
-    VPi mult _ imp a b :@ p | imp == implicit -> do
+    VPi mult _ imp a _ b :@ p | imp == implicit -> do
       m <- (:@ p) <$> freshMeta ctx mult a p AST.InsertedHole
       mv <- eval ctx m
+      a <- quote ctx (lvl ctx) a
       ty <- apply ctx b mv
-      insert' ctx (qs, TAST.EApplication expr True m :@ p, ty, usage)
+      insert' ctx (qs, TAST.EApplication expr True a m :@ p, ty, usage)
     va -> pure (qs, expr, va, usage)
 
 insert :: forall m. MonadElab m => Context -> (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity) -> m (Usage, Located TAST.Expression, Located Value, Located TAST.Multiplicity)
 insert ctx (qs, expr, ty, usage) = case (expr, ty) of
-  (t@(TAST.ELam (TAST.Parameter True _ _ _ :@ _) _ :@ _), va) -> pure (qs, t, va, usage)
+  (t@(TAST.ELam (TAST.Parameter True _ _ _ :@ _) _ _ :@ _), va) -> pure (qs, t, va, usage)
   (t, va) -> insert' ctx (qs, t, va, usage)
 
 -- | Check that the context and the usage information gathered are compatible.
@@ -335,7 +336,7 @@ check :: forall m. MonadElab m => ImportCache -> TAST.Relevance -> Context -> Lo
 check cache rel ctx expr ty = do
   ty <- force ctx ty
   case (expr, ty) of
-    (AST.ELam (AST.Parameter isImplicit m1 x ty :@ p1) expr :@ p3, VPi m2 _ imp ty2 ty3 :@ p2) | isImplicit == not imp -> do
+    (AST.ELam (AST.Parameter isImplicit m1 x ty :@ p1) expr :@ p3, VPi m2 _ imp ty2 _ ty3 :@ p2) | isImplicit == not imp -> do
       when (unLoc m1 /= m2) do
         throwError $ MultiplicityMismatch (m2 :@ p2) m1
       {-
@@ -344,7 +345,7 @@ check cache rel ctx expr ty = do
           Γ ⊢ (λ(x :ᵖ A) ⇒ e) ⇐ⁱ (x :ᵖ A) → B
       -}
       (qs1, ty) <- check cache TAST.Irrelevant ctx ty (VType :@ p1)
-      ty3' <- apply ctx ty3 (VVariable x (lvl ctx) :@ p2)
+      ty3' <- apply ctx ty3 (VVariable x (lvl ctx) ty2 :@ p2)
 
       let xMultiplicity = TAST.extend rel * unLoc m1
 
@@ -352,17 +353,19 @@ check cache rel ctx expr ty = do
         (qs, e) <- check cache rel ctx expr ty3'
         pure (qs, getPos e, e)
 
+      ty3' <- quote ctx (lvl ctx) ty3'
       ty' <- eval ctx ty
       unify ctx ty' ty2
-      pure (Usage.concat qs1 qs2, TAST.ELam (TAST.Parameter isImplicit m1 x ty :@ p1) u :@ p3)
-    (expr@(_ :@ p1), VPi m2 x imp ty2 ty3 :@ p2) | imp == implicit -> do
-      ty' <- apply ctx ty3 (VVariable ("x?" :@ p2) (lvl ctx) :@ p2)
+      pure (Usage.concat qs1 qs2, TAST.ELam (TAST.Parameter isImplicit m1 x ty :@ p1) ty3' u :@ p3)
+    (expr@(_ :@ p1), VPi m2 x imp ty2 ty4 ty3 :@ p2) | imp == implicit -> do
+      ty' <- apply ctx ty3 (VVariable ("x?" :@ p2) (lvl ctx) ty2 :@ p2)
       (qs, u) <- check cache TAST.Present (insertBinder m2 (x :@ p2) ty2 ctx) expr ty'
       -- TODO: is @ω@ the correct multiplicity to be infered for the parameter here?
 
       ty2 <- quote ctx (lvl ctx) ty2
+      ty4 <- quote ctx (lvl ctx) ty4
 
-      pure (qs, TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) u :@ p1)
+      pure (qs, TAST.ELam (TAST.Parameter True (TAST.Unrestricted :@ p1) (x :@ p1) ty2 :@ p1) ty4 u :@ p1)
     (AST.ELocal (AST.Let False m1 x ty ex :@ p1) expr :@ p2, ty2) -> do
       {-
          0Γ ⊢ A ⇐⁰ type ℓ            Γ, x :ⁱᵖ A ⊢ f ⇐ᵖ B            0Γ ⊢ e ⇐⁰ A          ip = 0
@@ -459,7 +462,7 @@ check cache rel ctx expr ty = do
       (_, ty2) <- withLocalVar x TAST.O ty' ctx \ctx -> do
         (qs, e) <- check cache TAST.Irrelevant ctx ty2 (VType :@ p2)
         pure (qs, getPos e, e)
-      pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
+      pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 x ty :@ p1) (TAST.EType :@ p2) ty2 :@ p2)
     (AST.EMultiplicativeProduct (AST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
       when (rel /= TAST.Irrelevant) do
         throwError $ MultiplicityMismatch (TAST.extend rel :@ p3) (TAST.O :@ p3)
@@ -473,7 +476,7 @@ check cache rel ctx expr ty = do
       (_, ty2) <- withLocalVar x TAST.O ty' ctx \ctx -> do
         (qs, e) <- check cache TAST.Irrelevant ctx ty2 (VType :@ p2)
         pure (qs, getPos e, e)
-      pure (mempty, TAST.EMultiplicativeProduct (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
+      pure (mempty, TAST.EMultiplicativeProduct (TAST.Parameter isImplicit m1 x ty :@ p1) (TAST.EType :@ p2) ty2 :@ p2)
     (AST.EAdditiveProduct (AST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2, VType :@ p3) -> do
       when (rel /= TAST.Irrelevant) do
         throwError $ MultiplicityMismatch (TAST.extend rel :@ p3) (TAST.O :@ p3)
@@ -487,8 +490,8 @@ check cache rel ctx expr ty = do
       (_, ty2) <- withLocalVar x TAST.O ty' ctx \ctx -> do
         (qs, e) <- check cache TAST.Irrelevant ctx ty2 (VType :@ p2)
         pure (qs, getPos e, e)
-      pure (mempty, TAST.EAdditiveProduct (TAST.Parameter isImplicit m1 x ty :@ p1) ty2 :@ p2)
-    (AST.EMultiplicativePair e1 e2 :@ p, VMultiplicativeProduct m1 x ty ty2 :@ p1) -> do
+      pure (mempty, TAST.EAdditiveProduct (TAST.Parameter isImplicit m1 x ty :@ p1) (TAST.EType :@ p2) ty2 :@ p2)
+    (AST.EMultiplicativePair e1 e2 :@ p, VMultiplicativeProduct m1 x ty _ ty2 :@ p1) -> do
       {-
                0Γ ⊢ M ⇐⁰ A          Γ ⊢ N ⇐ᵖ B            ip = 0
               ─────────────────────────────────────────────────── [⇐ ⊗-I₀]
@@ -503,19 +506,25 @@ check cache rel ctx expr ty = do
           -- apply [⇐ ⊗-I₀]
           (_, e1) <- check cache TAST.Irrelevant ctx e1 ty
 
-          ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) :@ p1)
+          ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) ty :@ p1)
           (qs2, e2) <- check cache rel ctx e2 ty2'
 
-          pure (qs2, TAST.EMultiplicativePair e1 e2 :@ p)
+          ty' <- quote ctx (lvl ctx) ty
+          ty2' <- quote ctx (lvl ctx) ty2'
+
+          pure (qs2, TAST.EMultiplicativePair e1 ty' e2 ty2' :@ p)
         xMult -> do
           -- apply [⇐ ⊗-I₁]
           (qs1, e1) <- check cache TAST.Present ctx e1 ty
 
-          ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) :@ p1)
+          ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) ty :@ p1)
           (qs2, e2) <- check cache rel ctx e2 ty2'
 
-          pure (Usage.scale xMult qs1 `Usage.concat` qs2, TAST.EMultiplicativePair e1 e2 :@ p)
-    (AST.EAdditivePair e1 e2 :@ p, VAdditiveProduct x ty ty2 :@ p1) -> do
+          ty' <- quote ctx (lvl ctx) ty
+          ty2' <- quote ctx (lvl ctx) ty2'
+
+          pure (Usage.scale xMult qs1 `Usage.concat` qs2, TAST.EMultiplicativePair e1 ty' e2 ty2' :@ p)
+    (AST.EAdditivePair e1 e2 :@ p, VAdditiveProduct x ty _ ty2 :@ p1) -> do
       {-
          Γ ⊢ M ⇐ᵖ A           Γ ⊢ N ⇐ᵖ B
         ───────────────────────────────── [⇐ &-I]
@@ -523,10 +532,13 @@ check cache rel ctx expr ty = do
       -}
       (qs1, e1) <- check cache rel ctx e1 ty
 
-      ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) :@ p1)
+      ty2' <- apply ctx ty2 (VVariable (x :@ p1) (lvl ctx) ty :@ p1)
       (qs2, e2) <- check cache rel ctx e2 ty2'
 
-      pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p)
+      ty' <- quote ctx (lvl ctx) ty
+      ty2' <- quote ctx (lvl ctx) ty2'
+
+      pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 ty' e2 ty2' :@ p)
     (AST.EOne :@ p, VType :@ _) -> do
       {-
          ─────────────── [⇐ 𝟏-F]
@@ -560,14 +572,14 @@ check cache rel ctx expr ty = do
       -}
       (qs1, m, ty, _) <- synthetize cache rel ctx m
       case ty of
-        VMultiplicativeProduct i _ s t :@ _ -> do
+        VMultiplicativeProduct i _ s _ t :@ _ -> do
           xVal <- eval ctx (TAST.EFst m :@ getPos m)
           yVal <- eval ctx (TAST.ESnd m :@ getPos m)
 
           let ipMult = pMult * i
               pMult = TAST.extend rel * unLoc mult
 
-          (qs2, n) <- defineLocal x ipMult xVal s ctx \ctx -> do
+          (qs2, (n, t')) <- defineLocal x ipMult xVal s ctx \ctx -> do
             t <- apply ctx t xVal
             (qs, n) <- defineLocal y pMult yVal t ctx \ctx -> do
               (qs, n) <- case z of
@@ -576,9 +588,13 @@ check cache rel ctx expr ty = do
                   (qs, n) <- check cache rel ctx n u
                   pure (qs, getPos n, n)
               pure (qs, getPos n, n)
-            pure (qs, getPos n, n)
 
-          pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x y m n :@ p)
+            t' <- quote ctx (lvl ctx) t
+            pure (qs, getPos n, (n, t'))
+
+          s' <- quote ctx (lvl ctx) s
+
+          pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x s' y t' m n :@ p)
         ty -> do
           ty@(_ :@ p) <- quote ctx (lvl ctx) ty
           throwError $ ExpectedMultiplicativeProduct ty p
@@ -615,26 +631,33 @@ check cache rel ctx expr ty = do
       -}
       (qs, r, t, _) <- synthetize cache rel ctx r
       case t of
-        VComposite fields :@ _ -> case lookup (lvl ctx) [] x fields of
-          (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
-          (subst, Just (m, _, ty1)) -> do
-            -- TODO: substitute in 'ty1'
-            ty1 <- apply' ctx ty1 subst
-            unify ctx ty ty1
-            pure (qs, TAST.ERecordAccess r x :@ p)
+        VComposite fields :@ _ ->
+          lookup ctx x [] fields >>= \case
+            (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
+            (subst, Just (m, _, ty1)) -> do
+              ty1 <- apply' ctx ty1 subst
+              unify ctx ty ty1
+
+              ty' <- quote ctx (lvl ctx) ty
+              pure (qs, TAST.ERecordAccess r ty' x :@ p)
         VModule fields :@ _ -> case Map.lookup x fields of
           Nothing -> throwError $ FieldNotFound x (getPos r)
           Just (m, ty1) -> do
             unify ctx ty ty1
-            pure (qs, TAST.ERecordAccess r x :@ p)
+
+            ty' <- quote ctx (lvl ctx) ty
+            pure (qs, TAST.ERecordAccess r ty' x :@ p)
         _ -> do
           t <- quote ctx (lvl ctx) t
           throwError $ ExpectedRecordOrModule t (getPos r)
       where
-        lookup _ env _ [] = (env, Nothing)
-        lookup lvl env x ((m, y, ty) : fs)
-          | x == y = (env, Just (m, x, ty))
-          | otherwise = lookup (lvl + 1) ((VVariable y lvl :@ getPos y) : env) x fs
+        lookup _ _ subst [] = pure (subst, Nothing)
+        lookup ctx x subst ((m, y, ty) : fs)
+          | x == y = pure (subst, Just (m, y, ty))
+          | otherwise = do
+              ty' <- apply' ctx ty subst
+              let var = VVariable x (lvl ctx) ty' :@ getPos x
+              lookup (bind (unLoc m) x ty' ctx) x (var : subst) fs
     (AST.EComposite fields :@ p, VType :@ _) -> do
       when (rel /= TAST.Irrelevant) do
         throwError $ MultiplicityMismatch (TAST.extend rel :@ p) (TAST.O :@ p)
@@ -738,7 +761,7 @@ synthetize _ rel _ (AST.ECharacter c :@ p) =
     ────────────────────────── [⇒ char-I]
            Γ ⊢ c ⇒ᵖ char
   -}
-  pure (mempty, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 :@ p, TAST.extend rel :@ p)
+  pure (mempty, TAST.ECharacter c :@ p, VVariable ("char" :@ p) 0 (VType :@ p) :@ p, TAST.extend rel :@ p)
 synthetize _ rel _ (AST.EBoolean bool :@ p) =
   {-
      b is a boolean literal
@@ -778,7 +801,7 @@ synthetize cache rel ctx (AST.EApplication e1 isImp e2 :@ p) = do
 
   t1 <- force ctx t1
   (m2, a, b) <- case t1 of
-    VPi u _ i a b :@ p2
+    VPi u _ i a _ b :@ p2
       | i == icit -> pure (u :@ p2, a, b)
       | otherwise -> throwError $ ImplicitMismatch icit i p2
     t1@(_ :@ p2) -> do
@@ -787,23 +810,25 @@ synthetize cache rel ctx (AST.EApplication e1 isImp e2 :@ p) = do
       a <- eval ctx . (:@ p) =<< freshMeta ctx usage (VType :@ p) p AST.InsertedHole
       meta <- freshMeta (bind usage ("x?" :@ p) a ctx) usage (VType :@ p) p AST.InsertedHole
       let b = Clos (env ctx) $ meta :@ p
-      unify ctx t1 (VPi usage "x?" explicit a b :@ p)
+      unify ctx t1 (VPi usage "x?" explicit a (VType :@ getPos a) b :@ p)
       pure (usage :@ p2, a, b)
 
+  a' <- quote ctx (lvl ctx) a
   case unLoc m1 * unLoc m2 of
     TAST.O -> do
       (qs2, e2) <- check cache TAST.Irrelevant ctx e2 a
 
       e2' <- eval ctx e2
       b <- apply ctx b e2'
-      pure (qs1 `Usage.merge` qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
+
+      pure (qs1 `Usage.merge` qs2, TAST.EApplication e1 (not icit) a' e2 :@ p, b, m2)
     xMultiplicity -> do
       (qs2, e2) <- check cache TAST.Present ctx e2 a
 
       e2' <- eval ctx e2
       b <- apply ctx b e2'
 
-      pure (qs1 `Usage.concat` Usage.scale xMultiplicity qs2, TAST.EApplication e1 (not icit) e2 :@ p, b, m2)
+      pure (qs1 `Usage.concat` Usage.scale xMultiplicity qs2, TAST.EApplication e1 (not icit) a' e2 :@ p, b, m2)
 synthetize _ rel ctx (AST.EIdentifier x :@ p) = do
   {-
     ──────────────────── [⇒ var-E]
@@ -820,7 +845,9 @@ synthetize _ rel ctx (AST.EIdentifier x :@ p) = do
   where
     go _ [] = checkBuiltin
     go ix ((usage, x', origin, a) : types)
-      | x == x' && origin == Source = pure (TAST.EIdentifier x' ix :@ p, a, usage)
+      | x == x' && origin == Source = do
+          a' <- quote ctx (lvl ctx) a
+          pure (TAST.EIdentifier x' ix a' :@ p, a, usage)
       | otherwise = go (ix + 1) types
 
     checkBuiltin = case unLoc x of
@@ -871,7 +898,7 @@ synthetize cache rel ctx (AST.EPi (AST.Parameter isImplicit m1 name ty :@ p2) ex
   (_, b) <- withLocalVar name TAST.O ty' ctx \ctx -> do
     (qs, e) <- check cache TAST.Irrelevant ctx expr (VType :@ p)
     pure (qs, getPos e, e)
-  pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 name ty :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
+  pure (mempty, TAST.EPi (TAST.Parameter isImplicit m1 name ty :@ p2) b (TAST.EType :@ getPos b) :@ p, VType :@ p, TAST.O :@ p)
 synthetize cache rel ctx (AST.EMultiplicativeProduct (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ p) = do
   when (rel /= TAST.Irrelevant) do
     throwError $ ErasedInRelevantContext p
@@ -885,7 +912,7 @@ synthetize cache rel ctx (AST.EMultiplicativeProduct (AST.Parameter isImplicit m
   (_, b) <- withLocalVar name TAST.O ty' ctx \ctx -> do
     (qs, e) <- check cache TAST.Irrelevant ctx expr (VType :@ p)
     pure (qs, getPos e, e)
-  pure (mempty, TAST.EMultiplicativeProduct (TAST.Parameter isImplicit m1 name ty :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
+  pure (mempty, TAST.EMultiplicativeProduct (TAST.Parameter isImplicit m1 name ty :@ p2) b (TAST.EType :@ getPos b) :@ p, VType :@ p, TAST.O :@ p)
 synthetize cache rel ctx (AST.EAdditiveProduct (AST.Parameter isImplicit m1 name ty :@ p2) expr :@ p) = do
   when (rel /= TAST.Irrelevant) do
     throwError $ ErasedInRelevantContext p
@@ -899,7 +926,7 @@ synthetize cache rel ctx (AST.EAdditiveProduct (AST.Parameter isImplicit m1 name
   (_, b) <- withLocalVar name TAST.O ty' ctx \ctx -> do
     (qs, e) <- check cache TAST.Irrelevant ctx expr (VType :@ p)
     pure (qs, getPos e, e)
-  pure (mempty, TAST.EAdditiveProduct (TAST.Parameter isImplicit m1 name ty :@ p2) b :@ p, VType :@ p, TAST.O :@ p)
+  pure (mempty, TAST.EAdditiveProduct (TAST.Parameter isImplicit m1 name ty :@ p2) b (TAST.EType :@ getPos b) :@ p, VType :@ p, TAST.O :@ p)
 synthetize cache rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) ex :@ p) = do
   {-
      0Γ ⊢ A ⇐⁰ type ℓ       Γ, x :ⁱᵖ A ⊢ e ⇒ᵖ B
@@ -913,8 +940,9 @@ synthetize cache rel ctx (AST.ELam (AST.Parameter isImplicit m1 name ty :@ p2) e
     (u, ex, b, u2) <- synthetize cache rel ctx ex
     pure (u, getPos ex, (ex, b, u2))
 
+  b' <- quote ctx (lvl ctx) b
   clos <- closeVal ctx b
-  pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' clos :@ p, u2)
+  pure (Usage.scale ip qs1, TAST.ELam (TAST.Parameter isImplicit m1 name ty :@ p2) b' ex :@ p, VPi (unLoc m1) (unLoc name) (not isImplicit) ty' b clos :@ p, u2)
 synthetize _ rel ctx (AST.EHole loc :@ p1) = do
   meta1 <- freshMeta ctx (TAST.extend rel) (VType :@ p1) p1 loc
   a <- eval ctx (meta1 :@ p1)
@@ -949,7 +977,10 @@ synthetize cache rel ctx (AST.EIfThenElse c t e :@ p) = do
 
       let qs1' = qs1 `Usage.merge` qs2
 
-      pure (qs0 `Usage.concat` qs1', TAST.EIfThenElse c t e :@ p, VIfThenElse c' a b :@ p, u1)
+      a' <- quote ctx (lvl ctx) a
+      b' <- quote ctx (lvl ctx) b
+
+      pure (qs0 `Usage.concat` qs1', TAST.EIfThenElse c t a' e b' :@ p, VIfThenElse c' a (VType :@ getPos a) b (VType :@ getPos b) :@ p, m1)
     p' -> do
       -- apply [⇐ bool-E₁]
       unify ctx bool (VBuiltinBool :@ getPos c)
@@ -963,7 +994,10 @@ synthetize cache rel ctx (AST.EIfThenElse c t e :@ p) = do
 
       let qs1' = qs1 `Usage.merge` qs2
 
-      pure (qs0 `Usage.concat` Usage.scale (unLoc p') qs1', TAST.EIfThenElse c t e :@ p, a, p')
+      a' <- quote ctx (lvl ctx) a
+      b' <- quote ctx (lvl ctx) b
+
+      pure (qs0 `Usage.concat` Usage.scale (unLoc p') qs1', TAST.EIfThenElse c t a' e b' :@ p, a, p')
 synthetize cache rel ctx (AST.EAdditivePair e1 e2 :@ p) = do
   {-
      Γ ⊢ M ⇒ᵖ A           Γ ⊢ N ⇒ᵖ B
@@ -973,8 +1007,11 @@ synthetize cache rel ctx (AST.EAdditivePair e1 e2 :@ p) = do
   (qs1, e1, a, _) <- synthetize cache rel ctx e1
   (qs2, e2, b, _) <- synthetize cache rel ctx e2
 
+  a' <- quote ctx (lvl ctx) a
+  b' <- quote ctx (lvl ctx) b
+
   b <- closeVal ctx b
-  pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 e2 :@ p, VAdditiveProduct "_" a b :@ p, TAST.extend rel :@ p)
+  pure (qs1 `Usage.merge` qs2, TAST.EAdditivePair e1 a' e2 b' :@ p, VAdditiveProduct "_" a (VType :@ getPos a) b :@ p, TAST.extend rel :@ p)
 synthetize cache rel ctx (AST.EAdditiveTupleAccess e n :@ _) = do
   (_, _, ty, _) <- synthetize cache rel ctx e
   ty' <- quote ctx (lvl ctx) ty
@@ -982,12 +1019,12 @@ synthetize cache rel ctx (AST.EAdditiveTupleAccess e n :@ _) = do
   let expr = foldr mkApp e fns
   synthetize cache rel ctx expr
   where
-    mkFstSnd (TAST.EAdditiveProduct _ _ :@ p) 1 = pure [(AST.EFst, p)]
+    mkFstSnd (TAST.EAdditiveProduct _ _ _ :@ p) 1 = pure [(AST.EFst, p)]
     mkFstSnd _ 1 = pure []
-    mkFstSnd (TAST.EAdditiveProduct _ e@(TAST.EAdditiveProduct _ _ :@ _) :@ p) n =
+    mkFstSnd (TAST.EAdditiveProduct _ _ e@(TAST.EAdditiveProduct _ _ _ :@ _) :@ p) n =
       ((AST.ESnd, p) :) <$> mkFstSnd e (n - 1)
-    mkFstSnd (TAST.EAdditiveProduct _ _ :@ p) 2 = pure [(AST.ESnd, p)]
-    mkFstSnd (TAST.EAdditiveProduct _ _ :@ _) _ = throwError $ CannotAccessNthElementOfAdditiveTuple n (getPos e)
+    mkFstSnd (TAST.EAdditiveProduct _ _ _ :@ p) 2 = pure [(AST.ESnd, p)]
+    mkFstSnd (TAST.EAdditiveProduct _ _ _ :@ _) _ = throwError $ CannotAccessNthElementOfAdditiveTuple n (getPos e)
     mkFstSnd e n = throwError $ CannotAccessNthElementOfNonAdditiveTuple n (getPos e)
 
     mkApp (f, p) e1 = f e1 :@ p
@@ -1000,7 +1037,7 @@ synthetize cache rel ctx (AST.EFst e :@ p) = do
   (qs1, e, ty, _) <- synthetize cache rel ctx e
 
   case ty of
-    VAdditiveProduct _ s _ :@ _ -> pure (qs1, TAST.EFst e :@ p, s, TAST.extend rel :@ p)
+    VAdditiveProduct _ s _ _ :@ _ -> pure (qs1, TAST.EFst e :@ p, s, TAST.extend rel :@ p)
     ty -> do
       ty@(_ :@ p) <- quote ctx (lvl ctx) ty
       throwError $ ExpectedAdditiveProduct ty p
@@ -1013,8 +1050,8 @@ synthetize cache rel ctx (AST.ESnd e :@ p) = do
   (qs1, e, ty, _) <- synthetize cache rel ctx e
 
   case ty of
-    VAdditiveProduct x _ t :@ p1 -> do
-      t <- apply ctx t (VVariable (x :@ p1) (lvl ctx) :@ p1)
+    VAdditiveProduct x s _ t :@ p1 -> do
+      t <- apply ctx t (VVariable (x :@ p1) (lvl ctx) s :@ p1)
       pure (qs1, TAST.ESnd e :@ p, t, TAST.extend rel :@ p)
     ty -> do
       ty@(_ :@ p) <- quote ctx (lvl ctx) ty
@@ -1027,21 +1064,24 @@ synthetize cache rel ctx (AST.EMultiplicativePairElim z mult x y m n :@ p) = do
   -}
   (qs1, m, ty, _) <- synthetize cache rel ctx m
   case ty of
-    VMultiplicativeProduct i _ s t :@ _ -> do
+    VMultiplicativeProduct i _ s _ t :@ _ -> do
       xVal <- eval ctx (TAST.EFst m :@ getPos m)
       yVal <- eval ctx (TAST.ESnd m :@ getPos m)
 
       let ipMult = pMult * i
           pMult = TAST.extend rel * unLoc mult
 
-      (qs2, (n, u)) <- defineLocal x ipMult xVal s ctx \ctx -> do
+      (qs2, (n, u, t')) <- defineLocal x ipMult xVal s ctx \ctx -> do
         t <- apply ctx t xVal
         (qs, (n, u)) <- defineLocal y pMult yVal t ctx \ctx -> do
           (qs, n, ty2, _) <- synthetize cache rel ctx n
           pure (qs, getPos n, (n, ty2))
-        pure (qs, getPos n, (n, u))
 
-      pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x y m n :@ p, u, TAST.extend rel :@ p)
+        t' <- quote ctx (lvl ctx) t
+        pure (qs, getPos n, (n, u, t'))
+
+      s' <- quote ctx (lvl ctx) s
+      pure (Usage.scale (unLoc mult) qs1 `Usage.concat` qs2, TAST.EMultiplicativePairElim z mult x s' y t' m n :@ p, u, TAST.extend rel :@ p)
     ty -> do
       ty@(_ :@ p) <- quote ctx (lvl ctx) ty
       throwError $ ExpectedMultiplicativeProduct ty p
@@ -1073,23 +1113,28 @@ synthetize cache rel ctx (AST.EFieldAccess r x :@ p) = do
           Γ ⊢ r::x ⇒ⁱᵖ τ
   -}
   (qs, r, t, u) <- synthetize cache rel ctx r
+  t' <- quote ctx (lvl ctx) t
   case t of
-    VComposite fields :@ _ -> case lookup (lvl ctx) x [] fields of
-      (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
-      (subst, Just (m, x, ty)) -> do
-        ty <- apply' ctx ty subst
-        pure (qs, TAST.ERecordAccess r x :@ p, ty, (* unLoc m) <$> u)
+    VComposite fields :@ _ ->
+      lookup ctx x [] fields >>= \case
+        (_, Nothing) -> throwError $ FieldNotFound x (getPos r)
+        (subst, Just (m, x, ty)) -> do
+          ty <- apply' ctx ty subst
+          pure (qs, TAST.ERecordAccess r t' x :@ p, ty, (* unLoc m) <$> u)
     VModule fields :@ _ -> case Map.lookup x fields of
       Nothing -> throwError $ FieldNotFound x (getPos r)
-      Just (m, ty) -> pure (qs, TAST.ERecordAccess r x :@ p, ty, (* unLoc m) <$> u)
+      Just (m, ty) -> pure (qs, TAST.ERecordAccess r t' x :@ p, ty, (* unLoc m) <$> u)
     _ -> do
       t <- quote ctx (lvl ctx) t
       throwError $ ExpectedRecordOrModule t (getPos r)
   where
-    lookup _ _ subst [] = (subst, Nothing)
-    lookup lvl x subst ((m, y, ty) : fs)
-      | x == y = (subst, Just (m, y, ty))
-      | otherwise = lookup (lvl + 1) x ((VVariable x lvl :@ getPos x) : subst) fs
+    lookup _ _ subst [] = pure (subst, Nothing)
+    lookup ctx x subst ((m, y, ty) : fs)
+      | x == y = pure (subst, Just (m, y, ty))
+      | otherwise = do
+          ty' <- apply' ctx ty subst
+          let var = VVariable x (lvl ctx) ty' :@ getPos x
+          lookup (bind (unLoc m) x ty' ctx) x (var : subst) fs
 synthetize _ _ _ (_ :@ p) = throwError $ CannotInferType p
 
 closeVal :: forall m. MonadElab m => Context -> Located Value -> m Closure

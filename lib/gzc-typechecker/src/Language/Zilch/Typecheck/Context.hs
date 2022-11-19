@@ -56,7 +56,7 @@ bind :: Multiplicity -> Located Name -> Located Value -> Context -> Context
 bind usage x@(_ :@ p) ty ctx =
   let level = lvl ctx
    in ctx
-        { env = Env.extend (env ctx) (VVariable x level :@ p),
+        { env = Env.extend (env ctx) (VVariable x level ty :@ p),
           types = (usage, x, Source, ty) : types ctx,
           lvl = level + 1,
           path = Bind (path ctx) usage x ty
@@ -66,7 +66,7 @@ insertBinder :: Multiplicity -> Located Name -> Located Value -> Context -> Cont
 insertBinder usage x@(_ :@ p) typ ctx =
   let level = lvl ctx
    in ctx
-        { env = Env.extend (env ctx) (VVariable x level :@ p),
+        { env = Env.extend (env ctx) (VVariable x level typ :@ p),
           types = (usage, x, Inserted, typ) : types ctx,
           lvl = level + 1,
           path = Bind (path ctx) usage x typ

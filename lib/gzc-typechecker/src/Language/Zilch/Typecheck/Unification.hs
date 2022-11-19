@@ -11,7 +11,7 @@ module Language.Zilch.Typecheck.Unification where
 
 import Control.Monad (when)
 import Control.Monad.Except (catchError, throwError)
-import Control.Monad.State (get, modify')
+import Control.Monad.State (get, gets, modify')
 import Data.Bifunctor (second)
 import Data.Foldable (foldlM)
 import Data.IntMap (IntMap)
@@ -39,11 +39,11 @@ invert ctx gamma sp = do
   pure $ Renaming dom gamma ren
   where
     go [] = pure (0, mempty)
-    go ((t, _) : sp) = do
+    go ((t, _, _) : sp) = do
       (dom, ren) <- go sp
       t' <- force ctx t
       case t' of
-        VVariable _ (Lvl x) :@ _ | IntMap.notMember x ren -> pure (dom + 1, IntMap.insert x dom ren)
+        VVariable _ (Lvl x) _ :@ _ | IntMap.notMember x ren -> pure (dom + 1, IntMap.insert x dom ren)
         _ -> throwError UnificationError
 
 rename :: forall m. MonadElab m => Context -> Int -> PartialRenaming -> Located Value -> m (Located TAST.Expression)
@@ -55,39 +55,46 @@ rename ctx m ren v = go ren v
         VFlexible m' sp :@ p
           | m == m' -> throwError UnificationError
           | otherwise -> goSpine ren (TAST.EMeta m' :@ p) sp
-        VRigid name (Lvl x) sp :@ p -> case IntMap.lookup x env of
-          Nothing -> throwError UnificationError
-          Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') :@ p) sp
-        VLam usage x isExplicit a t :@ p -> do
+        VRigid name (Lvl x) t sp :@ p -> do
+          t' <- go ren t
+          case IntMap.lookup x env of
+            Nothing -> throwError UnificationError
+            Just x' -> goSpine ren (TAST.EIdentifier name (debruijnLevelToIndex dom x') t' :@ p) sp
+        VLam usage x isExplicit a t2 t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
-          pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
-        VPi usage x isExplicit a t :@ p -> do
+          t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) isExplicit
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod a :@ p)
+          pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t2' t' :@ p
+        VPi usage x isExplicit a t2 t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
-          pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t' :@ p
-        VMultiplicativeProduct usage x a t :@ p -> do
+          t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) isExplicit
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod a :@ p)
+          pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t2' t' :@ p
+        VMultiplicativeProduct usage x a t2 t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
-          pure $ TAST.EMultiplicativeProduct (TAST.Parameter explicit (usage :@ p) (x :@ p) a' :@ p) t' :@ p
-        VAdditiveProduct x a t :@ p -> do
+          t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) explicit
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod a :@ p)
+          pure $ TAST.EMultiplicativeProduct (TAST.Parameter explicit (usage :@ p) (x :@ p) a' :@ p) t2' t' :@ p
+        VAdditiveProduct x a t2 t :@ p -> do
           a' <- go ren a
-          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod :@ p)
-          pure $ TAST.EAdditiveProduct (TAST.Parameter explicit (TAST.W :@ p) (x :@ p) a' :@ p) t' :@ p
+          t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) explicit
+          t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod a :@ p)
+          pure $ TAST.EAdditiveProduct (TAST.Parameter explicit (TAST.W :@ p) (x :@ p) a' :@ p) t2' t' :@ p
         -- maybe we have a better way of handling all base terms?
         -- this is merely to avoid duplicated code
         val -> quote ctx cod val
 
     goSpine _ t [] = pure t
-    goSpine ren t@(_ :@ p) ((u, i) : sp) = do
+    goSpine ren t@(_ :@ p) ((u, ty, i) : sp) = do
       v1 <- goSpine ren t sp
+      ty <- go ren ty
       v2 <- go ren u
-      pure $ TAST.EApplication v1 (not i) v2 :@ p
+      pure $ TAST.EApplication v1 (not i) ty v2 :@ p
 
 solve :: forall m. MonadElab m => Context -> DeBruijnLvl -> Int -> Spine -> Located Value -> m ()
 solve ctx' gamma m sp val = do
   (mult, ty, path, _, loc) <- do
-    IntMap.lookup m . snd <$> get >>= \case
+    gets (IntMap.lookup m . snd) >>= \case
       Nothing -> error "solve: impossible -- metavariable not found in context"
       Just (Unsolved m ty, path, p, loc) -> pure (m, ty, path, p, loc)
       Just (Solved _ m ty, path, p, loc) -> pure (m, ty, path, p, loc)
@@ -97,7 +104,7 @@ solve ctx' gamma m sp val = do
   let ctx = emptyContext
   ren@(Renaming _ _ _) <- invert ctx gamma sp
   val'@(_ :@ p) <- rename ctx m ren val
-  solution :@ _ <- uncurry eval =<< lams ctx' path' (reverse $ snd <$> sp) val' p
+  solution :@ _ <- uncurry eval =<< lams ctx' path' (reverse $ dropFst <$> sp) val' p
 
   ty <- quote ctx' (lvl ctx') ty
   ty' <- uncurry eval =<< mkPi ctx' ty path'
@@ -118,23 +125,24 @@ solve ctx' gamma m sp val = do
       a <- quote ctx (lvl ctx) a
       (ctx', ret) <- mkPi ctx' ty path
 
-      pure (ctx', TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) ret :@ p)
+      pure (ctx', TAST.EPi (TAST.Parameter (not explicit) (m :@ p) n a :@ p) (TAST.EType :@ p) ret :@ p)
 
-    lams = go 0
-
-    go :: forall m. MonadElab m => Integer -> Context -> [(TAST.Multiplicity, Located Text, Located Value)] -> [Implicitness] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
-    go _ ctx [] [] t _ = pure (ctx, t)
-    go x ctx ((m, n, a) : path) (_ : is) t p = do
+    lams :: forall m. MonadElab m => Context -> [(TAST.Multiplicity, Located Text, Located Value)] -> [(Located Value, Implicitness)] -> Located TAST.Expression -> Position -> m (Context, Located TAST.Expression)
+    lams ctx [] [] t _ = pure (ctx, t)
+    lams ctx ((m, n, a) : path) ((ty, _) : is) t p = do
       let ctx' = bind m n a ctx
       a <- quote ctx (lvl ctx) a
-      (ctx', lam) <- go x ctx' path is t p
+      (ctx', lam) <- lams ctx' path is t p
+      ty <- quote ctx (lvl ctx) ty
 
-      pure (ctx', TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) lam :@ p)
-    go _ _ _ _ _ _ = error "insertLambdas: incoherent context"
+      pure (ctx', TAST.ELam (TAST.Parameter (not explicit) (m :@ p) n a :@ p) ty lam :@ p)
+    lams _ _ _ _ _ = error "insertLambdas: incoherent context"
+
+    dropFst (_, y, z) = (y, z)
 
 unifySpine :: forall m. MonadElab m => Context -> DeBruijnLvl -> Spine -> Spine -> m ()
 unifySpine _ _ [] [] = pure ()
-unifySpine ctx lvl ((t, _) : sp) ((t', _) : sp') = do
+unifySpine ctx lvl ((t, _, _) : sp) ((t', _, _) : sp') = do
   unifySpine ctx lvl sp sp'
   unify' ctx lvl t t'
 unifySpine _ _ _ _ = throwError UnificationError
@@ -144,55 +152,55 @@ unify' ctx lvl t u = do
   t <- force ctx t
   u <- force ctx u
   case (t, u) of
-    (VLam _ _ _ a1 t1 :@ p1, VLam _ _ _ a2 t2 :@ p2) -> do
+    (VLam _ _ _ a1 _ t1 :@ p1, VLam _ _ _ a2 _ t2 :@ p2) -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl a1 :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl a2 :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (t1 :@ p1, VLam _ _ i _ t2 :@ p2) -> do
+    (t1 :@ p1, VLam _ _ i a _ t2 :@ p2) -> do
       (v1, v2) <-
         (,)
-          <$> applyVal ctx (t1 :@ p1) (VVariable ("x?" :@ p1) lvl :@ p1) i
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+          <$> applyVal ctx (t1 :@ p1) a (VVariable ("x?" :@ p1) lvl a :@ p1) i
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl a :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (VLam _ _ i _ t1 :@ p1, t2 :@ p2) -> do
+    (VLam _ _ i a _ t1 :@ p1, t2 :@ p2) -> do
       (v2, v1) <-
         (,)
-          <$> applyVal ctx (t2 :@ p2) (VVariable ("x?" :@ p2) lvl :@ p2) i
-          <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
+          <$> applyVal ctx (t2 :@ p2) a (VVariable ("x?" :@ p2) lvl a :@ p2) i
+          <*> apply ctx t1 (VVariable ("x?" :@ p1) lvl a :@ p1)
       unify' ctx (lvl + 1) v1 v2
-    (VPi _ _ i1 a1 t1 :@ p1, VPi _ _ i2 a2 t2 :@ p2) | i1 == i2 -> do
+    (VPi _ _ i1 a1 _ t1 :@ p1, VPi _ _ i2 a2 _ t2 :@ p2) | i1 == i2 -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl a1 :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl a2 :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (VMultiplicativeProduct _ _ a1 t1 :@ p1, VMultiplicativeProduct _ _ a2 t2 :@ p2) -> do
+    (VMultiplicativeProduct _ _ a1 _ t1 :@ p1, VMultiplicativeProduct _ _ a2 _ t2 :@ p2) -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl a1 :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl a2 :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (VAdditiveProduct _ a1 t1 :@ p1, VAdditiveProduct _ a2 t2 :@ p2) -> do
+    (VAdditiveProduct _ a1 _ t1 :@ p1, VAdditiveProduct _ a2 _ t2 :@ p2) -> do
       -- unifyMultiplicity (u1 :@ p1) (u2 :@ p2)
       unify' ctx lvl a1 a2
       (v1, v2) <-
         (,)
-          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl :@ p1)
-          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl :@ p2)
+          <$> apply ctx t1 (VVariable ("x?" :@ p1) lvl a1 :@ p1)
+          <*> apply ctx t2 (VVariable ("x?" :@ p2) lvl a2 :@ p2)
       unify' ctx (lvl + 1) v1 v2
-    (VIfThenElse c1 t1 e1 :@ _, VIfThenElse c2 t2 e2 :@ _) -> do
+    (VIfThenElse c1 t1 _ e1 _ :@ _, VIfThenElse c2 t2 _ e2 _ :@ _) -> do
       unify' ctx lvl c1 c2
       unify' ctx lvl t1 t2
       unify' ctx lvl e1 e2
-    (VRigid _ l1 sp1 :@ _, VRigid _ l2 sp2 :@ _)
+    (VRigid _ l1 _ sp1 :@ _, VRigid _ l2 _ sp2 :@ _)
       | l1 == l2 -> unifySpine ctx lvl sp1 sp2
     (VFlexible m1 sp1 :@ _, VFlexible m2 sp2 :@ _)
       | m1 == m2 -> unifySpine ctx lvl sp1 sp2
@@ -210,10 +218,10 @@ unify' ctx lvl t u = do
     (VBuiltinU32 :@ _, VBuiltinU32 :@ _) -> pure ()
     (VBuiltinU64 :@ _, VBuiltinU64 :@ _) -> pure ()
     (VBuiltinBool :@ _, VBuiltinBool :@ _) -> pure ()
-    (VMultiplicativePair e1 e2 :@ _, VMultiplicativePair e3 e4 :@ _) -> do
+    (VMultiplicativePair e1 _ e2 _ :@ _, VMultiplicativePair e3 _ e4 _ :@ _) -> do
       unify' ctx lvl e1 e3
       unify' ctx lvl e2 e4
-    (VAdditivePair e1 e2 :@ _, VAdditivePair e3 e4 :@ _) -> do
+    (VAdditivePair e1 _ e2 _ :@ _, VAdditivePair e3 _ e4 _ :@ _) -> do
       unify' ctx lvl e1 e3
       unify' ctx lvl e2 e4
     (VOne :@ _, VOne :@ _) -> pure ()
@@ -236,7 +244,7 @@ unify' ctx lvl t u = do
               <*> apply' ctx t2 env
 
           unify' ctx lvl v1 v2
-          pure (lvl + 1, (VVariable x1 lvl :@ getPos x1) : env)
+          pure (lvl + 1, (VVariable x1 lvl v1 :@ getPos x1) : env)
     _ -> throwError UnificationError
 
 unify :: forall m. MonadElab m => Context -> Located Value -> Located Value -> m ()

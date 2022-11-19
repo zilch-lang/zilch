@@ -55,17 +55,21 @@ data Expression
     ELam
       (Located Parameter)
       (Located Expression)
+      (Located Expression)
   | -- | The function type @(_ x : A) → B@ or @{_ x : A} → B@
     EPi
       (Located Parameter)
+      (Located Expression)
       (Located Expression)
   | -- | The dependent additive product type @(_ x : A) & B@
     EAdditiveProduct
       (Located Parameter)
       (Located Expression)
+      (Located Expression)
   | -- | The dependent multiplicative product type @(_ x : A) ⊗ B@
     EMultiplicativeProduct
       (Located Parameter)
+      (Located Expression)
       (Located Expression)
   | ELet
       (Located Definition)
@@ -75,9 +79,11 @@ data Expression
       Bool
       -- ^ Is it implicit
       (Located Expression)
+      (Located Expression)
   | EIdentifier
       (Located Text)
       DeBruijnIdx
+      (Located Expression)
   | EInteger
       (Located Text)
       BuiltinType
@@ -95,10 +101,16 @@ data Expression
       (Located Expression)
       (Located Expression)
       (Located Expression)
+      (Located Expression)
+      (Located Expression)
   | EAdditivePair
       (Located Expression)
       (Located Expression)
+      (Located Expression)
+      (Located Expression)
   | EMultiplicativePair
+      (Located Expression)
+      (Located Expression)
       (Located Expression)
       (Located Expression)
   | EMultiplicativeUnit
@@ -118,8 +130,10 @@ data Expression
       (Located Multiplicity)
       -- ^ @p@
       (Located Text)
+      (Located Expression)
       -- ^ @x@
       (Located Text)
+      (Located Expression)
       -- ^ @y@
       (Located Expression)
       -- ^ @M@
@@ -146,6 +160,7 @@ data Expression
       [(Located Multiplicity, Located Text, Located Expression, Located Expression)]
   | ERecordAccess
       (Located Expression)
+      (Located Expression)
       (Located Text)
   deriving (Show, Eq, Ord)
 
@@ -171,13 +186,14 @@ data Path
 
 ---------------------------------------------
 
-type Spine = [(Located Value, Implicitness)]
+type Spine = [(Located Value, Located Value, Implicitness)]
 
 data Value
   = -- | A bound variable
     VRigid
       (Located Text)
       DeBruijnLvl
+      (Located Value)
       Spine
   | VFlexible
       Int
@@ -186,11 +202,13 @@ data Value
     VApplication
       (Located Value)
       (Located Value)
+      (Located Value)
   | -- | An un-applied lambda abstraction with a given closure
     VLam
       Multiplicity
       Name
       Implicitness
+      (Located Value)
       (Located Value)
       Closure
   | -- | A pi-type with an explicit argument (denoted @(p x : A) → B@)
@@ -199,16 +217,19 @@ data Value
       Name
       Implicitness
       (Located Value)
+      (Located Value)
       Closure
   | -- | A ⊗-type with an explicit argument (denoted @(p x : A) ⊗ B@)
     VMultiplicativeProduct
       Multiplicity
       Name
       (Located Value)
+      (Located Value)
       Closure
   | -- | A &-type with an explicit argument (denoted @(x : A) & B@)
     VAdditiveProduct
       Name
+      (Located Value)
       (Located Value)
       Closure
   | -- | Universes (of the given level)
@@ -229,12 +250,18 @@ data Value
       (Located Value)
       (Located Value)
       (Located Value)
+      (Located Value)
+      (Located Value)
   | VTrue
   | VFalse
   | VMultiplicativePair
       (Located Value)
       (Located Value)
+      (Located Value)
+      (Located Value)
   | VAdditivePair
+      (Located Value)
+      (Located Value)
       (Located Value)
       (Located Value)
   | VMultiplicativeUnit
@@ -267,6 +294,7 @@ data Value
       [(Located Multiplicity, Located Text, Located Value, Located Value)]
   | VRecordAccess
       (Located Value)
+      (Located Value)
       (Located Text)
   | VFFI
       (Located Text)
@@ -278,11 +306,11 @@ data MetaEntry
   | Unsolved Multiplicity (Located Value)
   deriving (Show)
 
-pattern VVariable :: Located Text -> DeBruijnLvl -> Value
-pattern VVariable x lvl <-
-  VRigid x lvl []
+pattern VVariable :: Located Text -> DeBruijnLvl -> Located Value -> Value
+pattern VVariable x lvl ty <-
+  VRigid x lvl ty []
   where
-    VVariable x lvl = VRigid x lvl []
+    VVariable x lvl ty = VRigid x lvl ty []
 
 pattern VMeta :: Int -> Value
 pattern VMeta m <-
