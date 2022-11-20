@@ -32,7 +32,18 @@ pCli = do
 
 pDebug :: Parser DebugFlags
 pDebug = do
-  ~(ast, tast, anf, anfopt, dir) <- go <$> many (option (eitherReader debug) (short 'd' <> help "Set various compiler debugging flags" <> metavar "FLAG" <> completeWith flagList))
+  ~(ast, tast, anf, anfopt, dir) <-
+    go
+      <$> many
+        ( option
+            (eitherReader debug)
+            ( short 'd'
+                <> help "Set various compiler debugging flags"
+                <> metavar "FLAG"
+                <> completeWith flagList
+                <> hidden
+            )
+        )
   -- here we have to use an irrefutable (lazy) pattern
   -- otherwise GHC infers a @Monad m1@ constraint for the whole @do@ expression
   --
@@ -67,7 +78,15 @@ pDebug = do
 pConfig :: Parser ConfigFlags
 pConfig =
   ConfigFlags
-    <$> option (eitherReader colorDiagnostics) (short 'f' <> value True <> help "Set compiler options" <> metavar "FLAG" <> completeWith flagList)
+    <$> option
+      (eitherReader colorDiagnostics)
+      ( short 'f'
+          <> value True
+          <> help "Set compiler options"
+          <> metavar "FLAG"
+          <> completeWith flagList
+          <> hidden
+      )
   where
     colorDiagnostics "color-diagnostics" = Right True
     colorDiagnostics "no-color-diagnostics" = Right False
@@ -80,7 +99,15 @@ pConfig =
 
 pInput :: Parser InputFlags
 pInput = do
-  includes <- many (strOption (short 'I' <> metavar "DIR" <> help "Add a path to the search path, where to find additional .zc and .zci files" <> action "directory"))
+  includes <-
+    many
+      ( strOption
+          ( short 'I'
+              <> metavar "DIR"
+              <> help "Add a path to the search path, where to find additional .zc and .zci files"
+              <> action "directory"
+          )
+      )
   mods <- many (argument str $ metavar "MODULES..." <> help "The list of module to compile" <> action "file")
 
   pure $ InputFlags mods includes
@@ -88,15 +115,42 @@ pInput = do
 pOutput :: Parser OutputFlags
 pOutput =
   OutputFlags
-    <$> strOption (long "out" <> short 'o' <> metavar "FILE" <> value "a.out" <> help "Set the path to the output file" <> showDefault)
-    <*> switch (long "no-main" <> help "Pass if the modules to be built do not contain a 'main' function")
-    <*> switch (long "keep-zci" <> help "Preserve the .zci files in the dump directory")
-    <*> switch (long "keep-zco" <> help "Preserve the .zco files in the dump directory")
+    <$> strOption
+      ( long "out"
+          <> short 'o'
+          <> metavar "FILE"
+          <> value "a.out"
+          <> help "Set the path to the output file"
+          <> showDefault
+          <> action "file"
+      )
+    <*> switch
+      ( long "no-main"
+          <> help "Pass if the modules to be built do not contain a 'main' function"
+      )
+    <*> switch
+      ( long "keep-zci"
+          <> help "Preserve the .zci files in the dump directory"
+          <> hidden
+      )
+    <*> switch
+      ( long "keep-zco"
+          <> help "Preserve the .zco files in the dump directory"
+          <> hidden
+      )
 
 --------------------------------
 
 pWarning :: Parser Integer
-pWarning = option (eitherReader warn) (short 'W' <> help "Choose which warning to enable/disable" <> metavar "[no-]WARN" <> completeWith flagList)
+pWarning =
+  option
+    (eitherReader warn)
+    ( short 'W'
+        <> help "Choose which warning to enable/disable"
+        <> metavar "[no-]WARN"
+        <> completeWith flagList
+        <> hidden
+    )
   where
     warn "all" = Right 0
     warn "error" = Right 1
