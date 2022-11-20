@@ -11,8 +11,8 @@ import Data.Located (Located ((:@)), unLoc)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Language.Zilch.Pretty.TAST ()
-import Language.Zilch.Typecheck.Core.Multiplicity
 import Language.Zilch.Typecheck.ANF
+import Language.Zilch.Typecheck.Core.Multiplicity
 import Prettyprinter (Doc, Pretty (pretty), align, braces, colon, comma, concatWith, dquote, emptyDoc, enclose, flatAlt, group, hardline, indent, line, lparen, parens, rparen, space, surround, vsep)
 
 instance Pretty (Located Module) where
@@ -43,36 +43,33 @@ instance Pretty (Located Definition) where
       <> ":"
       <> space
       <> pretty typ
+      <> space
+      <> "≔"
       <> line
-      <> indent
-        2
-        ( "≔"
-            <> line
-            <> line
-            <> pretty val
-        )
+      <> indent 2 (pretty val)
     where
       pretty' = pretty . Text.intercalate "∷" . fmap unLoc
-  -- pretty (Val usage name typ :@ _) =
-  --   "val"
-  --     <> space
-  --     <> pretty usage
-  --     <> space
-  --     <> pretty (unLoc name)
-  --     <> space
-  --     <> ":"
-  --     <> space
-  --     <> pretty typ
+
+-- pretty (Val usage name typ :@ _) =
+--   "val"
+--     <> space
+--     <> pretty usage
+--     <> space
+--     <> pretty (unLoc name)
+--     <> space
+--     <> ":"
+--     <> space
+--     <> pretty typ
 
 instance Pretty (Located Parameter) where
   pretty (Parameter usage name ty :@ _) =
-      pretty usage
-        <> space
-        <> pretty (unLoc name)
-        <> space
-        <> ":"
-        <> space
-        <> group (pretty ty)
+    pretty usage
+      <> space
+      <> pretty (unLoc name)
+      <> space
+      <> ":"
+      <> space
+      <> group (pretty ty)
 
 instance Pretty (Located Expression) where
   pretty (EType :@ _) = "type"
