@@ -133,12 +133,13 @@ normalizeName ns expr ty = do
         let pos = getPos expr
 
         name <- gensym pos
-        let ident = ANF.EIdentifier [name] :@ pos
+        let newName = ns <> [name]
+            ident = ANF.EIdentifier newName :@ pos
 
         flip mapContT (pure ident) \e -> do
           e <- e
           ty <- rawExpr ty
-          pure $ ANF.ELet (ANF.Let False (I :@ pos) (ns <> [name]) ty expr :@ pos) e :@ pos
+          pure $ ANF.ELet (ANF.Let False (I :@ pos) newName ty expr :@ pos) e :@ pos
 
   expr <- normalizeExpression ns expr
   case expr of
