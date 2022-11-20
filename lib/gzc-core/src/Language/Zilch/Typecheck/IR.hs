@@ -31,12 +31,12 @@ data Definition
   = Let
       Bool
       (Located Multiplicity)
-      (Located Text)
+      [Located Text]
       (Located Expression)
       (Located Expression)
   | Val
       (Located Multiplicity)
-      (Located Text)
+      [Located Text]
       (Located Expression)
   deriving (Show, Eq, Ord)
 

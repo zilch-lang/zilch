@@ -6,6 +6,7 @@
 
 module Language.Zilch.Typecheck.Internal.TAST2IR where
 
+import Control.Arrow ((&&&))
 import Control.Monad (forM, when)
 import Control.Monad.State (MonadState, evalState, get, gets, modify, put)
 import Data.Functor ((<&>))
@@ -39,15 +40,17 @@ translateMod modName (TAST.Mod bs :@ p) = do
         b@(Just (IR.TopLevel _ isPub def :@ _)) -> do
           case def of
             IR.Let _ _ name _ _ :@ _ ->
-              let modName' = if isPub then modName else modName <> ["/priv" :@ getPos name]
-               in modify (Map.insert name modName')
+              let (modName', name') = unsnoc name
+               in modify (Map.insert name' modName')
             IR.Val _ name _ :@ _ ->
-              let modName' = if isPub then modName else modName <> ["/priv" :@ getPos name]
-               in modify (Map.insert name modName')
+              let (modName', name') = unsnoc name
+               in modify (Map.insert name' modName')
           pure b
         Nothing -> pure Nothing
 
   pure $ IR.Module bs :@ p
+  where
+    unsnoc = init &&& last
 
 translateToplevel :: MonadTranslator m => [Located Text] -> Located TAST.TopLevel -> m (Maybe (Located IR.TopLevel))
 translateToplevel modName (TAST.TopLevel attrs isPublic def :@ p) = do
@@ -58,14 +61,17 @@ translateDefinition :: MonadTranslator m => [Located Text] -> Bool -> Bool -> Lo
 translateDefinition modName isPub isTop (TAST.Let isRec mult name ty ex :@ p) = do
   ty <- locally id (translateExpression modName ty)
   let modName' = if not isPub && isTop then modName <> ["/priv" :@ getPos name] else modName
+      newName = modName' <> [name]
   ex <- (if isRec then locally (Map.insert name modName') else id) do
     -- this has as effect to scope any new `external` definitions
-    translateExpression (modName' <> [name]) ex
+    translateExpression newName ex
   modify (Map.insert name modName')
-  pure $ Just (IR.Let isRec mult name ty ex :@ p)
-translateDefinition modName _ _ (TAST.Val mult name ty :@ p) = do
+  pure $ Just (IR.Let isRec mult newName ty ex :@ p)
+translateDefinition modName isPub isTop (TAST.Val mult name ty :@ p) = do
   ty <- locally id (translateExpression modName ty)
-  pure $ Just (IR.Val mult name ty :@ p)
+  let modName' = if not isPub && isTop then modName <> ["/priv" :@ getPos name] else modName
+      newName = modName' <> [name]
+  pure $ Just (IR.Val mult newName ty :@ p)
 translateDefinition _ _ _ (TAST.External _ name _ _ (init -> mod) _ :@ _) = do
   modify (Map.insert name mod)
   pure Nothing

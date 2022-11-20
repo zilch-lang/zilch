@@ -18,7 +18,7 @@ data Definition
   = Let
       Bool
       (Located Multiplicity)
-      (Located Text)
+      [Located Text]
       (Located Expression)
       (Located Expression)
   deriving (Show)

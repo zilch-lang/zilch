@@ -38,7 +38,7 @@ instance Pretty (Located Definition) where
       <> space
       <> pretty usage
       <> space
-      <> pretty (unLoc name)
+      <> pretty' name
       <> space
       <> ":"
       <> space
@@ -51,6 +51,8 @@ instance Pretty (Located Definition) where
             <> line
             <> pretty val
         )
+    where
+      pretty' = pretty . Text.intercalate "∷" . fmap unLoc
   -- pretty (Val usage name typ :@ _) =
   --   "val"
   --     <> space
