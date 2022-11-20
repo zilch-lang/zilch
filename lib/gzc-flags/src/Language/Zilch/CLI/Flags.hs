@@ -20,6 +20,8 @@ data DebugFlags = DebugFlags
     dumpTAST :: Bool,
     -- | @-ddump-anf@
     dumpANF :: Bool,
+    -- | @-ddump-anf-opt@
+    dumpANFOpt :: Bool,
     -- | @-ddump-dir=DIR@
     dumpDir :: Maybe FilePath,
     -- | @--build-progress@

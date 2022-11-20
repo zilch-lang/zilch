@@ -23,6 +23,7 @@ dependencies:
 - gzc-core
 - gzc-parser
 - gzc-typechecker
+- gzc-optimizer
 - text ==1.2.4.1
 
 ghc-options:

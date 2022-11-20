@@ -10,6 +10,8 @@ cradle:
       component: "gzc-typechecker:lib"
     - path: "./lib/gzc-flags/src"
       component: "gzc-flags:lib"
+    - path: "./lib/gzc-optimizer/src"
+      component: "gzc-optimizer:lib"
     # - path: "./lib/nstargen/src"
     #   component: "nstargen:lib"
     - path: "./src"

@@ -7,8 +7,8 @@
 
 module Main (main) where
 
-import Control.Monad (forM_, when)
-import Control.Monad.Except (liftEither, runExceptT)
+import Control.Monad (forM_, unless, when)
+import Control.Monad.Except (lift, liftEither, runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List (nub)
@@ -19,6 +19,7 @@ import Error.Diagnose (Diagnostic, Report (..), addFile, addReport, def, default
 import Language.Zilch.CLI.Flags (DebugFlags (..), Flags (..), InputFlags (..), OutputFlags (..), WarningFlags, doDump)
 import qualified Language.Zilch.CLI.Flags as W (WarningFlags (..))
 import Language.Zilch.CLI.Parser (getFlags)
+import Language.Zilch.Optimize.Driver (optimize)
 import Language.Zilch.Pretty.ANF ()
 import Language.Zilch.Pretty.AST ()
 import qualified Language.Zilch.Syntax.Core.AST as AST
@@ -52,8 +53,13 @@ main = do
     liftIO $ doOutputWarnings files warns
     liftIO $ forM_ allASTs \(path, _, ast) -> doDumpAST flags ast path
 
-    (allTASTs, warns) <- liftEither =<< typecheckModules flags allASTs
+    (allANFs, warns) <- liftEither =<< typecheckModules flags allASTs
     liftIO $ doOutputWarnings files warns
+
+    unless ?noMain do
+      anf <- lift $ optimize flags allANFs
+
+      pure ()
 
     pure ()
 

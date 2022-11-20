@@ -32,18 +32,13 @@ import Prettyprinter (pretty)
 
 type MonadDriver m = (MonadIO m, MonadError (Diagnostic String) m)
 
-typecheckModules :: (?warnings :: WarningFlags, ?buildProgress :: Bool, ?noMain :: Bool, MonadIO m) => Flags -> [(FilePath, [Located Text], Located AST.Module)] -> m (Either (Diagnostic String) ([(FilePath, [Located Text], Located ANF.Module)], Diagnostic String))
+typecheckModules :: (?warnings :: WarningFlags, ?buildProgress :: Bool, MonadIO m) => Flags -> [(FilePath, [Located Text], Located AST.Module)] -> m (Either (Diagnostic String) ([(FilePath, [Located Text], Located ANF.Module)], Diagnostic String))
 typecheckModules flags mods = runExceptT $ do
   (mods, warns) <- typecheckModulesWithCache flags mempty mods
 
   when ?buildProgress do
     liftIO . putStrLn $ "Translating modules to A-normal form…"
   let mods' = translateModules mods <&> \(path, name, mod) -> (path, name, normalizeModule mod)
-
-  -- check if building executable (i.e. @--no-main@ is not specified on the command line)
-  -- if ?noMain
-  --   then pure (mods', warns)
-  --   else (,warns) . pure <$> liftEither (monomorphiseProgram mods')
 
   forM_ mods' \(path, _, mod) ->
     liftIO $ doDumpANF flags mod path
