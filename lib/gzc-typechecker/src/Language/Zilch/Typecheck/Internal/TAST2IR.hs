@@ -60,7 +60,7 @@ translateDefinition modName isPub isTop (TAST.Let isRec mult name ty ex :@ p) = 
   let modName' = if not isPub && isTop then modName <> ["/priv" :@ getPos name] else modName
   ex <- (if isRec then locally (Map.insert name modName') else id) do
     -- this has as effect to scope any new `external` definitions
-    translateExpression (modName <> [name]) ex
+    translateExpression (modName' <> [name]) ex
   modify (Map.insert name modName')
   pure $ Just (IR.Let isRec mult name ty ex :@ p)
 translateDefinition modName _ _ (TAST.Val mult name ty :@ p) = do
