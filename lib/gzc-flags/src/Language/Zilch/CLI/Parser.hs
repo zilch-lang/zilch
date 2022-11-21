@@ -26,7 +26,8 @@ man :: Parser (a -> a)
 man =
   option manReader $
     mconcat
-      [ long "man",
+      [ value id,
+        long "man",
         metavar "[FLAG]",
         noArgError (InfoMsg fullMan),
         help "Show help about the command line flag FLAG (such as \"-d\"). FLAG is a comma-separated list of flags. If FLAG is unspecified or empty, show help for all the command line flags",
