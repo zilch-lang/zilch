@@ -20,12 +20,12 @@ optimize flags mods = do
 
   let (path, name, mod) = gatherDefinitions mods
 
-  let (path', name', mod') = pipeline (path, name, mod)
+  (path', name', mod') <- pipeline (path, name, mod)
 
   liftIO $ doDumpANFOpt flags mod' path'
   pure (path', name', mod')
   where
-    pipeline = tupleArguments
+    pipeline = tupleArguments flags
 
 -- TODO: put this at the beginning of the codegen pipeline
 --

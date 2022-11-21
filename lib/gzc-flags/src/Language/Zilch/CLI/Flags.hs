@@ -25,7 +25,9 @@ data DebugFlags = DebugFlags
     -- | @-ddump-dir=DIR@
     dumpDir :: Maybe FilePath,
     -- | @--build-progress@
-    buildProgress :: Bool
+    buildProgress :: Bool,
+    -- | @-ddump-arities@
+    dumpArities :: Bool
   }
   deriving (Show)
 
@@ -79,4 +81,13 @@ doDump flags prefix p x path
 
       createDirectoryIfMissing True (joinPath dir)
       writeFile (joinPath $ dir <> [show (hash path) <> "-" <> prefix <.> "dbg" <.> "zc"]) (show x)
+  | otherwise = pure ()
+
+doDump' :: Show a => Flags -> String -> (Flags -> Bool) -> a -> IO ()
+doDump' flags fileName p x
+  | p flags = do
+      let dir = getDumpBasePath flags
+
+      createDirectoryIfMissing True (joinPath dir)
+      writeFile (joinPath $ dir <> [fileName]) (show x)
   | otherwise = pure ()

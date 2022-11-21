@@ -127,7 +127,7 @@ pCli = do
 
 pDebug :: Parser DebugFlags
 pDebug = do
-  ~(ast, tast, anf, anfopt, dir) <-
+  ~(ast, tast, anf, anfopt, arities, dir) <-
     go
       <$> many
         ( option
@@ -144,29 +144,31 @@ pDebug = do
   --
   -- see https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/applicative_do.html#strict-patterns
   buildProgress <- switch (long "build-progress" <> help "Turn on progress logging" <> internal)
-  pure $ DebugFlags ast tast anf anfopt dir buildProgress
+  pure $ DebugFlags ast tast anf anfopt dir buildProgress arities
   where
-    debug "dump-ast" = Right (True, False, False, False, Nothing)
-    debug "dump-tast" = Right (False, True, False, False, Nothing)
-    debug "dump-anf" = Right (False, False, True, False, Nothing)
-    debug "dump-anf-opt" = Right (False, False, False, True, Nothing)
+    debug "dump-ast" = Right (True, False, False, False, False, Nothing)
+    debug "dump-tast" = Right (False, True, False, False, False, Nothing)
+    debug "dump-anf" = Right (False, False, True, False, False, Nothing)
+    debug "dump-anf-opt" = Right (False, False, False, True, False, Nothing)
+    debug "dump-arities" = Right (False, False, False, False, True, Nothing)
     debug "dump-dir=" = Left "dump-dir: Missing directory"
     debug "dump-dir" = Left "dump-dir: Missing directory"
-    debug ('d' : 'u' : 'm' : 'p' : '-' : 'd' : 'i' : 'r' : '=' : dir) = Right (False, False, False, False, Just dir)
+    debug ('d' : 'u' : 'm' : 'p' : '-' : 'd' : 'i' : 'r' : '=' : dir) = Right (False, False, False, False, False, Just dir)
     debug spec = Left $ "Invalid command '" <> spec <> "'"
 
     go =
       foldr
-        ( \(ast1, tast1, anf1, anfopt1, dir1) (ast2, tast2, anf2, anfopt2, dir2) ->
-            (ast1 || ast2, tast1 || tast2, anf1 || anf2, anfopt1 || anfopt2, dir1 <|> dir2)
+        ( \(ast1, tast1, anf1, anfopt1, arities1, dir1) (ast2, tast2, anf2, anfopt2, arities2, dir2) ->
+            (ast1 || ast2, tast1 || tast2, anf1 || anf2, anfopt1 || anfopt2, arities1 || arities2, dir1 <|> dir2)
         )
-        (False, False, False, False, Nothing)
+        (False, False, False, False, False, Nothing)
 
     flagList =
       [ "dump-ast",
         "dump-tast",
         "dump-anf",
         "dump-anf-opt",
+        "dump-arities",
         "dump-dir"
       ]
 
