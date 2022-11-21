@@ -10,8 +10,9 @@ build-type:     Simple
 
 library
   exposed-modules:
-      Language.Zilch.Optimize.CallArity
+      Language.Zilch.Optimize.ArgumentTuplingAnalysis
       Language.Zilch.Optimize.Driver
+      Language.Zilch.Optimize.Internal.Type
   other-modules:
       Paths_gzc_optimizer
   hs-source-dirs:

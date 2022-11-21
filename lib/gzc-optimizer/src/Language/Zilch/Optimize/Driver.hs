@@ -7,6 +7,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Located (Located (..))
 import Data.Text (Text)
 import Language.Zilch.CLI.Flags (Flags, debug, doDump, dumpANFOpt)
+import Language.Zilch.Optimize.ArgumentTuplingAnalysis (tupleArguments)
 import Language.Zilch.Pretty.ANF ()
 import Language.Zilch.Typecheck.ANF (Module (..))
 import Prettyprinter (pretty)
@@ -19,8 +20,12 @@ optimize flags mods = do
 
   let (path, name, mod) = gatherDefinitions mods
 
-  liftIO $ doDumpANFOpt flags mod path
-  pure (path, name, mod)
+  let (path', name', mod') = pipeline (path, name, mod)
+
+  liftIO $ doDumpANFOpt flags mod' path'
+  pure (path', name', mod')
+  where
+    pipeline = tupleArguments
 
 -- TODO: put this at the beginning of the codegen pipeline
 --
