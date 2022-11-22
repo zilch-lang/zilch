@@ -350,11 +350,11 @@ check cache rel ctx expr ty = do
 
       let xMultiplicity = TAST.extend rel * unLoc m1
 
-      (qs2, u) <- withLocalVar x xMultiplicity ty2 ctx \ctx -> do
+      (qs2, (u, ty3')) <- withLocalVar x xMultiplicity ty2 ctx \ctx -> do
         (qs, e) <- check cache rel ctx expr ty3'
-        pure (qs, getPos e, e)
+        ty3 <- quote ctx (lvl ctx) ty3'
+        pure (qs, getPos e, (e, ty3))
 
-      ty3' <- quote ctx (lvl ctx) ty3'
       ty' <- eval ctx ty
       unify ctx ty' ty2
       pure (Usage.concat qs1 qs2, TAST.ELam (TAST.Parameter isImplicit m1 x ty :@ p1) ty3' u :@ p3)

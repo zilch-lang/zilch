@@ -9,7 +9,9 @@ extend :: Environment -> Located Value -> Environment
 extend env val = val : env
 
 lookup :: HasCallStack => Environment -> Int -> Located Value
-lookup env name = env !! name
+lookup env name
+  | name < 0 = error "lookup: negative index"
+  | otherwise = env !! name
 
 length :: Environment -> Int
 length = Prelude.length

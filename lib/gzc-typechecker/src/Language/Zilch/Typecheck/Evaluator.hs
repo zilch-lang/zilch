@@ -15,7 +15,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Debug.Trace (trace, traceShow)
-import Language.Zilch.Typecheck.Context (Context (env, lvl), emptyContext)
+import Language.Zilch.Typecheck.Context (Context (env, lvl), bind, emptyContext)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
 import Language.Zilch.Typecheck.Core.Eval
 import qualified Language.Zilch.Typecheck.Core.Multiplicity as TAST
@@ -72,9 +72,9 @@ eval ctx (TAST.EAdditiveProduct (TAST.Parameter _ _ name ty1 :@ _) ty3 ty2 :@ p)
   ty1' <- eval ctx ty1
   ty3' <- eval ctx ty3
   pure $ VAdditiveProduct (unLoc name) ty1' ty3' (Clos (env ctx) ty2) :@ p
-eval ctx (TAST.ELam (TAST.Parameter isImplicit usage (x :@ _) ty1 :@ _) ty2 ex :@ p) = do
+eval ctx (TAST.ELam (TAST.Parameter isImplicit usage name@(x :@ _) ty1 :@ _) ty2 ex :@ p) = do
   ty1' <- eval ctx ty1
-  ty2' <- eval ctx ty2
+  ty2' <- eval (bind (unLoc usage) name ty1' ctx) ty2
   pure $ VLam (unLoc usage) x (not isImplicit) ty1' ty2' (Clos (env ctx) ex) :@ p
 eval _ (TAST.EType :@ p) = pure $ VType :@ p
 eval _ (TAST.EMeta m :@ p) = metaValue m p
@@ -173,7 +173,7 @@ applyVal ctx (VLam _ _ _ _ _ t :@ _) _ u _ = apply ctx t u
 applyVal _ (VFlexible x sp :@ p) ty u i = pure $ VFlexible x ((u, ty, i) : sp) :@ p
 applyVal _ (VRigid x name ty1 sp :@ p) ty u i = pure $ VRigid x name ty1 ((u, ty, i) : sp) :@ p
 applyVal _ (VFFI name sp :@ p) ty u i = pure $ VFFI name ((u, ty, i) : sp) :@ p
-applyVal _ _ _ _ _ = undefined
+applyVal _ t _ _ _ = error $ "Cannot apply to term " <> show t
 
 applySpine :: forall m. MonadElab m => Context -> Located Value -> Spine -> m (Located Value)
 applySpine _ t [] = pure t

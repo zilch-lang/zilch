@@ -69,7 +69,7 @@ rename ctx m ren v = go ren v
           pure $ TAST.ELam (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t2' t' :@ p
         VPi usage x isExplicit a t2 t :@ p -> do
           a' <- go ren a
-          t2' <- go (lift ren) =<< applyVal ctx t2 a (VVariable (x :@ p) cod a :@ p) isExplicit
+          t2' <- go ren t2
           t' <- go (lift ren) =<< apply ctx t (VVariable (x :@ p) cod a :@ p)
           pure $ TAST.EPi (TAST.Parameter (not isExplicit) (usage :@ p) (x :@ p) a' :@ p) t2' t' :@ p
         VMultiplicativeProduct usage x a t2 t :@ p -> do
