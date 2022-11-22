@@ -13,7 +13,7 @@ import Data.Functor ((<&>))
 import Data.Located (Located (..), getPos)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import Debug.Trace (traceShow)
 import qualified Language.Zilch.Typecheck.Core.AST as TAST
@@ -121,8 +121,8 @@ translateExpression modName (TAST.EApplication ty1 f _ ty2 x :@ p) = do
   pure $ IR.EApplication ty1 f ty2 x :@ p
 translateExpression _ (TAST.EIdentifier name _ _ :@ p) = do
   -- traceShow name $ pure ()
-  mod <- gets (Map.! name)
-  pure $ IR.EIdentifier (mod <> [name]) :@ p
+  mod <- gets (Map.!? name)
+  pure $ IR.EIdentifier (fromMaybe [] mod <> [name]) :@ p
 translateExpression _ (TAST.EInteger i ty :@ p) = pure $ IR.EInteger i ty :@ p
 translateExpression _ (TAST.ECharacter c :@ p) = pure $ IR.ECharacter c :@ p
 translateExpression _ (TAST.EMeta _ :@ _) = undefined

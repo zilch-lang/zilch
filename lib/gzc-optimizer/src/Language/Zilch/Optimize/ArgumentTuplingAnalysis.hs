@@ -68,14 +68,14 @@ nbCalls _ (ESnd _ :@ _) = pure Nothing
 nbCalls f (EIfThenElse _ t e :@ _) = do
   nbCallsT <- nbCalls f t
   nbCallsE <- nbCalls f e
-  case (nbCallsT, nbCallsE) of
-    (Nothing, Nothing) -> pure Nothing
-    (Just a, Nothing) -> pure $ Just a
-    (Nothing, Just a) -> pure $ Just a
-    (Just a1, Just a2) -> pure $ Just $ min a1 a2
+  pure $ min' nbCallsT nbCallsE
 nbCalls f (EApplication (EIdentifier g :@ _) args :@ _)
   | f == g = pure . Just . toInteger $ length args
-nbCalls _ (EApplication _ _ :@ _) = pure Nothing
+nbCalls f (EApplication _ args :@ _) = do
+  nbCallsArgs <- traverse (nbCalls f) args
+  case nbCallsArgs of
+    [] -> pure Nothing
+    calls -> pure $ foldr1 min' calls
 nbCalls _ (EAdditivePair _ :@ _) = pure Nothing
 nbCalls _ (EMultiplicativePair _ :@ _) = pure Nothing
 nbCalls f (ELam _ e :@ _) = nbCalls f e
@@ -86,25 +86,23 @@ nbCalls f (ELet (Let _ _ h _ (EApplication (EIdentifier g :@ _) args :@ _) :@ _)
   | f == g = do
       nbCallsHE <- fmap (+ toInteger (length args)) <$> nbCalls h e
       nbCallsFE <- nbCalls f e
-      case (nbCallsHE, nbCallsFE) of
-        (Nothing, Nothing) -> pure Nothing
-        (Just a, Nothing) -> pure $ Just a
-        (Nothing, Just a) -> pure $ Just a
-        (Just a1, Just a2) -> pure $ Just $ min a1 a2
+      pure $ min' nbCallsHE nbCallsFE
 nbCalls f (ELet (Let _ _ _ _ e1 :@ _) e2 :@ _) = do
   nbCallsE1 <- nbCalls f e1
   nbCallsE2 <- nbCalls f e2
-  case (nbCallsE1, nbCallsE2) of
-    (Nothing, Nothing) -> pure Nothing
-    (Just a, Nothing) -> pure $ Just a
-    (Nothing, Just a) -> pure $ Just a
-    (Just a1, Just a2) -> pure $ Just $ min a1 a2
+  pure $ min' nbCallsE1 nbCallsE2
 nbCalls f (EMultiplicativePairElim _ _ _ (EApplication (EIdentifier g :@ _) args :@ _) e :@ _)
   | f == g = fmap (min (toInteger $ length args)) <$> nbCalls f e
 nbCalls f (EMultiplicativePairElim _ _ _ _ e :@ _) = nbCalls f e
 nbCalls _ (EComposite _ :@ _) = pure Nothing
 nbCalls _ (ERecordLiteral _ :@ _) = pure Nothing
 nbCalls _ (ERecordAccess _ _ :@ _) = pure Nothing
+
+min' :: Maybe Integer -> Maybe Integer -> Maybe Integer
+min' Nothing Nothing = Nothing
+min' (Just a) Nothing = Just a
+min' Nothing (Just a) = Just a
+min' (Just a1) (Just a2) = Just $ min a1 a2
 
 gatherAllIdentifiers :: MonadOptimizer m => Located Module -> m ()
 gatherAllIdentifiers (Module defs :@ _) = forM_ defs \(TopLevel _ (Let _ _ name ty e :@ _) :@ _) -> do
