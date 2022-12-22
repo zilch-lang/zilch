@@ -1,0 +1,64 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           gzc-lib
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/zilch-lang/zilch#readme>
+homepage:       https://github.com/zilch-lang/gzc#readme
+bug-reports:    https://github.com/zilch-lang/gzc/issues
+author:         Mesabloo
+maintainer:     Mesabloo
+copyright:      2022 Mesabloo
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/zilch-lang/gzc
+
+library
+  exposed-modules:
+      Data.Located
+      Syntax.Errors
+      Syntax.Lexer
+      Syntax.Parser
+      Syntax.Tokens
+  other-modules:
+      Paths_gzc_lib
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+    , diagnose >=2
+    , megaparsec >=9.0 && <10
+    , mtl ==2.2.2
+    , nsc-core
+    , text ==1.2.5.0
+  default-language: Haskell2010
+
+test-suite parser-tests
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_gzc_lib
+  hs-source-dirs:
+      test/Parser
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , diagnose >=2
+    , gzc-lib
+    , megaparsec >=9.0 && <10
+    , mtl ==2.2.2
+    , nsc-core
+    , pretty-simple
+    , text ==1.2.5.0
+  default-language: Haskell2010
