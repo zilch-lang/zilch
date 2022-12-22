@@ -1,0 +1,9 @@
+session Located (GZC) = HOL +
+  options [timeout = 180]
+
+  sessions
+    HOL
+    Diagnose
+
+  theories
+    At

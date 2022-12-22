@@ -1,0 +1,12 @@
+chapter Diagnose
+
+session Diagnose (GZC) = HOL +
+  options [timeout = 180]
+
+  sessions
+    HOL
+
+  theories
+    Diagnostic
+    Report
+    Position
