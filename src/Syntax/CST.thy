@@ -4,11 +4,15 @@ theory CST
     Located.At
 begin
 
+datatype implicitness =
+  Explicit
+| Implicit
+
 datatype expr =
   Identifier string
 | Integer
     \<open>string located\<close>
-    \<open>expr located\<close>
+    \<open>expr located option\<close>
 | ProductType
     \<open>parameter located list\<close>
     \<open>expr located\<close>
@@ -28,12 +32,14 @@ datatype expr =
     \<open>expr located\<close>
 | Application
     \<open>expr located\<close>
-    \<open>expr located list\<close>
+    \<open>(implicitness \<times> expr located list) list\<close>
 | Parenthesized
     \<open>expr located\<close>
+| Hole
 
 and parameter =
   Parameter
+    \<open>implicitness\<close>
     \<open>expr located option\<close>
     \<open>string located\<close>
     \<open>expr located\<close>
@@ -43,13 +49,13 @@ and def' =
     \<open>expr located option\<close>
     \<open>string located\<close>
     \<open>parameter located list list\<close>
-    \<open>expr located\<close>
+    \<open>expr located option\<close>
     \<open>expr located\<close>
 | Rec
     \<open>expr located option\<close>
     \<open>string located\<close>
     \<open>parameter located list list\<close>
-    \<open>expr located\<close>
+    \<open>expr located option\<close>
     \<open>expr located\<close>
 | Val
     \<open>expr located option\<close>
@@ -57,10 +63,7 @@ and def' =
     \<open>parameter located list list\<close>
     \<open>expr located\<close>
 | Assume
-    \<open>expr located option\<close>
-    \<open>string located\<close>
     \<open>parameter located list list\<close>
-    \<open>expr located\<close>
 | Mutual
     \<open>toplevel located list\<close>
 
@@ -75,7 +78,7 @@ datatype module =
 code_reserved Haskell Expression Definition Parameter Module TopLevel
                       Mod Binding Let Rec Val Assume Mutual Identifier ProductType
                       Lambda MultiplicativeSigmaType AdditiveSigmaType MultiplicativeUnitType
-                      MultiplicativeUnit Local Application Parenthesized
+                      MultiplicativeUnit Local Application Parenthesized Hole
 
 code_printing
   type_constructor expr \<rightharpoonup> (Haskell) "Syntax.CST.Expression"
@@ -90,6 +93,7 @@ code_printing
 | constant Local \<rightharpoonup> (Haskell) "Syntax.CST.Local"
 | constant Application \<rightharpoonup> (Haskell) "Syntax.CST.Application"
 | constant Parenthesized \<rightharpoonup> (Haskell) "Syntax.CST.Parenthesized"
+| constant Hole \<rightharpoonup> (Haskell) "Syntax.CST.Hole"
 
 | type_constructor parameter \<rightharpoonup> (Haskell) "Syntax.CST.Parameter"
 | constant Parameter \<rightharpoonup> (Haskell) "Syntax.CST.Parameter"
@@ -106,5 +110,9 @@ code_printing
 
 | type_constructor module \<rightharpoonup> (Haskell) "Syntax.CST.Module"
 | constant Mod \<rightharpoonup> (Haskell) "Syntax.CST.Mod"
+
+| type_constructor implicitness \<rightharpoonup> (Haskell) "Syntax.CST.Implicitness"
+| constant Implicit \<rightharpoonup> (Haskell) "Syntax.CST.Implicit"
+| constant Explicit \<rightharpoonup> (Haskell) "Syntax.CST.Explicit"
 
 end

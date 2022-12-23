@@ -1,21 +1,33 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Syntax.Parser where
+module Syntax.Parser (runParser) where
 
-import Control.Monad.Writer (MonadWriter)
+import Control.Monad (void)
+import Control.Monad.Writer (MonadWriter, runWriterT)
+import Data.Bifunctor (bimap, second)
+import Data.Foldable (foldl')
+import Data.Functor ((<&>))
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NonEmpty
-import Error.Diagnose (Diagnostic, Position (..))
-import Located (Located (..), getPos, unLoc)
+import qualified Data.Text as Text
+import Error.Diagnose (Diagnostic, Position (..), addReport, def)
+import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
+import Located (Located (..), getPos, spanOf, unLoc)
 import qualified Syntax.CST as CST
 import Syntax.Errors
-import Syntax.Tokens (Token, showToken)
+import Syntax.Tokens (Token (..), showToken)
 import qualified Text.Megaparsec as MP
+import qualified Text.Megaparsec.Char.Lexer as MPL
 
 type MonadParser m = (MonadWriter [ParsingWarning] m, MP.MonadParsec ParsingError [Located Token] m, MonadFail m)
 
@@ -73,13 +85,306 @@ located p = do
 
   let pos =
         Position
-          (fromIntegral $ MP.unPos beginLine, fromIntegral $ MP.unPos beginColumn)
+          (MP.unPos beginLine, MP.unPos beginColumn)
           (endLine, endColumn)
           file
 
   pure $ res :@ pos
 
+-- | Accepts the given 'Token' not matter its position.
+token :: forall m. MonadParser m => Token -> m (Located Token)
+token tk = MP.satisfy ((== tk) . unLoc) MP.<?> showToken tk
+
+whitespaces :: forall m. MonadParser m => m ()
+whitespaces = MPL.space MP.empty parseLineComment parseMultiComment
+  where
+    parseLineComment = MP.skipSome $ MP.satisfy lineComment
+    lineComment (TkInlineComment _ :@ _) = True
+    lineComment _ = False
+
+    parseMultiComment = MP.skipSome $ MP.satisfy multiComment
+    multiComment (TkMultilineComment _ :@ _) = True
+    multiComment (TkDocComment _ :@ _) = True
+    multiComment _ = False
+
+lexeme :: forall m a. MonadParser m => m a -> m a
+lexeme = MPL.lexeme whitespaces
+
+-- | See 'MPL.indentGuard'.
+indentGuard :: forall m. MonadParser m => Ordering -> MP.Pos -> m MP.Pos
+indentGuard = MPL.indentGuard whitespaces
+
+nonIndented :: forall m a. MonadParser m => m a -> m a
+nonIndented = MPL.nonIndented whitespaces
+
+lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
+lineFold p = MPL.lineFold whitespaces (\s -> p (MP.try s))
+
+-- | Unfortunately, we cannot use 'MPL.indentBlock' because it has a constraint @'Token' s ~ 'Char'@,
+--   which is not our case here.
+indentBlock :: forall m a. MonadParser m => m a -> m [a]
+indentBlock p = do
+  pos <- whitespaces *> MPL.indentLevel
+  (p <* whitespaces) `MP.sepBy` indentGuard EQ pos
+
+parens :: forall m a. MonadParser m => m a -> m a
+parens p = do
+  _ <- lexeme (token TkLeftParen)
+  res <- p
+  _ <- lexeme (token TkRightParen)
+  pure res
+
+------------------------------------------------------------------------
+
+parseIdentifier :: forall m. MonadParser m => m (Located String)
+parseIdentifier = MP.label "an identifier" $ MP.satisfy isIdentifier <&> \(TkSymbol id :@ p) -> Text.unpack id :@ p
+  where
+    isIdentifier (TkSymbol _ :@ _) = True
+    isIdentifier _ = False
+
+parseNumber :: forall m. MonadParser m => m (Located String, Maybe (Located String))
+parseNumber = MP.label "a number" do
+  TkNumber nb suffix :@ p <- MP.satisfy isNumber
+  pure (Text.unpack nb :@ p, (:@ p) . Text.unpack <$> suffix)
+  where
+    isNumber (TkNumber _ _ :@ _) = True
+    isNumber _ = False
+
 ------------------------------------------------------------------------
 
 runParser :: FilePath -> [Located Token] -> Either (Diagnostic String) (Located CST.Module, Diagnostic String)
-runParser path tokens = undefined
+runParser path tokens =
+  bimap
+    (errorDiagnosticFromBundle Nothing "Parse error on input" Nothing)
+    (second toDiagnostic)
+    $ MP.runParser (runWriterT parseModule) path tokens
+  where
+    toDiagnostic = foldl' addReport def . fmap fromParsingWarning
+
+------------------------------------------------------------------------
+
+parseModule :: forall m. MonadParser m => m (Located CST.Module)
+parseModule = located do
+  defs <- MP.many (nonIndented parseTopLevel)
+  _ <- token TkEOF MP.<?> "end of input"
+  pure $ CST.Mod defs
+
+parseTopLevel :: forall m. MonadParser m => m (Located CST.TopLevel)
+parseTopLevel = located $ lineFold \s -> do
+  isPub <- MP.option False (True <$ lexeme (token TkPublic))
+  def <- parseDefinition s
+  pure $ CST.Binding isPub def
+
+parseDefinition :: forall m. MonadParser m => m () -> m (Located CST.Definition)
+parseDefinition s =
+  located $
+    MP.choice
+      [parseLet s, parseRec s, parseVal s, parseAssume s, parseMutual s]
+  where
+    parseLet = parseLetOrRec TkLet CST.Let
+    parseRec = parseLetOrRec TkRec CST.Rec
+
+    parseLetOrRec tk ctor s = do
+      _ <- lexeme (token tk) <* s
+      mult <- MP.optional (parseMultiplicity s <* s)
+      name <- parseIdentifier <* s
+      params <- lexeme (parseTypeParameter s) `MP.sepBy` s
+      ret <- MP.optional do
+        _ <- lexeme (token TkColon) <* s
+        parseFullExpression s
+      _ <- lexeme (token TkColonEquals MP.<|> token TkUniColonEquals) <* s
+      body <- parseFullExpression s
+
+      pure $ ctor mult name params ret body
+
+    parseVal s = do
+      _ <- lexeme (token TkVal) <* s
+      mult <- MP.optional (parseMultiplicity s <* s)
+      name <- parseIdentifier <* s
+      params <- lexeme (parseTypeParameter s) `MP.sepBy` s
+      _ <- lexeme (token TkColon) <* s
+      ret <- parseFullExpression s
+
+      pure $ CST.Val mult name params ret
+
+    parseAssume s = do
+      _ <- lexeme (token TkAssume) <* s
+      params <- lexeme (parseTypeParameter s) `MP.sepBy` s
+
+      pure $ CST.Assume params
+
+    parseMutual s = do
+      _ <- lexeme (token TkMutual)
+      defs <- indentBlock (s *> parseTopLevel)
+
+      pure $ CST.Mutual defs
+
+parseMultiplicity :: forall m. MonadParser m => m () -> m (Located CST.Multiplicity)
+parseMultiplicity s = do
+  _ :@ Position _ (_, cl) _ <- token TkAt
+  MP.observing (indentGuard EQ (MP.mkPos cl)) >>= \case
+    Left _ -> fail "Unexpected blank after '@'"
+    Right _ -> pure ()
+  parseAtomicExpression s
+
+parseAtomicExpression :: forall m. MonadParser m => m () -> m (Located CST.Expression)
+parseAtomicExpression s =
+  located $
+    MP.choice
+      [ -- identifiers
+        CST.Identifier . unLoc <$> parseIdentifier,
+        -- numbers
+        do
+          (nb, suffix) <- parseNumber
+          -- FIXME: do that only if @nb@ does not contain dots
+          pure $ CST.Integer nb (fmap CST.Identifier <$> suffix),
+        -- multiplicative unit
+        MP.try
+          do
+            _ <- lexeme (token TkLeftParen)
+            _ <- lexeme (token TkRightParen)
+            pure CST.MultiplicativeUnit,
+        -- multiplicative unit type
+        CST.MultiplicativeUnitType <$ token (TkSymbol "𝟏"),
+        -- parenthesized expression
+        CST.Parenthesized
+          <$> parens (parseFullExpression s)
+      ]
+
+parseFullExpression :: forall m. MonadParser m => m () -> m (Located CST.Expression)
+parseFullExpression s =
+  MP.label "an expression" . located $
+    MP.choice
+      [ -- lambda abstraction
+        parseLambda s,
+        -- local binding
+        parseLocal s,
+        -- dependent type
+        MP.try $ parseDependentType s,
+        -- function application
+        parseApplication s
+      ]
+
+parseLambda :: forall m. MonadParser m => m () -> m CST.Expression
+parseLambda _ = lineFold \s -> do
+  _ <- lexeme (token TkLam MP.<|> token TkUniLam) <* s
+  params <- parseLambdaParameter s `MP.sepBy1` s
+  _ <- lexeme (token TkDoubleRightArrow MP.<|> token TkUniDoubleRightArrow) <* s
+  body <- parseFullExpression s
+
+  pure $ CST.Lambda params body
+
+parseLocal :: forall m. MonadParser m => m () -> m CST.Expression
+parseLocal s = do
+  def <- lineFold parseDefinition <* s
+  body <- parseFullExpression s
+
+  pure $ CST.Local def body
+
+parseDependentType :: forall m. MonadParser m => m () -> m CST.Expression
+parseDependentType s = do
+  params <- parseTypeParameter s <* s
+  tk :@ _ <-
+    lexeme $
+      MP.choice
+        [ token TkAmpersand,
+          token TkTimes,
+          token TkUniTensor,
+          token TkRightArrow,
+          token TkUniRightArrow
+        ]
+        <* s
+  ret <- parseFullExpression s
+
+  let ctor = case tk of
+        TkAmpersand -> CST.AdditiveSigmaType
+        TkUniTensor -> CST.MultiplicativeSigmaType
+        TkTimes -> CST.MultiplicativeSigmaType
+        TkRightArrow -> CST.ProductType
+        TkUniRightArrow -> CST.ProductType
+
+  pure $ ctor params ret
+
+parseApplication :: forall m. MonadParser m => m () -> m CST.Expression
+parseApplication s = do
+  fn <- lexeme (parseAtomicExpression s)
+  args <-
+    MP.many $
+      MP.choice
+        [ s *> go TkLeftParen TkRightParen CST.Explicit,
+          s *> go TkLeftBrace TkRightBrace CST.Implicit
+        ]
+
+  pure
+    if null args
+      then unLoc fn
+      else CST.Application fn args
+  where
+    go left right imp = do
+      _ <- lexeme (token left) <* s
+      args <- parseFullExpression s `MP.sepBy` (s *> lexeme (token TkComma) <* s)
+      _ <- s *> token right
+
+      pure (imp, args)
+
+parseTypeParameter :: forall m. MonadParser m => m () -> m [Located CST.Parameter]
+parseTypeParameter s =
+  MP.choice
+    [ go TkLeftParen TkRightParen CST.Explicit s,
+      go TkLeftBrace TkRightBrace CST.Implicit s,
+      pure <$> located do
+        mult <- MP.optional $ lexeme (parseMultiplicity s) <* s
+        typ@(_ :@ p2) <- parseAtomicExpression s
+        pure $ CST.Parameter CST.Explicit mult ("_" :@ p2) typ
+    ]
+  where
+    go left right imp s = do
+      _ <- lexeme (token left) <* s
+      params <- parseParam imp s `MP.sepBy` (s *> lexeme (token TkComma) <* s)
+      _ <- token right
+
+      pure params
+
+    parseParam imp s = located do
+      mult <- MP.optional $ lexeme (parseMultiplicity s) <* s
+      (name, typ) <-
+        MP.choice
+          [ MP.try do
+              name <- lexeme (unnamedBinding MP.<|> parseIdentifier) <* s
+              _ <- lexeme (token TkColon) <* s
+              typ <- parseFullExpression s <* s
+              pure (name, typ),
+            do
+              typ@(_ :@ p1) <- parseFullExpression s
+              pure ("_" :@ p1, typ)
+          ]
+
+      pure $ CST.Parameter imp mult name typ
+
+    unnamedBinding = ("_" <$) <$> token TkUnderscore
+
+parseLambdaParameter :: forall m. MonadParser m => m () -> m [Located CST.Parameter]
+parseLambdaParameter s =
+  MP.choice
+    [ pure <$> located do
+        name@(_ :@ p1) <- parseIdentifier
+        pure $ CST.Parameter CST.Explicit Nothing name (CST.Hole :@ p1),
+      go TkLeftParen TkRightParen CST.Explicit s,
+      go TkLeftBrace TkRightBrace CST.Implicit s
+    ]
+  where
+    go left right imp s = do
+      _ <- lexeme (token left) <* s
+      params <- parseParam imp s `MP.sepBy` (s *> lexeme (token TkComma) <* s)
+      _ <- lexeme (token right) <* s
+
+      pure params
+
+    parseParam imp s = located do
+      mult <- MP.optional $ lexeme (parseMultiplicity s) <* s
+      name@(_ :@ p1) <- parseIdentifier <* s
+      typ <- MP.option (CST.Hole :@ p1) do
+        _ <- lexeme (token TkColon) <* s
+        parseFullExpression s
+
+      pure $ CST.Parameter imp mult name typ

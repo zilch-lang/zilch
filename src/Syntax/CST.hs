@@ -22,13 +22,13 @@ data Definition
       (Maybe (Located Multiplicity))
       (Located String)
       [[Located Parameter]]
-      (Located Expression)
+      (Maybe (Located Expression))
       (Located Expression)
   | Rec
       (Maybe (Located Multiplicity))
       (Located String)
       [[Located Parameter]]
-      (Located Expression)
+      (Maybe (Located Expression))
       (Located Expression)
   | Val
       (Maybe (Located Multiplicity))
@@ -36,10 +36,7 @@ data Definition
       [[Located Parameter]]
       (Located Expression)
   | Assume
-      (Maybe (Located Multiplicity))
-      (Located String)
       [[Located Parameter]]
-      (Located Expression)
   | Mutual
       [Located TopLevel]
   deriving (Show)
@@ -47,8 +44,14 @@ data Definition
 -- | Multiplicities are certain kinds of expressions.
 type Multiplicity = Expression
 
+data Implicitness
+  = Implicit
+  | Explicit
+  deriving (Show)
+
 data Parameter
   = Parameter
+      Implicitness
       (Maybe (Located Multiplicity))
       (Located String)
       (Located Expression)
@@ -58,7 +61,7 @@ data Expression
   = Identifier String
   | Integer
       (Located String)
-      (Located Expression)
+      (Maybe (Located Expression))
   | ProductType
       [Located Parameter]
       (Located Expression)
@@ -78,7 +81,8 @@ data Expression
       (Located Expression)
   | Application
       (Located Expression)
-      [Located Expression]
+      [(Implicitness, [Located Expression])]
   | Parenthesized
       (Located Expression)
+  | Hole
   deriving (Show)
