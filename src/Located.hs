@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 
-module Data.Located (module Export, spanOf) where
+module Located (module Export, spanOf) where
 
 import "nsc-core" Data.Located as Export (Located (..), Position (..), getPos, unLoc)
 

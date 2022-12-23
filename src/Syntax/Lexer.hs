@@ -12,14 +12,13 @@ import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.Char (isSpace)
 import Data.Foldable (foldl')
-import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Located (Located (..), Position (..))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
+import Located (Located (..), Position (..))
 import Syntax.Errors
-import Syntax.Tokens (Token (..), showToken)
+import Syntax.Tokens (Token (..))
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
@@ -42,8 +41,8 @@ located p = do
 
   let pos =
         Position
-          (fromIntegral $ MP.unPos beginLine, fromIntegral $ MP.unPos beginColumn)
-          (fromIntegral $ MP.unPos endLine, fromIntegral $ MP.unPos endColumn)
+          (MP.unPos beginLine, MP.unPos beginColumn)
+          (MP.unPos endLine, MP.unPos endColumn)
           file
 
   pure $ res :@ pos
@@ -56,9 +55,9 @@ space = MPL.space MPC.space1 MP.empty MP.empty
 lexeme :: MonadLexer m => m a -> m a
 lexeme = MPL.lexeme space
 
--- | 'MPL.symbol' but with its first argument set to 'space'.
-symbol :: MonadLexer m => Text -> m Text
-symbol = MPL.symbol space
+-- -- | 'MPL.symbol' but with its first argument set to 'space'.
+-- symbol :: MonadLexer m => Text -> m Text
+-- symbol = MPL.symbol space
 
 -- | Parse and return a 'TkEOF' if at the end of the stream.
 eof :: MonadLexer m => m (Located Token)
@@ -168,8 +167,7 @@ integer = MP.label "a number" . located $ MP.choice [toNumber hexadecimal, toNum
         MP.optional . MP.try $
           identifierOrKeyword >>= \case
             TkSymbol suffix :@ _ -> pure suffix
-            tk :@ _ -> MP.empty
-            tk :@ _ -> MP.customFailure (UnexpectedKeywordAsNumberSuffix tk) -- MP.unexpected (MP.Tokens $ Text.pack (showToken tk) :| [])
+            _ :@ _ -> MP.empty
       pure $ TkNumber nb ty
 
 --------------------------------------------------------------------------------------
@@ -197,11 +195,12 @@ reservedSymbol =
         TkColon <$ MPC.string ":",
         TkLeftAngle <$ MPC.string "⟨",
         TkRightAngle <$ MPC.string "⟩",
-        TkComma <$ MPC.string ","
+        TkComma <$ MPC.string ",",
+        TkAt <$ MPC.string "@"
       ]
 
 anySymbol :: forall m. MonadLexer m => m (Located Token)
-anySymbol = located $ toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v∷" :: String))
+anySymbol = located $ toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v∷@" :: String))
   where
     toToken "->" = TkRightArrow
     toToken "→" = TkUniRightArrow

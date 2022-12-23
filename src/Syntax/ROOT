@@ -1,0 +1,10 @@
+session Syntax (GZC) = HOL +
+  options [timeout = 180]
+
+  sessions
+    HOL
+    Diagnose
+    Located
+
+  theories
+    CST

@@ -25,7 +25,8 @@ source-repository head
 
 library
   exposed-modules:
-      Data.Located
+      Located
+      Syntax.CST
       Syntax.Errors
       Syntax.Lexer
       Syntax.Parser

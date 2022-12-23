@@ -12,7 +12,7 @@ where \<open>from_point (position x _ _) = x\<close>
 fun to_point :: \<open>position \<Rightarrow> nat \<times> nat\<close>
 where \<open>to_point (position _ x _) = x\<close>
 
-fun in_file :: \<open>position \<Rightarrow> string›
+fun in_file :: \<open>position \<Rightarrow> string\<close>
 where \<open>in_file (position _ _ x) = x\<close>
 
 (****************************************)

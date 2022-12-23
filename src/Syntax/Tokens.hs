@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Werror=Wincomplete-patterns #-}
+{-# OPTIONS_GHC -Werror=incomplete-patterns #-}
 
 module Syntax.Tokens where
 
@@ -99,6 +99,8 @@ data Token
     TkComma
   | -- | @_@: wildcard pattern or infered holes
     TkUnderscore
+  | -- | @\@@: multiplicity syntactic prefix
+    TkAt
   | -- | A valid symbol formed from any non-space character
     TkSymbol Text
   | -- | Any number-like form
@@ -172,3 +174,4 @@ showToken TkAmpersand = "'&'"
 showToken TkLeftAngle = "'⟨'"
 showToken TkRightAngle = "'⟩'"
 showToken TkHashAttributes = "'#attributes'"
+showToken TkAt = "'@'"

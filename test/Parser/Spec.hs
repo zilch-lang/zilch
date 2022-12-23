@@ -1,10 +1,10 @@
 {-# LANGUAGE PackageImports #-}
 
-import "gzc-lib" Data.Located (unLoc)
-import Error.Diagnose (printDiagnostic, stdout, defaultStyle)
-import Syntax.Tokens
-import Syntax.Lexer (runLexer)
 import qualified Data.Text.IO as Text
+import Error.Diagnose (defaultStyle, printDiagnostic, stdout)
+import Located (unLoc)
+import Syntax.Lexer (runLexer)
+import Syntax.Tokens
 import Text.Pretty.Simple (pPrint)
 
 main :: IO ()
