@@ -64,7 +64,9 @@ substituteUnicodeInPlace() {
         --replace "⇀" "\<rightharpoonup>" \
         --replace "×" "\<times>" \
         --replace "›" "\<close>" \
-        --replace "‹" "\<open>"
+        --replace "‹" "\<open>" \
+        --replace "←" "\<leftarrow>" \
+        --replace "≡" "\<equiv>"
 }
 
 export -f substitute
@@ -72,3 +74,4 @@ export -f substituteInPlace
 export -f substituteUnicodeInPlace
 
 find src -name '*.thy' -exec bash -c 'substituteUnicodeInPlace "$@"' bash {} \;
+find app -name '*.thy' -exec bash -c 'substituteUnicodeInPlace "$@"' bash {} \;

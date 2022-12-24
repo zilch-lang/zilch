@@ -4,94 +4,89 @@ theory CST
     Located.At
 begin
 
-text \<open>
-  A subcontext containing the whole tree definition, used to prevent
-  name clashes with other very similar modules.
-  That way, all uses of this tree is prefixed with \<open>CST.\<close>.
-\<close>
-locale CST
-begin
+datatype implicitness =
+  Explicit
+| Implicit
 
-  datatype implicitness =
-    Explicit
-  | Implicit
+datatype expr =
+  Identifier string
+| Integer
+    \<open>string located\<close>
+    \<open>expr located option\<close>
+| ProductType
+    \<open>parameter located list\<close>
+    \<open>expr located\<close>
+| Lambda
+    \<open>parameter located list\<close>
+    \<open>expr located\<close>
+| MultiplicativeSigmaType
+    \<open>parameter located list\<close>
+    \<open>expr located\<close>
+| AdditiveSigmaType
+    \<open>parameter located list\<close>
+    \<open>expr located\<close>
+| MultiplicativeUnitType
+| MultiplicativeUnit
+| Local
+    \<open>def' located\<close>
+    \<open>expr located\<close>
+| Application
+    \<open>expr located\<close>
+    \<open>(implicitness \<times> expr located list) list\<close>
+| Parenthesized
+    \<open>expr located\<close>
+| Do
+    \<open>expr located\<close>
 
-  datatype expr =
-    Identifier string
-  | Integer
-      \<open>string located\<close>
-      \<open>expr located option\<close>
-  | ProductType
-      \<open>parameter located list\<close>
-      \<open>expr located\<close>
-  | Lambda
-      \<open>parameter located list\<close>
-      \<open>expr located\<close>
-  | MultiplicativeSigmaType
-      \<open>parameter located list\<close>
-      \<open>expr located\<close>
-  | AdditiveSigmaType
-      \<open>parameter located list\<close>
-      \<open>expr located\<close>
-  | MultiplicativeUnitType
-  | MultiplicativeUnit
-  | Local
-      \<open>def' located\<close>
-      \<open>expr located\<close>
-  | Application
-      \<open>expr located\<close>
-      \<open>(implicitness \<times> expr located list) list\<close>
-  | Parenthesized
-      \<open>expr located\<close>
-  | Do
-      \<open>expr located\<close>
+and parameter =
+  Parameter
+    \<open>implicitness\<close>
+    \<open>expr located option\<close>
+    \<open>string located option\<close>
+    \<open>expr located option\<close>
 
-  and parameter =
-    Parameter
-      \<open>implicitness\<close>
-      \<open>expr located option\<close>
-      \<open>string located option\<close>
-      \<open>expr located option\<close>
+and def' =
+  Let
+    \<open>expr located option\<close>
+    \<open>string located\<close>
+    \<open>parameter located list list\<close>
+    \<open>expr located option\<close>
+    \<open>expr located\<close>
+| Rec
+    \<open>expr located option\<close>
+    \<open>string located\<close>
+    \<open>parameter located list list\<close>
+    \<open>expr located option\<close>
+    \<open>expr located\<close>
+| Val
+    \<open>expr located option\<close>
+    \<open>string located\<close>
+    \<open>parameter located list list\<close>
+    \<open>expr located\<close>
+| Assume
+    \<open>parameter located list list\<close>
+| Mutual
+    \<open>toplevel located list\<close>
 
-  and def' =
-    Let
-      \<open>expr located option\<close>
-      \<open>string located\<close>
-      \<open>parameter located list list\<close>
-      \<open>expr located option\<close>
-      \<open>expr located\<close>
-  | Rec
-      \<open>expr located option\<close>
-      \<open>string located\<close>
-      \<open>parameter located list list\<close>
-      \<open>expr located option\<close>
-      \<open>expr located\<close>
-  | Val
-      \<open>expr located option\<close>
-      \<open>string located\<close>
-      \<open>parameter located list list\<close>
-      \<open>expr located\<close>
-  | Assume
-      \<open>parameter located list list\<close>
-  | Mutual
-      \<open>toplevel located list\<close>
+and toplevel =
+  Binding bool \<open>def' located\<close>
 
-  and toplevel =
-    Binding bool \<open>def' located\<close>
+datatype module =
+  Mod \<open>toplevel located list\<close>
 
-  datatype module =
-    Mod \<open>toplevel located list\<close>
+type_synonym multiplicity = expr
 
-  type_synonym multiplicity = expr
-
-end
+hide_type (open) implicitness expr parameter def' toplevel module
+hide_const (open) Explicit Implicit Identifier Integer ProductType Lambda
+                  MultiplicativeSigmaType AdditiveSigmaType MultiplicativeUnitType
+                  MultiplicativeUnit Local Application Parenthesized Do
 
 (************************************************)
 
 code_reserved Haskell Expression Definition Parameter Module TopLevel
                       Mod Binding Let Rec Val Assume Mutual Identifier ProductType
                       Lambda MultiplicativeSigmaType AdditiveSigmaType MultiplicativeUnitType
-                      MultiplicativeUnit Local Application Parenthesized Hole
+                      MultiplicativeUnit Local Application Parenthesized Do
 
 code_printing
   type_constructor CST.expr \<rightharpoonup> (Haskell) "Syntax.CST.Expression"

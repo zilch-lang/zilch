@@ -5,6 +5,7 @@ session Diagnose (GZC) = HOL +
 
   sessions
     HOL
+    Hello_World
 
   theories
     Diagnostic

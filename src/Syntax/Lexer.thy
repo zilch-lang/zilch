@@ -7,7 +7,7 @@ theory Lexer
 begin
 
 axiomatization
-  run_lexer :: \<open>string \<Rightarrow> string \<Rightarrow> (string diagnostic + (token located list \<times> string diagnostic))\<close>
+  run_lexer :: \<open>String.literal \<Rightarrow> String.literal \<Rightarrow> (String.literal diagnostic + (token located list \<times> String.literal diagnostic))\<close>
 
 (*********************************************)
 

@@ -11,3 +11,4 @@ session Syntax (GZC) = HOL +
     Parser
     Tokens
     Lexer
+    Driver

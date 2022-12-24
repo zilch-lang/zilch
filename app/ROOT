@@ -1,0 +1,9 @@
+session EntryPoint (GZC main) = HOL +
+  sessions
+    Diagnose
+    Syntax
+    Located
+    Hello_World
+
+  theories
+    EntryPoint

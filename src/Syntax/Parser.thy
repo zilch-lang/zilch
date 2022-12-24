@@ -8,7 +8,7 @@ theory Parser
 begin
 
 axiomatization
-  run_parser :: \<open>string \<Rightarrow> token located list \<Rightarrow> (string diagnostic + (CST.module located \<times> string diagnostic))\<close>
+  run_parser :: \<open>String.literal \<Rightarrow> token located list \<Rightarrow> (String.literal diagnostic + (CST.module located \<times> String.literal diagnostic))\<close>
 
 (**********************************************)
 
