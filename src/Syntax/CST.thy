@@ -35,14 +35,15 @@ datatype expr =
     \<open>(implicitness \<times> expr located list) list\<close>
 | Parenthesized
     \<open>expr located\<close>
-| Hole
+| Do
+    \<open>expr located\<close>
 
 and parameter =
   Parameter
     \<open>implicitness\<close>
     \<open>expr located option\<close>
-    \<open>string located\<close>
-    \<open>expr located\<close>
+    \<open>string located option\<close>
+    \<open>expr located option\<close>
 
 and def' =
   Let
@@ -73,6 +74,8 @@ and toplevel =
 datatype module =
   Mod \<open>toplevel located list\<close>
 
+type_synonym multiplicity = expr
+
 (************************************************)
 
 code_reserved Haskell Expression Definition Parameter Module TopLevel
@@ -93,7 +96,7 @@ code_printing
 | constant Local \<rightharpoonup> (Haskell) "Syntax.CST.Local"
 | constant Application \<rightharpoonup> (Haskell) "Syntax.CST.Application"
 | constant Parenthesized \<rightharpoonup> (Haskell) "Syntax.CST.Parenthesized"
-| constant Hole \<rightharpoonup> (Haskell) "Syntax.CST.Hole"
+| constant Do \<rightharpoonup> (Haskell) "Syntax.CST.Do"
 
 | type_constructor parameter \<rightharpoonup> (Haskell) "Syntax.CST.Parameter"
 | constant Parameter \<rightharpoonup> (Haskell) "Syntax.CST.Parameter"

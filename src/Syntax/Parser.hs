@@ -6,13 +6,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Syntax.Parser (runParser) where
 
-import Control.Monad (void)
 import Control.Monad.Writer (MonadWriter, runWriterT)
 import Data.Bifunctor (bimap, second)
 import Data.Foldable (foldl')
@@ -22,7 +20,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text as Text
 import Error.Diagnose (Diagnostic, Position (..), addReport, def)
 import Error.Diagnose.Compat.Megaparsec (errorDiagnosticFromBundle)
-import Located (Located (..), getPos, spanOf, unLoc)
+import Located (Located (..), getPos, unLoc)
 import qualified Syntax.CST as CST
 import Syntax.Errors
 import Syntax.Tokens (Token (..), showToken)
@@ -118,7 +116,7 @@ nonIndented :: forall m a. MonadParser m => m a -> m a
 nonIndented = MPL.nonIndented whitespaces
 
 lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
-lineFold p = MPL.lineFold whitespaces (\s -> p (MP.try s))
+lineFold p = MPL.lineFold whitespaces (p . MP.try)
 
 -- | Unfortunately, we cannot use 'MPL.indentBlock' because it has a constraint @'Token' s ~ 'Char'@,
 --   which is not our case here.
@@ -257,6 +255,8 @@ parseFullExpression s =
     MP.choice
       [ -- lambda abstraction
         parseLambda s,
+        -- do block
+        parseDo s,
         -- local binding
         parseLocal s,
         -- dependent type
@@ -273,6 +273,13 @@ parseLambda _ = lineFold \s -> do
   body <- parseFullExpression s
 
   pure $ CST.Lambda params body
+
+parseDo :: forall m. MonadParser m => m () -> m CST.Expression
+parseDo _ = lineFold \s -> do
+  _ <- lexeme (token TkDo) <* s
+  body <- parseFullExpression s
+
+  pure $ CST.Do body
 
 parseLocal :: forall m. MonadParser m => m () -> m CST.Expression
 parseLocal s = do
@@ -334,8 +341,8 @@ parseTypeParameter s =
       go TkLeftBrace TkRightBrace CST.Implicit s,
       pure <$> located do
         mult <- MP.optional $ lexeme (parseMultiplicity s) <* s
-        typ@(_ :@ p2) <- parseAtomicExpression s
-        pure $ CST.Parameter CST.Explicit mult ("_" :@ p2) typ
+        typ <- parseAtomicExpression s
+        pure $ CST.Parameter CST.Explicit mult Nothing (Just typ)
     ]
   where
     go left right imp s = do
@@ -353,10 +360,10 @@ parseTypeParameter s =
               name <- lexeme (unnamedBinding MP.<|> parseIdentifier) <* s
               _ <- lexeme (token TkColon) <* s
               typ <- parseFullExpression s <* s
-              pure (name, typ),
+              pure (Just name, Just typ),
             do
-              typ@(_ :@ p1) <- parseFullExpression s
-              pure ("_" :@ p1, typ)
+              typ <- parseFullExpression s
+              pure (Nothing, Just typ)
           ]
 
       pure $ CST.Parameter imp mult name typ
@@ -367,8 +374,8 @@ parseLambdaParameter :: forall m. MonadParser m => m () -> m [Located CST.Parame
 parseLambdaParameter s =
   MP.choice
     [ pure <$> located do
-        name@(_ :@ p1) <- parseIdentifier
-        pure $ CST.Parameter CST.Explicit Nothing name (CST.Hole :@ p1),
+        name <- parseIdentifier
+        pure $ CST.Parameter CST.Explicit Nothing (Just name) Nothing,
       go TkLeftParen TkRightParen CST.Explicit s,
       go TkLeftBrace TkRightBrace CST.Implicit s
     ]
@@ -382,9 +389,9 @@ parseLambdaParameter s =
 
     parseParam imp s = located do
       mult <- MP.optional $ lexeme (parseMultiplicity s) <* s
-      name@(_ :@ p1) <- parseIdentifier <* s
-      typ <- MP.option (CST.Hole :@ p1) do
+      name <- parseIdentifier <* s
+      typ <- MP.optional do
         _ <- lexeme (token TkColon) <* s
         parseFullExpression s
 
-      pure $ CST.Parameter imp mult name typ
+      pure $ CST.Parameter imp mult (Just name) typ

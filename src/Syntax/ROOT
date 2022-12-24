@@ -8,3 +8,6 @@ session Syntax (GZC) = HOL +
 
   theories
     CST
+    Parser
+    Tokens
+    Lexer

@@ -53,8 +53,8 @@ data Parameter
   = Parameter
       Implicitness
       (Maybe (Located Multiplicity))
-      (Located String)
-      (Located Expression)
+      (Maybe (Located String))
+      (Maybe (Located Expression))
   deriving (Show)
 
 data Expression
@@ -84,5 +84,6 @@ data Expression
       [(Implicitness, [Located Expression])]
   | Parenthesized
       (Located Expression)
-  | Hole
+  | Do
+      (Located Expression)
   deriving (Show)
