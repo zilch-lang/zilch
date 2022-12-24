@@ -63,7 +63,7 @@ val project_root =
   in
     if project <> ""
       then Path.basic project
-      else Path.parent
+      else Path.parent (* That's because this file is not at the root of the project *)
   end;
 
 val target = Path.append project_root (Path.basic "generated");
