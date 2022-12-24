@@ -26,4 +26,7 @@ code_printing
 | constant to_point \<rightharpoonup> (Haskell) "Error.Diagnose.Position.end"
 | constant in_file \<rightharpoonup> (Haskell) "Error.Diagnose.Position.file"
 
+  (* Suppress unwanted class instances *)
+| class_instance position :: \<open>HOL.equal\<close> \<rightharpoonup> (Haskell) -
+
 end

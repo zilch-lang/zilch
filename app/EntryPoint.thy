@@ -41,6 +41,38 @@ code_reserved Haskell exitFailure
 code_printing
   constant exit_failure \<rightharpoonup> (Haskell) "System.IO.exitFailure"
 
-export_code entrypoint in Haskell file_prefix "generated"
+(* export_code _ in Haskell *)
+
+text \<open>
+  Code generation in a custom directory.
+
+  The default \<open>export_code\<close> command generates source code in a virtual file systemn
+  which is inaccessible from the shell.
+  This is merely a hack to generate our Haskell code so that it is available to
+  our local stack project.
+\<close>
+ML\<open>
+writeln "Generating Haskell code...";
+
+val (files, _) =
+  Code_Target.produce_code @{context} false [@{const_name entrypoint}] "Haskell" "EntryPoint" NONE [];
+
+val project_root =
+  let
+    val project = getenv "PROJECT";
+  in
+    if project <> ""
+      then Path.basic project
+      else Path.parent
+  end;
+
+val target = Path.append project_root (Path.basic "generated");
+
+Isabelle_System.make_directory target;
+
+List.app (fn ([file], content) => Bytes.write (Path.append target (Path.basic file)) content) files;
+
+writeln ("Successfully exported generated Haskell code to " ^ Path.print target)
+\<close>
 
 end
