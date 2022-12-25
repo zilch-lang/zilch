@@ -1,9 +1,14 @@
+session CLI (GZC main) in CLI = HOL +
+  theories
+    Flags
+
 session EntryPoint (GZC main) = HOL +
   sessions
     Diagnose
     Syntax
     Located
     Hello_World
+    CLI
 
   theories
     EntryPoint

@@ -61,6 +61,7 @@ executables:
     dependencies:
     - gzc-lib
     - diagnose
+    - optparse-applicative >=0.16
 
 tests:
   parser-tests:

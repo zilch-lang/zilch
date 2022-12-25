@@ -1,6 +1,7 @@
 module Main where
 
+import CLI.Parser (getFlags)
 import EntryPoint (entrypoint)
 
 main :: IO ()
-main = entrypoint []
+main = getFlags >>= entrypoint

@@ -1,6 +1,6 @@
 --- a/EntryPoint.hs	2022-12-24 19:30:42.593228712 +0100
 +++ b/EntryPoint.hs	2022-12-24 19:30:58.919051141 +0100
-@@ -8,6 +8,17 @@
+@@ -8,6 +8,18 @@
    zip, null, takeWhile, dropWhile, all, any, Integer, negate, abs, divMod,
    String, Bool(True, False), Maybe(Nothing, Just));
  import qualified Prelude;
@@ -15,6 +15,7 @@
 +import qualified Syntax.Tokens;
 +import qualified System.IO;
 +import qualified System.Exit;
++import qualified CLI.Flags;
  import qualified StdIO;
  
  data Itself a = Type;

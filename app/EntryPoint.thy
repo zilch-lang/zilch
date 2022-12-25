@@ -9,6 +9,8 @@ theory EntryPoint
     Syntax.CST
     Syntax.AST
 
+    CLI.Flags
+
     Hello_World.IO
 begin
 
@@ -27,9 +29,9 @@ fun go_typecheck :: \<open>(String.literal diagnostic + (String.literal \<righth
 where \<open>go_typecheck (Inl diag) = print_diagnostic_and_quit diag\<close>
     | \<open>go_typecheck (Inr ast) = undefined\<close>
 
-definition entrypoint :: \<open>String.literal list \<Rightarrow> unit io\<close>
-where \<open>entrypoint paths \<equiv> do {
-         (result, files) \<leftarrow> run_driver paths;
+fun entrypoint :: \<open>all_flags \<Rightarrow> unit io\<close>
+where \<open>entrypoint (AllFlags input output) = do {
+         (result, files) \<leftarrow> run_driver input;
          go_typecheck result;
          IO.return ()
        }\<close>

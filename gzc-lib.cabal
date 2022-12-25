@@ -48,6 +48,8 @@ library
 executable gzc
   main-is: Main.hs
   other-modules:
+      CLI.Flags
+      CLI.Parser
       EntryPoint
       StdIO
       Paths_gzc_lib
@@ -59,6 +61,7 @@ executable gzc
       base >=4.7 && <5
     , diagnose
     , gzc-lib
+    , optparse-applicative >=0.16
   default-language: Haskell2010
 
 test-suite parser-tests
