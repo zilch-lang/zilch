@@ -45,6 +45,22 @@ library
     , text ==1.2.5.0
   default-language: Haskell2010
 
+executable gzc
+  main-is: Main.hs
+  other-modules:
+      EntryPoint
+      StdIO
+      Paths_gzc_lib
+  hs-source-dirs:
+      app
+      generated
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , diagnose
+    , gzc-lib
+  default-language: Haskell2010
+
 test-suite parser-tests
   type: exitcode-stdio-1.0
   main-is: Spec.hs
@@ -55,11 +71,7 @@ test-suite parser-tests
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , diagnose >=2
     , gzc-lib
-    , megaparsec >=9.0 && <10
-    , mtl ==2.2.2
-    , nsc-core
     , pretty-simple
     , text ==1.2.5.0
   default-language: Haskell2010

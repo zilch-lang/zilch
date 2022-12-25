@@ -7,6 +7,7 @@ session Syntax (GZC) = HOL +
     Located
 
   theories
+    AST
     CST
     Parser
     Tokens

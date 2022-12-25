@@ -16,7 +16,7 @@ and errors_to_warnings :: \<open>'msg diagnostic \<Rightarrow> 'msg diagnostic\<
 and add_report :: \<open>'msg diagnostic \<Rightarrow> 'msg report \<Rightarrow> 'msg diagnostic\<close>
 and add_file :: \<open>'msg diagnostic \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> 'msg diagnostic\<close>
 (* TODO: perhaps someday I'll add a \<open>'msg :: pretty\<close> constraint here *)
-and print_diagnostic :: \<open>bool \<Rightarrow> bool \<Rightarrow> nat \<Rightarrow> 'msg diagnostic \<Rightarrow> unit io\<close>
+and print_diagnostic :: \<open>bool \<Rightarrow> bool \<Rightarrow> integer \<Rightarrow> 'msg diagnostic \<Rightarrow> unit io\<close>
 
 (*******************************************************)
 
@@ -31,6 +31,6 @@ code_printing
 | constant add_report \<rightharpoonup> (Haskell) "Error.Diagnose.Diagnostic.addReport"
 | constant add_file \<rightharpoonup> (Haskell) "Error.Diagnose.Diagnostic.addFile"
 
-| constant print_diagnostic \<rightharpoonup> (Haskell) "Error.Diagnose.Diagnostic.printDiagnostic System.IO.stderr _ _ _ Error.Diagnose.Style.defaultStyle _"
+| constant print_diagnostic \<rightharpoonup> (Haskell) "Error.Diagnose.Diagnostic.printDiagnostic System.IO.stderr _ _ (Prelude.fromInteger _) Error.Diagnose.Style.defaultStyle _"
 
 end

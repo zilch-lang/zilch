@@ -2,10 +2,12 @@ theory EntryPoint
   imports
     Main
     "HOL-Library.Monad_Syntax"
+    "HOL-Library.Code_Target_Int"
 
     Diagnose.Diagnostic
     Syntax.Driver
     Syntax.CST
+    Syntax.AST
 
     Hello_World.IO
 begin
@@ -21,16 +23,14 @@ where \<open>print_diagnostic_and_quit diag = do {
          exit_failure
        }\<close>
 
-fun go_parse :: \<open>String.literal list \<Rightarrow> ((String.literal diagnostic + CST.module located) \<times> (String.literal \<times> String.literal) list) io\<close>
-where \<open>go_parse paths = undefined\<close>
-
-fun go_typecheck :: \<open>'b \<Rightarrow> 'a io\<close>
-where \<open>go_typecheck _ = undefined\<close>
+fun go_typecheck :: \<open>(String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located)) \<Rightarrow> unit io\<close>
+where \<open>go_typecheck (Inl diag) = print_diagnostic_and_quit diag\<close>
+    | \<open>go_typecheck (Inr ast) = undefined\<close>
 
 definition entrypoint :: \<open>String.literal list \<Rightarrow> unit io\<close>
 where \<open>entrypoint paths \<equiv> do {
-         (result, files) \<leftarrow> go_parse paths;
-         result \<leftarrow> go_typecheck result;
+         (result, files) \<leftarrow> run_driver paths;
+         go_typecheck result;
          IO.return ()
        }\<close>
 
@@ -39,7 +39,12 @@ where \<open>entrypoint paths \<equiv> do {
 code_reserved Haskell exitFailure
 
 code_printing
-  constant exit_failure \<rightharpoonup> (Haskell) "System.IO.exitFailure"
+  constant exit_failure \<rightharpoonup> (Haskell) "System.Exit.exitFailure"
+
+  (* Just for the sake of interacting with Haskell code... *)
+| type_constructor sum \<rightharpoonup> (Haskell) "Prelude.Either _ _"
+| constant Inl \<rightharpoonup> (Haskell) "Prelude.Left"
+| constant Inr \<rightharpoonup> (Haskell) "Prelude.Right"
 
 (* export_code _ in Haskell *)
 

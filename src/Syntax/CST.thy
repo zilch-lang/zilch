@@ -83,10 +83,10 @@ hide_const (open) Explicit Implicit Identifier Integer ProductType Lambda
 
 (************************************************)
 
-code_reserved Haskell Expression Definition Parameter Module TopLevel
+(* code_reserved Haskell Expression Definition Parameter Module TopLevel
                       Mod Binding Let Rec Val Assume Mutual Identifier ProductType
                       Lambda MultiplicativeSigmaType AdditiveSigmaType MultiplicativeUnitType
-                      MultiplicativeUnit Local Application Parenthesized Do
+                      MultiplicativeUnit Local Application Parenthesized Do *)
 
 code_printing
   type_constructor CST.expr \<rightharpoonup> (Haskell) "Syntax.CST.Expression"

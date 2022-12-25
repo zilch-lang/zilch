@@ -4,3 +4,7 @@ cradle:
       component: "gzc-lib:lib"
     - path: "./test/Parser"
       component: "gzc-lib:test:parser-tests"
+    - path: "./app"
+      component: "gzc-lib:exe:gzc"
+    - path: "./generated"
+      component: "gzc-lib:exe:gzc"
