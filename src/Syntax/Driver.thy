@@ -9,15 +9,12 @@ theory Driver
     Syntax.AST
     Syntax.Lexer
     Syntax.Parser
+    Syntax.ImportResolver
 
     CLI.Flags
 begin
 
-type_synonym registered_files = \<open>String.literal \<rightharpoonup> String.literal\<close>
-
-fun run_driver :: \<open>input_flags \<Rightarrow> ((String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located)) \<times> registered_files) io\<close>
-where \<open>run_driver (InputFlags idirs mods) = do {
-         IO.return undefined
-       }\<close>
+fun run_driver :: \<open>input_flags \<Rightarrow> ((String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located) \<times> module_order) \<times> registered_files) io\<close>
+where \<open>run_driver (InputFlags idirs mods) = parse_and_resolve_modules idirs mods\<close>
 
 end

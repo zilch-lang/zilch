@@ -51,6 +51,7 @@ executable gzc
       CLI.Flags
       CLI.Parser
       EntryPoint
+      ImportResolver
       StdIO
       Paths_gzc_lib
   hs-source-dirs:
@@ -60,7 +61,10 @@ executable gzc
   build-depends:
       base >=4.7 && <5
     , diagnose
+    , directory >=1.3
+    , filepath >=1.4
     , gzc-lib
+    , megaparsec >=9.0 && <10
     , optparse-applicative >=0.16
   default-language: Haskell2010
 

@@ -25,7 +25,7 @@ where \<open>print_diagnostic_and_quit diag = do {
          exit_failure
        }\<close>
 
-fun go_typecheck :: \<open>(String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located)) \<Rightarrow> unit io\<close>
+fun go_typecheck :: \<open>(String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located) \<times> String.literal list) \<Rightarrow> unit io\<close>
 where \<open>go_typecheck (Inl diag) = print_diagnostic_and_quit diag\<close>
     | \<open>go_typecheck (Inr ast) = undefined\<close>
 

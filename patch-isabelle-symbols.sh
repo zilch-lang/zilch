@@ -66,7 +66,11 @@ substituteUnicodeInPlace() {
         --replace "›" "\<close>" \
         --replace "‹" "\<open>" \
         --replace "←" "\<leftarrow>" \
-        --replace "≡" "\<equiv>"
+        --replace "≡" "\<equiv>" \
+        --replace "↦" "\<mapsto>" \
+        --replace "λ" "\<lambda>" \
+        --replace "⤜" "\<bind>" \
+        --replace "⋀" "\<And>"
 }
 
 export -f substitute

@@ -4,7 +4,7 @@ module CLI.Parser where
 
 import CLI.Flags
 import Data.Foldable (fold)
-import Options.Applicative (Parser, customExecParser, fullDesc, helper, info, long, many, metavar, prefs, short, showDefault, showHelpOnError, strArgument, strOption, value)
+import Options.Applicative (Parser, customExecParser, fullDesc, help, helper, info, long, many, metavar, prefs, short, showDefault, showHelpOnError, strArgument, strOption, value)
 
 getFlags :: IO AllFlags
 getFlags = customExecParser preferences $ info (helper <*> cli) opts
@@ -26,13 +26,13 @@ cli = do
 
 parseOutputFlags :: Parser OutputFlags
 parseOutputFlags = do
-  out <- strOption $ fold [short 'o', long "out", value "a.out", metavar "FILE", showDefault]
+  out <- strOption $ fold [short 'o', long "out", value "a.out", metavar "FILE", showDefault, help "The path to the output file"]
 
   pure $ OutputFlags out
 
 parseInputFlags :: Parser InputFlags
 parseInputFlags = do
-  idirs <- many . strOption $ fold [short 'I', long "include", metavar "DIR"]
-  mods <- many . strArgument $ fold [metavar "FILES..."]
+  idirs <- many . strOption $ fold [short 'I', long "include", metavar "DIR", help "The set of directories to look in"]
+  mods <- many . strArgument $ fold [metavar "FILES...", help "The name of modules to compile"]
 
   pure $ InputFlags idirs mods
