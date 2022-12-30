@@ -338,9 +338,16 @@ where \<open>try_solve_systems_incrementally _ = do {
        }\<close>
 by pat_completeness auto
 
-termination try_solve_systems_incrementally
+termination
   sorry
-(* NOTE: need to prove termination for \<open>try_solve_systems_incrementally\<close> to get code equations *)
+(* TODO: need to prove termination
+ *
+ *       I don't really know how to yet…
+ *       Moreover, this proofs relies on the postulate that there is a finite number of files.
+ *       When this may not be the case (for example in the presence of symbolic links),
+ *       then this function should actually not terminate, unless paths are normalized.
+ *       What's true (or at least seems true) is that there is a finite store of normal paths.
+ *)
 
 fun check_all_systems :: \<open>system list \<Rightarrow> mod_list \<Rightarrow> unit resolver\<close>
 where \<open>check_all_systems [] _ = return ()\<close>
