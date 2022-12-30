@@ -213,7 +213,7 @@ parseDefinition s =
 
     parseMutual s = do
       _ <- lexeme (token TkMutual)
-      defs <- indentBlock (s *> parseTopLevel)
+      defs <- indentBlock (s *> parseDefinition s)
 
       pure $ CST.Mutual defs
 

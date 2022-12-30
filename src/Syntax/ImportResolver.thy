@@ -28,12 +28,15 @@ code_printing
 type_synonym registered_files = \<open>String.literal list \<times> (String.literal \<rightharpoonup> String.literal)\<close>
 
 fun union_files :: \<open>[registered_files, registered_files] \<Rightarrow> registered_files\<close> (infixl \<open>U\<close> 30)
-where \<open>union_files (l1, m1) (l2, m2) = (l1 @ l2, m1 ++ m2)\<close>
+where \<open>union_files (l1, m1) (l2, m2) = (List.remdups (l1 @ l2), m1 ++ m2)\<close>
 
 definition no_files :: \<open>registered_files\<close>
 where \<open>no_files = ([], Map.empty)\<close>
 
-type_synonym modules = \<open>String.literal \<rightharpoonup> AST.module located\<close>
+text \<open>
+  File system path to parsed CST, to prevent reparsing files we have parsed before.
+\<close>
+type_synonym modules = \<open>String.literal \<rightharpoonup> CST.module located\<close>
 
 type_synonym module_order = \<open>String.literal list\<close>
 
@@ -43,6 +46,9 @@ datatype module_origin =
   CommandLine
 | InSource position
 
+text \<open>
+  All module names (and their origin) that we know of.
+\<close>
 type_synonym mod_list = \<open>(module_origin \<times> String.literal list) list\<close>
 
 fun origin_to_position :: \<open>module_origin \<Rightarrow> position option\<close>
@@ -89,7 +95,7 @@ where \<open>set_system n s = (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss
 definition insert_interface :: \<open>[String.literal, interface option] \<Rightarrow> unit resolver\<close>
 where \<open>insert_interface name iface \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns(name \<mapsto> iface), ms, g), ()), no_files))\<close>
 
-definition insert_module :: \<open>[String.literal, AST.module located] \<Rightarrow> unit resolver\<close>
+definition insert_module :: \<open>[String.literal, CST.module located] \<Rightarrow> unit resolver\<close>
 where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms(name \<mapsto> m), g), ()), no_files))\<close>
 
 definition register_module :: \<open>[String.literal list, module_origin] \<Rightarrow> unit resolver\<close>
@@ -262,17 +268,14 @@ text \<open>
 fun try_generate_interface :: \<open>namespace \<Rightarrow> (interface option option \<times> nat) resolver\<close>
 where \<open>try_generate_interface _ = undefined\<close>
 
-fun try_solve_constraint :: \<open>constraint \<Rightarrow> (constraint \<times> nat) resolver\<close>
-where \<open>try_solve_constraint [] = return ([], 0)\<close>
-    | \<open>try_solve_constraint (Top f # fs) = do {
-         (fs, n) \<leftarrow> try_solve_constraint fs;
+fun try_solve_constraint :: \<open>String.literal list \<Rightarrow> constraint \<Rightarrow> (constraint \<times> nat) resolver\<close>
+where \<open>try_solve_constraint _ [] = return ([], 0)\<close>
+    | \<open>try_solve_constraint m (Top f # fs) = do {
+         (fs, n) \<leftarrow> try_solve_constraint m fs;
          return (Top f # fs, n)
        }\<close>
-    | \<open>try_solve_constraint (Bottom f # fs) = do {
-         (fs, n) \<leftarrow> try_solve_constraint fs;
-         return (Bottom f # fs, n)
-       }\<close>
-    | \<open>try_solve_constraint (Exists path # fs) = do {
+    | \<open>try_solve_constraint m (Bottom f # fs) = return (Bottom f # fs, 0)\<close>
+    | \<open>try_solve_constraint m (Exists path # fs) = do {
          file_exists \<leftarrow> lift_io (does_file_exist path);
          if file_exists
            then do {
@@ -283,16 +286,16 @@ where \<open>try_solve_constraint [] = return ([], 0)\<close>
                  insert_file path content;
                  (tokens, _) \<leftarrow> lift_sum (run_lexer path content);
                  (cst, _) \<leftarrow> lift_sum (run_parser path tokens);
-                 (ast, _) \<leftarrow> lift_sum (run_desugarer cst);
-                 insert_module path ast
+                 let flattened_imports = extract_imports cst;
+                 insert_module path cst
                }
              | Some _ \<Rightarrow> return ());
-             (fs, n) \<leftarrow> try_solve_constraint fs;
+             (fs, n) \<leftarrow> try_solve_constraint m fs;
              return (Top (Exists path) # fs, n)
            }
            else return (Bottom (Exists path) # fs, 0)
         }\<close>
-     | \<open>try_solve_constraint (In x n # fs) = do {
+     | \<open>try_solve_constraint m (In x n # fs) = do {
           (iface, i) \<leftarrow> try_generate_interface n;
           case iface of
             None \<Rightarrow> return (In x n # fs, i)
@@ -300,23 +303,29 @@ where \<open>try_solve_constraint [] = return ([], 0)\<close>
           | Some (Some iface) \<Rightarrow>
               if contains x iface
                 then do {
-                  (fs, k) \<leftarrow> try_solve_constraint fs;
+                  (fs, k) \<leftarrow> try_solve_constraint m fs;
                   return (Top (In x n) # fs, i + k)
                 }
                 else return (Bottom (In x n) # fs, i)
         }\<close>
 
-fun try_solve_each_constraint :: \<open>system \<Rightarrow> (system \<times> nat) resolver\<close>
-where \<open>try_solve_each_constraint [] = return ([], 0)\<close>
-    | \<open>try_solve_each_constraint (c # cs) = do {
-         (c, i) \<leftarrow> if is_solved c then return (c, 0) else try_solve_constraint c;
-         (cs, n) \<leftarrow> try_solve_each_constraint cs;
+(* TODO: when parsing a file, fetch imports and add them to the import_graph
+         also add constraint system for each new import, to be resolved before *)
+(* NOTE: add new systems only if they have not been added earlier
+         we can check if an import was already added by using our \<open>import_graph\<close> *)
+
+fun try_solve_each_constraint :: \<open>module_origin \<times> String.literal list \<Rightarrow> system \<Rightarrow> (system \<times> nat) resolver\<close>
+where \<open>try_solve_each_constraint _ [] = return ([], 0)\<close>
+    | \<open>try_solve_each_constraint (orig, m) (c # cs) = do {
+         (c, i) \<leftarrow> if is_solved c then return (c, 0) else try_solve_constraint m c;
+         (cs, n) \<leftarrow> try_solve_each_constraint (orig, m) cs;
          return (c # cs, i + n)
        }\<close>
 
 fun try_solve_system :: \<open>[nat, system] \<Rightarrow> unit resolver\<close>
 where \<open>try_solve_system i s = do {
-         (cs, n) \<leftarrow> try_solve_each_constraint s;
+         (_, ml, _, _, _) \<leftarrow> get;
+         (cs, n) \<leftarrow> try_solve_each_constraint (ml ! i) s;
          set_system (i + n) cs
        }\<close>
 
@@ -338,14 +347,10 @@ where \<open>check_all_systems [] _ = return ()\<close>
     | \<open>check_all_systems (s # ss) ((orig, m) # ms) =
          (case [c \<leftarrow> s. is_true c] of
            [] \<Rightarrow> throw (mk_cannot_resolve_import_error (pos_or orig m) (map (the \<circ> only_false_constraint) s))
-         | (a # b # cs) \<Rightarrow> throw undefined
+         | (a # b # cs) \<Rightarrow> throw (mk_ambiguous_import_error (pos_or orig m) [c \<leftarrow> a @ b @ (cs \<bind> id). is_true_exists c])
          | [_] \<Rightarrow> check_all_systems ss ms)\<close>
     (* Inconsistent state: all systems must have an associated module *)
     | \<open>check_all_systems _ _ = undefined\<close>
-(* TODO: fetch the position of the import associated to this system.
-         also fetch the name of the import if it is a CLI import (i.e. no position).
-
-         \<open>mk_cannot_resolve_import_error\<close> must take a \<open>String.literal + position\<close> as argument. *)
 
 fun check_final_systems :: \<open>unit \<Rightarrow> unit resolver\<close>
 where \<open>check_final_systems () = do {

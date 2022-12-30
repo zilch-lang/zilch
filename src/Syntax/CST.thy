@@ -17,7 +17,7 @@ datatype expr =
     \<open>parameter located list\<close>
     \<open>expr located\<close>
 | Lambda
-    \<open>parameter located list\<close>
+    \<open>parameter located list list\<close>
     \<open>expr located\<close>
 | MultiplicativeSigmaType
     \<open>parameter located list\<close>
@@ -66,9 +66,9 @@ and def' =
 | Assume
     \<open>parameter located list list\<close>
 | Mutual
-    \<open>toplevel located list\<close>
+    \<open>def' located list\<close>
 
-and toplevel =
+datatype toplevel =
   Binding bool \<open>def' located\<close>
 
 datatype module =
@@ -80,6 +80,7 @@ hide_type (open) implicitness expr parameter def' toplevel module
 hide_const (open) Explicit Implicit Identifier Integer ProductType Lambda
                   MultiplicativeSigmaType AdditiveSigmaType MultiplicativeUnitType
                   MultiplicativeUnit Local Application Parenthesized Do
+                  Let Rec Val Mutual Binding Mod
 
 (************************************************)
 

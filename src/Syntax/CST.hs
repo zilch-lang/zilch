@@ -38,7 +38,7 @@ data Definition
   | Assume
       [[Located Parameter]]
   | Mutual
-      [Located TopLevel]
+      [Located Definition]
   deriving (Show)
 
 -- | Multiplicities are certain kinds of expressions.

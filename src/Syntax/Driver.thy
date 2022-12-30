@@ -15,6 +15,11 @@ theory Driver
 begin
 
 fun run_driver :: \<open>input_flags \<Rightarrow> ((String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located) \<times> module_order) \<times> registered_files) io\<close>
-where \<open>run_driver (InputFlags idirs mods) = parse_and_resolve_modules idirs mods\<close>
+where \<open>run_driver (InputFlags idirs mods) = do {
+         parse_and_resolve_modules idirs mods;
+         IO.return undefined
+       }\<close>
+
+(* TODO: don't forget to desugar after resolving all imports *)
 
 end

@@ -52,6 +52,10 @@ where \<open>only_false_constraint [] = None\<close>
     | \<open>only_false_constraint (Bottom f # _) = Some f\<close>
     | \<open>only_false_constraint (_ # fs) = only_false_constraint fs\<close>
 
+fun is_true_exists :: \<open>formula \<Rightarrow> bool\<close>
+where \<open>is_true_exists (Top (Exists _)) = True\<close>
+    | \<open>is_true_exists _ = False\<close>
+
 (****************************************************)
 
 code_reserved Haskell Namespace Module Access Top Bottom Exists In

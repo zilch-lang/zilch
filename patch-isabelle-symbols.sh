@@ -73,7 +73,9 @@ substituteUnicodeInPlace() {
         --replace "⋀" "\<And>" \
         --replace "∨" "\<or>" \
         --replace "¬" "\<not>" \
-        --replace "≠" "\<noteq>"
+        --replace "≠" "\<noteq>" \
+        --replace "∘" "\<circ>" \
+        --replace "∈" "\<in>"
 }
 
 export -f substitute
