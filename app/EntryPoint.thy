@@ -25,15 +25,23 @@ where \<open>print_diagnostic_and_quit diag = do {
          exit_failure
        }\<close>
 
-fun go_typecheck :: \<open>(String.literal diagnostic + (String.literal \<rightharpoonup> AST.module located) \<times> String.literal list) \<Rightarrow> unit io\<close>
-where \<open>go_typecheck (Inl diag) = print_diagnostic_and_quit diag\<close>
-    | \<open>go_typecheck (Inr ast) = undefined\<close>
+definition add_all_files :: \<open>(String.literal \<times> String.literal) list \<Rightarrow> String.literal diagnostic \<Rightarrow> String.literal diagnostic\<close>
+where \<open>add_all_files \<equiv> List.fold (\<lambda>(a, b) d. add_file d a b)\<close>
+
+(* TODO: add files to diagnostic *)
+
+fun go_typecheck :: \<open>(String.literal \<rightharpoonup> AST.module located) \<Rightarrow> String.literal list \<Rightarrow> unit io\<close>
+where \<open>go_typecheck asts mods = IO.return ()\<close>
+
+term run_driver
 
 fun entrypoint :: \<open>all_flags \<Rightarrow> unit io\<close>
 where \<open>entrypoint (AllFlags input output) = do {
-         (result, files) \<leftarrow> run_driver input;
-         go_typecheck result;
-         IO.return ()
+         (result, (names, files)) \<leftarrow> run_driver input;
+         let files = List.map (\<lambda>n. (n, the (files n))) (List.remdups names);
+         case result of
+           Inl diag \<Rightarrow> print_diagnostic_and_quit (add_all_files files diag)
+         | Inr (asts, mods) \<Rightarrow> go_typecheck asts mods
        }\<close>
 
 (********************************************)

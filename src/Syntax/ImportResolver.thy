@@ -25,7 +25,13 @@ code_printing
 
 (***************************************************)
 
-type_synonym registered_files = \<open>String.literal \<rightharpoonup> String.literal\<close>
+type_synonym registered_files = \<open>String.literal list \<times> (String.literal \<rightharpoonup> String.literal)\<close>
+
+fun union_files :: \<open>[registered_files, registered_files] \<Rightarrow> registered_files\<close> (infixl \<open>U\<close> 30)
+where \<open>union_files (l1, m1) (l2, m2) = (l1 @ l2, m1 ++ m2)\<close>
+
+definition no_files :: \<open>registered_files\<close>
+where \<open>no_files = ([], Map.empty)\<close>
 
 type_synonym modules = \<open>String.literal \<rightharpoonup> AST.module located\<close>
 
@@ -54,49 +60,55 @@ type_synonym namespaces = \<open>String.literal \<rightharpoonup> interface opti
 
 type_synonym global_state = \<open>system list \<times> mod_list \<times> namespaces \<times> modules \<times> import_graph\<close>
 
-type_synonym 'a resolver = \<open>[global_state, registered_files] \<Rightarrow> ((String.literal diagnostic + global_state \<times> 'a) \<times> registered_files) io\<close>
+type_synonym 'a resolver = \<open>global_state \<Rightarrow> ((String.literal diagnostic + global_state \<times> 'a) \<times> registered_files) io\<close>
 
 fun bind_resolver :: \<open>'a resolver \<Rightarrow> ('a \<Rightarrow> 'b resolver) \<Rightarrow> 'b resolver\<close>
-where \<open>bind_resolver r f st fs = do {
-         (res, fs) \<leftarrow> r st fs;
+where \<open>bind_resolver r f st = do {
+         (res, fs1) \<leftarrow> r st;
          case res of
-           Inl diag \<Rightarrow> IO.return (Inl diag, fs)
-         | Inr (st, x) \<Rightarrow> f x st fs
+           Inl diag \<Rightarrow> IO.return (Inl diag, fs1)
+         | Inr (st, x) \<Rightarrow> do {
+             (res, fs2) \<leftarrow> f x st;
+             IO.return (res, fs1 U fs2)
+           }
        }\<close>
 adhoc_overloading bind bind_resolver
 
 definition return :: \<open>'a \<Rightarrow> 'a resolver\<close>
-where \<open>return x st fs = IO.return (Inr (st, x), fs)\<close>
+where \<open>return x st = IO.return (Inr (st, x), no_files)\<close>
 
 definition throw :: \<open>String.literal diagnostic \<Rightarrow> 'a resolver\<close>
-where \<open>throw diag _ fs = IO.return (Inl diag, fs)\<close>
+where \<open>throw diag _ = IO.return (Inl diag, no_files)\<close>
 
 definition append_system :: \<open>system \<Rightarrow> unit resolver\<close>
-where \<open>append_system s \<equiv> (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((s # ss, ml, ns, ms, g), ()), fs))\<close>
+where \<open>append_system s \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((s # ss, ml, ns, ms, g), ()), no_files))\<close>
 
 definition set_system :: \<open>[nat, system] \<Rightarrow> unit resolver\<close>
-where \<open>set_system n s = (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((ss[n := s], ml, ns, ms, g), ()), fs))\<close>
+where \<open>set_system n s = (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss[n := s], ml, ns, ms, g), ()), no_files))\<close>
 
 definition insert_interface :: \<open>[String.literal, interface option] \<Rightarrow> unit resolver\<close>
-where \<open>insert_interface name iface \<equiv> (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((ss, ml, ns(name \<mapsto> iface), ms, g), ()), fs))\<close>
+where \<open>insert_interface name iface \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns(name \<mapsto> iface), ms, g), ()), no_files))\<close>
 
 definition insert_module :: \<open>[String.literal, AST.module located] \<Rightarrow> unit resolver\<close>
-where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((ss, ml, ns, ms(name \<mapsto> m), g), ()), fs))\<close>
+where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms(name \<mapsto> m), g), ()), no_files))\<close>
 
 definition register_module :: \<open>[String.literal list, module_origin] \<Rightarrow> unit resolver\<close>
-where \<open>register_module m orig \<equiv> (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((ss, (orig, m) # ml, ns, ms, g), ()), fs))\<close>
+where \<open>register_module m orig \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, (orig, m) # ml, ns, ms, g), ()), no_files))\<close>
 
 definition insert_dependency :: \<open>[String.literal, String.literal] \<Rightarrow> unit resolver\<close>
-where \<open>insert_dependency a b \<equiv> (\<lambda>(ss, ml, ns, ms, g) fs. IO.return (Inr ((ss, ml, ns, ms, add_edge (a, b) g), ()), fs))\<close>
+where \<open>insert_dependency a b \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms, add_edge (a, b) g), ()), no_files))\<close>
+
+definition insert_file :: \<open>[String.literal, String.literal] \<Rightarrow> unit resolver\<close>
+where \<open>insert_file name content \<equiv> (\<lambda>st. IO.return (Inr (st, ()), ([name], Map.empty(name \<mapsto> content))))\<close>
 
 definition get :: \<open>global_state resolver\<close>
-where \<open>get \<equiv> (\<lambda>st fs. IO.return (Inr (st, st), fs))\<close>
+where \<open>get \<equiv> (\<lambda>st. IO.return (Inr (st, st), no_files))\<close>
 
 definition lift_io :: \<open>'a io \<Rightarrow> 'a resolver\<close>
-where \<open>lift_io act \<equiv> (\<lambda>st fs. do { x \<leftarrow> act; IO.return (Inr (st, x), fs) })\<close>
+where \<open>lift_io act \<equiv> (\<lambda>st. do { x \<leftarrow> act; IO.return (Inr (st, x), no_files) })\<close>
 
 definition lift_sum :: \<open>String.literal diagnostic + 'a \<Rightarrow> 'a resolver\<close>
-where \<open>lift_sum res \<equiv> (\<lambda>st fs. IO.return (map_sum id (Pair st) res, fs))\<close>
+where \<open>lift_sum res \<equiv> (\<lambda>st. IO.return (map_sum id (Pair st) res, no_files))\<close>
 
 fun contains :: \<open>String.literal \<Rightarrow> interface \<Rightarrow> bool\<close>
 where \<open>contains x (Iface binds) = (binds x \<noteq> None)\<close>
@@ -268,6 +280,7 @@ where \<open>try_solve_constraint [] = return ([], 0)\<close>
              (case ms path of
                None \<Rightarrow> do {
                  content \<leftarrow> lift_io (read_file path);
+                 insert_file path content;
                  (tokens, _) \<leftarrow> lift_sum (run_lexer path content);
                  (cst, _) \<leftarrow> lift_sum (run_parser path tokens);
                  (ast, _) \<leftarrow> lift_sum (run_desugarer cst);
@@ -345,12 +358,12 @@ where \<open>parse_and_resolve_modules idirs mods = do {
          let mods = map (Pair CommandLine) mods;
          let sys = make_initial_constraint_system idirs mods;
          case sys of
-           Inl diag \<Rightarrow> IO.return (Inl diag, Map.empty)
+           Inl diag \<Rightarrow> IO.return (Inl diag, ([], Map.empty))
          | Inr (sys, mods) \<Rightarrow> do {
              (res, files) \<leftarrow> (do {
-               try_solve_systems_incrementally ();
+               () \<leftarrow> try_solve_systems_incrementally ();
                check_final_systems ()
-             }) (sys, mods, Map.empty, Map.empty, Digraph.empty) Map.empty;
+             }) (sys, mods, Map.empty, Map.empty, Digraph.empty);
              let res = do {
                    ((_, _, _, mods, g), ()) \<leftarrow> res;
                    map_sum undefined (Pair mods) (topsort g)

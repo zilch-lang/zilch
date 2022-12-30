@@ -186,7 +186,7 @@ parseDefinition s =
       _ <- lexeme (token tk) <* s
       mult <- MP.optional (parseMultiplicity s <* s)
       name <- parseIdentifier <* s
-      params <- lexeme (parseTypeParameter s) `MP.sepBy` s
+      params <- lexeme (parseLambdaParameter s) `MP.sepBy` s
       ret <- MP.optional do
         _ <- lexeme (token TkColon) <* s
         parseFullExpression s
