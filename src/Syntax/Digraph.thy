@@ -18,6 +18,10 @@ where \<open>add_vert x g \<equiv> \<lparr> vertices = {x} \<union> vertices g, 
 definition add_edge :: \<open>'a \<times> 'a \<Rightarrow> 'a digraph \<Rightarrow> 'a digraph\<close>
 where \<open>add_edge x g \<equiv> (let (a, b) = x in \<lparr> vertices = {a, b} \<union> vertices g, edges = (edges g)(a \<mapsto> {b} \<union> case_option {} id (edges g a)) \<rparr>)\<close>
 
+text \<open>
+  Tries to apply a topological sort on the directed graph (any root).
+  The result is a left value containing a cycle if there is one, otherwise a right value with the full sort.
+\<close>
 fun topsort :: \<open>'a digraph \<Rightarrow> 'a list + 'a list\<close>
 where \<open>topsort _ = undefined\<close>
 

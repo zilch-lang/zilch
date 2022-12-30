@@ -70,7 +70,10 @@ substituteUnicodeInPlace() {
         --replace "↦" "\<mapsto>" \
         --replace "λ" "\<lambda>" \
         --replace "⤜" "\<bind>" \
-        --replace "⋀" "\<And>"
+        --replace "⋀" "\<And>" \
+        --replace "∨" "\<or>" \
+        --replace "¬" "\<not>" \
+        --replace "≠" "\<noteq>"
 }
 
 export -f substitute

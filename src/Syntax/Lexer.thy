@@ -14,6 +14,6 @@ axiomatization
 code_reserved Haskell runLexer
 
 code_printing
-  constant run_lexer \<rightharpoonup> (Haskell) "Syntax.Lexer.runLexer"
+  constant run_lexer \<rightharpoonup> (Haskell) "Syntax.Lexer.runLexer'"
 
 end

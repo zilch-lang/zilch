@@ -51,6 +51,7 @@ executable gzc
       CLI.Flags
       CLI.Parser
       EntryPoint
+      FileIO
       ImportResolver
       StdIO
       Paths_gzc_lib
