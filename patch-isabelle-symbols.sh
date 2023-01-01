@@ -75,7 +75,11 @@ substituteUnicodeInPlace() {
         --replace "¬" "\<not>" \
         --replace "≠" "\<noteq>" \
         --replace "∘" "\<circ>" \
-        --replace "∈" "\<in>"
+        --replace "∈" "\<in>" \
+        --replace "∀" "\<forall>" \
+        --replace "∃" "\<exists>" \
+        --replace "⟹" "\<Longrightarrow>" \
+        --replace "≤" "\<le>"
 }
 
 export -f substitute

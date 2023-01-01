@@ -55,20 +55,19 @@ where \<open>extract_imports_def (CST.Mutual ts @@ _) = ts \<bind> extract_impor
     | \<open>extract_imports_expr (CST.Do ex @@ _) = extract_imports_expr ex\<close>
 by pat_completeness auto
 
-termination sorry
-(* TODO: prove termination, but I don't know how to yet…
- *
- *       This function should always terminate, because it merely just walks the tree downwards,
- *       but some cases seem to confuse the termination checker, leading to
- *       me needing to prove termination for this.
- *)
+termination extract_imports_def
+  apply (relation \<open>measure (case_sum def_tree_height (case_sum parameter_tree_height expr_tree_height))\<close>)
+  apply (simp_all add: f_of_max_is_less f_of_max_is_less_than_max le_imp_less_Suc)
+  apply (metis UN_I f_of_max_is_less le_imp_less_Suc max.coboundedI1 max.commute set_concat)
+  apply (metis UN_I f_of_max_is_less le_imp_less_Suc max.coboundedI1 max.commute set_concat)
+  apply (metis UN_I f_of_max_is_less le_imp_less_Suc max.coboundedI1 max.commute set_concat)
+  apply (metis comp_apply dual_order.trans f_of_max_is_less le_imp_less_Suc max.coboundedI2 snd_conv)
+  done
 
 fun extract_imports_toplevel :: \<open>CST.toplevel located \<Rightarrow> String.literal list list\<close>
 where \<open>extract_imports_toplevel (CST.Binding _ d @@ _) = extract_imports_def d\<close>
 
 fun extract_imports :: \<open>CST.module located \<Rightarrow> String.literal list list\<close>
 where \<open>extract_imports (CST.Mod ts @@ _) = ts \<bind> extract_imports_toplevel\<close>
-
-
 
 end

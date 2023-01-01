@@ -46,9 +46,6 @@ library:
   # - containers ==0.6.*
   # - filepath >=1.4
   # - directory >=1.3
-  ghc-options:
-  - -Wno-unused-matches
-
 
 executables:
   gzc:
@@ -60,6 +57,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wno-unused-matches
     dependencies:
     - gzc-lib
     - diagnose
