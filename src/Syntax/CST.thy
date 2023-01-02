@@ -77,10 +77,13 @@ datatype module =
 
 type_synonym multiplicity = expr
 
+lemma [measure_function]: \<open>is_measure size_expr\<close> ..
+lemma [measure_function]: \<open>is_measure size_def'\<close> ..
+lemma [measure_function]: \<open>is_measure size_parameter\<close> ..
+
 (******************************************)
 
-function (sequential)
-         def_tree_height :: \<open>def' located \<Rightarrow> nat\<close>
+function def_tree_height :: \<open>def' located \<Rightarrow> nat\<close>
      and parameter_tree_height :: \<open>parameter located \<Rightarrow> nat\<close>
      and expr_tree_height :: \<open>expr located \<Rightarrow> nat\<close>
 where \<open>def_tree_height (Assume ps @@ _) = maximum_by parameter_tree_height 0 (concat ps) + 1\<close>
@@ -124,7 +127,19 @@ where \<open>def_tree_height (Assume ps @@ _) = maximum_by parameter_tree_height
 by pat_completeness auto
 
 termination def_tree_height
-  sorry
+  apply (relation \<open>measure (case_sum (size_located size_def') (case_sum (size_located size_parameter) (size_located size_expr)))\<close>)
+  apply simp_all
+  subgoal * sorry  (* Assume ps @@ _ ? *)
+  subgoal ** sorry (* Mutual ds @@ _ *)
+  apply (metis "*" add.right_neutral add_Suc_right bot_nat_0.extremum_strict less_Suc_eq less_add_Suc2 list.size(1))
+  apply (metis One_nat_def "*" add_Suc_shift linorder_not_less list.size(1) not_add_less1 order_le_less_trans plus_1_eq_Suc)
+  apply (metis One_nat_def "*" add_Suc_shift linorder_not_less list.size(1) not_add_less1 order_le_less_trans plus_1_eq_Suc)
+  apply (metis One_nat_def "*" add.commute less_SucE less_add_Suc2 list.size(1) plus_1_eq_Suc trans_less_add1)
+  apply (metis One_nat_def "*" add_Suc_shift list.size(1) plus_1_eq_Suc trans_less_add1)
+  apply (metis One_nat_def "*" add.commute less_SucE less_add_Suc2 list.size(1) plus_1_eq_Suc trans_less_add1)
+  apply (metis One_nat_def "*" add.commute less_SucE less_add_Suc2 list.size(1) plus_1_eq_Suc trans_less_add1)
+  subgoal sorry (* Application f xs @@ _ *)
+  done
 (* TODO: prove termination
  *
  *       this should always terminate because we are unfolding a level every time, in every definition
@@ -136,6 +151,14 @@ where \<open>toplevel_tree_height (Binding _ d @@ _) = def_tree_height d + 1\<cl
 
 fun module_tree_height :: \<open>module located \<Rightarrow> nat\<close>
 where \<open>module_tree_height (Mod ts @@ _) = maximum_by toplevel_tree_height 0 ts + 1\<close>
+
+text \<open>Declare all those functions as candidates for termination measures.\<close>
+
+lemma [measure_function]: \<open>is_measure def_tree_height\<close> ..
+lemma [measure_function]: \<open>is_measure parameter_tree_height\<close> ..
+lemma [measure_function]: \<open>is_measure expr_tree_height\<close> ..
+lemma [measure_function]: \<open>is_measure toplevel_tree_height\<close> ..
+lemma [measure_function]: \<open>is_measure module_tree_height\<close> ..
 
 (**************************************************)
 

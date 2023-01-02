@@ -21,6 +21,8 @@ text \<open>
 fun loc_eq :: \<open>'a located \<Rightarrow> 'a located \<Rightarrow> bool\<close>
 where \<open>loc_eq (x @@ _) (y @@ _) = (x = y)\<close>
 
+lemma [measure_function]: \<open>is_measure f \<Longrightarrow> is_measure (size_located f)\<close> ..
+
 (***************************************************)
 
 code_reserved Haskell Located

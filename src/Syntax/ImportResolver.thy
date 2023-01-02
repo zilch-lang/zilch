@@ -38,9 +38,9 @@ text \<open>
 \<close>
 type_synonym modules = \<open>String.literal \<rightharpoonup> CST.module located\<close>
 
-type_synonym module_order = \<open>String.literal list\<close>
+type_synonym module_order = \<open>String.literal list list\<close>
 
-type_synonym import_graph = \<open>String.literal digraph\<close>
+type_synonym import_graph = \<open>String.literal list digraph\<close>
 
 datatype module_origin =
   CommandLine
@@ -86,8 +86,8 @@ where \<open>return x st = IO.return (Inr (st, x), no_files)\<close>
 definition throw :: \<open>String.literal diagnostic \<Rightarrow> 'a resolver\<close>
 where \<open>throw diag _ = IO.return (Inl diag, no_files)\<close>
 
-definition append_system :: \<open>system \<Rightarrow> unit resolver\<close>
-where \<open>append_system s \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((s # ss, ml, ns, ms, g), ()), no_files))\<close>
+definition prepend_system :: \<open>system \<Rightarrow> unit resolver\<close>
+where \<open>prepend_system s \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((s # ss, ml, ns, ms, g), ()), no_files))\<close>
 
 definition set_system :: \<open>[nat, system] \<Rightarrow> unit resolver\<close>
 where \<open>set_system n s = (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss[n := s], ml, ns, ms, g), ()), no_files))\<close>
@@ -101,7 +101,7 @@ where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.ret
 definition register_module :: \<open>[String.literal list, module_origin] \<Rightarrow> unit resolver\<close>
 where \<open>register_module m orig \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, (orig, m) # ml, ns, ms, g), ()), no_files))\<close>
 
-definition insert_dependency :: \<open>[String.literal, String.literal] \<Rightarrow> unit resolver\<close>
+definition insert_dependency :: \<open>[String.literal list, String.literal list] \<Rightarrow> unit resolver\<close>
 where \<open>insert_dependency a b \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms, add_edge (a, b) g), ()), no_files))\<close>
 
 definition insert_file :: \<open>[String.literal, String.literal] \<Rightarrow> unit resolver\<close>
@@ -268,34 +268,51 @@ text \<open>
 fun try_generate_interface :: \<open>namespace \<Rightarrow> (interface option option \<times> nat) resolver\<close>
 where \<open>try_generate_interface _ = undefined\<close>
 
-fun try_solve_constraint :: \<open>String.literal list \<Rightarrow> constraint \<Rightarrow> (constraint \<times> nat) resolver\<close>
-where \<open>try_solve_constraint _ [] = return ([], 0)\<close>
-    | \<open>try_solve_constraint m (Top f # fs) = do {
-         (fs, n) \<leftarrow> try_solve_constraint m fs;
+fun insert_dependencies_and_constraints :: \<open>[String.literal list, String.literal list located list, String.literal list] \<Rightarrow> nat resolver\<close>
+where \<open>insert_dependencies_and_constraints _ [] _ = return 0\<close>
+    | \<open>insert_dependencies_and_constraints idirs ((i @@ p) # is) m = do {
+         (_, _, _, _, g) \<leftarrow> get;
+         k \<leftarrow> (if i \<in> vertices g
+              then return 0
+              else do {
+                insert_dependency m i;
+                prepend_system (mk_constraint_system idirs i);
+                return 1
+              });
+         n \<leftarrow> insert_dependencies_and_constraints idirs is m;
+         return (k + n)
+       }\<close>
+
+fun try_solve_constraint :: \<open>[String.literal list, String.literal list, constraint] \<Rightarrow> (constraint \<times> nat) resolver\<close>
+where \<open>try_solve_constraint _ _ [] = return ([], 0)\<close>
+    | \<open>try_solve_constraint idirs m (Top f # fs) = do {
+         (fs, n) \<leftarrow> try_solve_constraint idirs m fs;
          return (Top f # fs, n)
        }\<close>
-    | \<open>try_solve_constraint m (Bottom f # fs) = return (Bottom f # fs, 0)\<close>
-    | \<open>try_solve_constraint m (Exists path # fs) = do {
+    | \<open>try_solve_constraint _ m (Bottom f # fs) = return (Bottom f # fs, 0)\<close>
+    | \<open>try_solve_constraint idirs m (Exists path # fs) = do {
          file_exists \<leftarrow> lift_io (does_file_exist path);
          if file_exists
            then do {
              (_, _, ms, _) \<leftarrow> get;
-             (case ms path of
-               None \<Rightarrow> do {
-                 content \<leftarrow> lift_io (read_file path);
-                 insert_file path content;
-                 (tokens, _) \<leftarrow> lift_sum (run_lexer path content);
-                 (cst, _) \<leftarrow> lift_sum (run_parser path tokens);
-                 let flattened_imports = extract_imports cst;
-                 insert_module path cst
-               }
-             | Some _ \<Rightarrow> return ());
-             (fs, n) \<leftarrow> try_solve_constraint m fs;
-             return (Top (Exists path) # fs, n)
+             i \<leftarrow> case ms path of
+                   None \<Rightarrow> do {
+                     content \<leftarrow> lift_io (read_file path);
+                     insert_file path content;
+                     (tokens, _) \<leftarrow> lift_sum (run_lexer path content);
+                     (cst, _) \<leftarrow> lift_sum (run_parser path tokens);
+                     let flattened_imports = extract_imports cst;
+                     i \<leftarrow> insert_dependencies_and_constraints idirs flattened_imports m;
+                     insert_module path cst;
+                     return i
+                   }
+                 | Some _ \<Rightarrow> return 0;
+             (fs, n) \<leftarrow> try_solve_constraint idirs m fs;
+             return (Top (Exists path) # fs, i + n)
            }
            else return (Bottom (Exists path) # fs, 0)
         }\<close>
-     | \<open>try_solve_constraint m (In x n # fs) = do {
+     | \<open>try_solve_constraint idirs m (In x n # fs) = do {
           (iface, i) \<leftarrow> try_generate_interface n;
           case iface of
             None \<Rightarrow> return (In x n # fs, i)
@@ -303,7 +320,7 @@ where \<open>try_solve_constraint _ [] = return ([], 0)\<close>
           | Some (Some iface) \<Rightarrow>
               if contains x iface
                 then do {
-                  (fs, k) \<leftarrow> try_solve_constraint m fs;
+                  (fs, k) \<leftarrow> try_solve_constraint idirs m fs;
                   return (Top (In x n) # fs, i + k)
                 }
                 else return (Bottom (In x n) # fs, i)
@@ -314,29 +331,34 @@ where \<open>try_solve_constraint _ [] = return ([], 0)\<close>
 (* NOTE: add new systems only if they have not been added earlier
          we can check if an import was already added by using our \<open>import_graph\<close> *)
 
-fun try_solve_each_constraint :: \<open>module_origin \<times> String.literal list \<Rightarrow> system \<Rightarrow> (system \<times> nat) resolver\<close>
-where \<open>try_solve_each_constraint _ [] = return ([], 0)\<close>
-    | \<open>try_solve_each_constraint (orig, m) (c # cs) = do {
-         (c, i) \<leftarrow> if is_solved c then return (c, 0) else try_solve_constraint m c;
-         (cs, n) \<leftarrow> try_solve_each_constraint (orig, m) cs;
+fun try_solve_each_constraint :: \<open>String.literal list \<Rightarrow> module_origin \<times> String.literal list \<Rightarrow> system \<Rightarrow> (system \<times> nat) resolver\<close>
+where \<open>try_solve_each_constraint _ _ [] = return ([], 0)\<close>
+    | \<open>try_solve_each_constraint idirs (orig, m) (c # cs) = do {
+         (c, i) \<leftarrow> if is_solved c then return (c, 0) else try_solve_constraint idirs m c;
+         (cs, n) \<leftarrow> try_solve_each_constraint idirs (orig, m) cs;
          return (c # cs, i + n)
        }\<close>
 
-fun try_solve_system :: \<open>[nat, system] \<Rightarrow> unit resolver\<close>
-where \<open>try_solve_system i s = do {
+fun try_solve_system :: \<open>[String.literal list, nat, system] \<Rightarrow> unit resolver\<close>
+where \<open>try_solve_system idirs i s = do {
          (_, ml, _, _, _) \<leftarrow> get;
-         (cs, n) \<leftarrow> try_solve_each_constraint (ml ! i) s;
+         (cs, n) \<leftarrow> try_solve_each_constraint idirs (ml ! i) s;
          set_system (i + n) cs
        }\<close>
 
-function try_solve_systems_incrementally :: \<open>unit \<Rightarrow> unit resolver\<close>
-where \<open>try_solve_systems_incrementally _ = do {
+(* WARN: please do NOT remove the \<open>unit\<close> argument, otherwise \<open>pat_completeness\<close> hangs in the
+   definition for \<^const>{parse_and_resolve_modules}. *)
+function try_solve_systems_incrementally :: \<open>String.literal list \<Rightarrow> unit \<Rightarrow> unit resolver\<close>
+where \<open>try_solve_systems_incrementally idirs () = do {
          sys \<leftarrow> find_unsolved_system ();
          case sys of
            None \<Rightarrow> return ()
-         | Some (i, s) \<Rightarrow> try_solve_system i s \<bind> try_solve_systems_incrementally
+         | Some (i, s) \<Rightarrow> try_solve_system idirs i s \<bind> try_solve_systems_incrementally idirs
        }\<close>
 by pat_completeness auto
+
+(* TODO: try to detect if system gets stuck solving the same constraint over and over,
+         in which case we need to throw an error or something *)
 
 termination
   sorry
@@ -373,7 +395,7 @@ where \<open>parse_and_resolve_modules idirs mods = do {
            Inl diag \<Rightarrow> IO.return (Inl diag, ([], Map.empty))
          | Inr (sys, mods) \<Rightarrow> do {
              (res, files) \<leftarrow> (do {
-               () \<leftarrow> try_solve_systems_incrementally ();
+               try_solve_systems_incrementally [] ();
                check_final_systems ()
              }) (sys, mods, Map.empty, Map.empty, Digraph.empty);
              let res = do {
@@ -383,6 +405,10 @@ where \<open>parse_and_resolve_modules idirs mods = do {
              IO.return (res, files)
            }
        }\<close>
+(* FIXME: little hickup: we can't find the path of a module only knowing the module name,
+          yet we return a list of modules (the topsort) along with a list of filepaths mapped to CSTs *)
+(* TODO: return all the interfaces generated for later use in the name resolver and the typechecker
+         we only need to generate them once *)
 
 hide_type module_origin
 hide_const CommandLine InSource

@@ -3,6 +3,7 @@ theory EntryPoint
     Main
     "HOL-Library.Monad_Syntax"
     "HOL-Library.Code_Target_Int"
+    "HOL-Library.Code_Target_Nat"
 
     Diagnose.Diagnostic
     Syntax.Driver
@@ -30,7 +31,7 @@ where \<open>add_all_files \<equiv> List.fold (\<lambda>(a, b) d. add_file d a b
 
 (* TODO: add files to diagnostic *)
 
-fun go_typecheck :: \<open>(String.literal \<rightharpoonup> AST.module located) \<Rightarrow> String.literal list \<Rightarrow> unit io\<close>
+fun go_typecheck :: \<open>(String.literal \<rightharpoonup> AST.module located) \<Rightarrow> String.literal list list \<Rightarrow> unit io\<close>
 where \<open>go_typecheck asts mods = IO.return ()\<close>
 
 term run_driver

@@ -58,6 +58,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wno-unused-matches
+    - -Wno-incomplete-patterns
     dependencies:
     - gzc-lib
     - diagnose

@@ -18,9 +18,9 @@ code_printing
 
 (***********************************************************)
 
-function extract_imports_def :: \<open>CST.def' located \<Rightarrow> String.literal list list\<close>
-     and extract_imports_parameter :: \<open>CST.parameter located \<Rightarrow> String.literal list list\<close>
-     and extract_imports_expr :: \<open>CST.expr located \<Rightarrow> String.literal list list\<close>
+function extract_imports_def :: \<open>CST.def' located \<Rightarrow> String.literal list located list\<close>
+     and extract_imports_parameter :: \<open>CST.parameter located \<Rightarrow> String.literal list located list\<close>
+     and extract_imports_expr :: \<open>CST.expr located \<Rightarrow> String.literal list located list\<close>
 where \<open>extract_imports_def (CST.Mutual ts @@ _) = ts \<bind> extract_imports_def\<close>
     | \<open>extract_imports_def (CST.Assume ps @@ _) = concat ps \<bind> extract_imports_parameter\<close>
     | \<open>extract_imports_def (CST.Val _ _ ps ty @@ _) =
@@ -64,10 +64,10 @@ termination extract_imports_def
   apply (metis comp_apply dual_order.trans f_of_max_is_less le_imp_less_Suc max.coboundedI2 snd_conv)
   done
 
-fun extract_imports_toplevel :: \<open>CST.toplevel located \<Rightarrow> String.literal list list\<close>
+fun extract_imports_toplevel :: \<open>CST.toplevel located \<Rightarrow> String.literal list located list\<close>
 where \<open>extract_imports_toplevel (CST.Binding _ d @@ _) = extract_imports_def d\<close>
 
-fun extract_imports :: \<open>CST.module located \<Rightarrow> String.literal list list\<close>
+fun extract_imports :: \<open>CST.module located \<Rightarrow> String.literal list located list\<close>
 where \<open>extract_imports (CST.Mod ts @@ _) = ts \<bind> extract_imports_toplevel\<close>
 
 end

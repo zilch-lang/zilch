@@ -26,6 +26,7 @@ The end-goal (the evolutionary step) is to rewrite the entire project in Zilch o
 
 As of now, no release has been built (yet), so you'll need to compile the project yourself if you want to use it.
 
+<!--
 ### Prerequisites
 
 :warning: If you also are using Nix, then you don't need to look at the various steps involving installing stack/cabal.
@@ -58,6 +59,7 @@ To be honest, I don't work with cabal.
 All I know is that you can type `cabal v2-build` to build the project.
 
 </details>
+-->
 
 ## Code examples
 
