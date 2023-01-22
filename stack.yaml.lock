@@ -45,6 +45,63 @@ packages:
       size: 1388
   original:
     hackage: unordered-containers-0.2.14.0@sha256:2fe789f78246b7c7ec10d7b85c72d898a9f72fdda5b60d581e839d21016bc628,4992
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquidhaskell
+    pantry-tree:
+      sha256: e820c05ce8eab10b76a2862193ed0df62e911c82d1b5da0a107bd5fb7beb45c3
+      size: 321388
+    subdir: .
+    version: 0.8.10.7.1
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: .
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-base
+    pantry-tree:
+      sha256: bc16a74d46b76935cfeafdf0d6bf423382c0fda5aa905ad98c60c45ab74e31f9
+      size: 15114
+    subdir: liquid-base
+    version: 4.14.3.0
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-base
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-ghc-prim
+    pantry-tree:
+      sha256: e1dbd416d00871251794b17a96e25453469856a73cb943a3dc3d851a7a8f00a5
+      size: 912
+    subdir: liquid-ghc-prim
+    version: 0.6.1
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-ghc-prim
+- completed:
+    commit: 5aed39ec3210b9093ed635693d01bf351e25392f
+    git: https://github.com/ucsd-progsys/liquid-fixpoint
+    name: liquid-fixpoint
+    pantry-tree:
+      sha256: e75d523a96db5c9786d7806b0bb61a2134a0ceb64c729e9e2ca4ccc8ec42ae16
+      size: 23098
+    version: 0.8.10.7.1
+  original:
+    commit: 5aed39ec3210b9093ed635693d01bf351e25392f
+    git: https://github.com/ucsd-progsys/liquid-fixpoint
+- completed:
+    hackage: rest-rewrite-0.4.0@sha256:be93d899f7dece33f2a7613eb3dabd24d139f9cb2fc09f9efedfdce4ba6eb276,3923
+    pantry-tree:
+      sha256: ad19ccb2185ac0b58ddfd2eede69e6444986e687232e1504eb04ce7bb6e39368
+      size: 4018
+  original:
+    hackage: rest-rewrite-0.4.0@sha256:be93d899f7dece33f2a7613eb3dabd24d139f9cb2fc09f9efedfdce4ba6eb276,3923
 snapshots:
 - completed:
     sha256: 6d1532d40621957a25bad5195bfca7938e8a06d923c91bc52aa0f3c41181f2d4

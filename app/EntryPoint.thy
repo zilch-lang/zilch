@@ -39,7 +39,7 @@ term run_driver
 fun entrypoint :: \<open>all_flags \<Rightarrow> unit io\<close>
 where \<open>entrypoint (AllFlags input output) = do {
          (result, files) \<leftarrow> run_driver input;
-         let files = inorder files;
+         let files = inorder2 files [];
          case result of
            Inl diag \<Rightarrow> print_diagnostic_and_quit (add_all_files files diag)
          | Inr (asts, mods) \<Rightarrow> go_typecheck asts mods

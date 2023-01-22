@@ -23,6 +23,11 @@ source-repository head
   type: git
   location: https://github.com/zilch-lang/gzc
 
+flag liquidhaskell
+  description: Enable verification of some source files with LiquidHaskell
+  manual: True
+  default: False
+
 library
   exposed-modules:
       Located
@@ -37,13 +42,20 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
-    , diagnose >=2
+      diagnose >=2
     , megaparsec >=9.0 && <10
     , mtl ==2.2.2
     , nsc-core
     , text ==1.2.5.0
   default-language: Haskell2010
+  if flag(liquidhaskell)
+    ghc-options: -fplugin=LiquidHaskell
+    build-depends:
+        liquid-base >=4.7 && <5
+      , liquidhaskell
+  else
+    build-depends:
+        base >=4.7 && <5
 
 executable gzc
   main-is: Main.hs
@@ -61,16 +73,23 @@ executable gzc
   default-extensions:
       TypeSynonymInstances
       FlexibleInstances
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -Wno-unused-matches -Wno-incomplete-patterns
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -Wno-unused-matches -Wno-incomplete-patterns -Wno-unused-imports -Wno-missing-signatures -Wno-unused-top-binds -Wno-redundant-constraints -Wno-name-shadowing
   build-depends:
-      base >=4.7 && <5
-    , diagnose
+      diagnose
     , directory >=1.3
     , filepath >=1.4
     , gzc-lib
     , megaparsec >=9.0 && <10
     , optparse-applicative >=0.16
   default-language: Haskell2010
+  if flag(liquidhaskell)
+    ghc-options: -fplugin=LiquidHaskell
+    build-depends:
+        liquid-base >=4.7 && <5
+      , liquidhaskell
+  else
+    build-depends:
+        base >=4.7 && <5
 
 test-suite parser-tests
   type: exitcode-stdio-1.0
@@ -81,8 +100,15 @@ test-suite parser-tests
       test/Parser
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
-    , gzc-lib
+      gzc-lib
     , pretty-simple
     , text ==1.2.5.0
   default-language: Haskell2010
+  if flag(liquidhaskell)
+    ghc-options: -fplugin=LiquidHaskell
+    build-depends:
+        liquid-base >=4.7 && <5
+      , liquidhaskell
+  else
+    build-depends:
+        base >=4.7 && <5

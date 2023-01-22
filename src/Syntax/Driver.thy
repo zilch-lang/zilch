@@ -16,8 +16,10 @@ begin
 
 fun run_driver :: \<open>input_flags \<Rightarrow> ((String.literal diagnostic + (String.literal \<times> AST.module located) tree \<times> module_order) \<times> registered_files) io\<close>
 where \<open>run_driver (InputFlags idirs mods) = do {
-         parse_and_resolve_modules idirs mods;
-         IO.return undefined
+         (res, files) \<leftarrow> parse_and_resolve_modules idirs mods;
+         case res of
+           Inl diag \<Rightarrow> IO.return (Inl diag, files)
+         | Inr (mods, order) \<Rightarrow> IO.return undefined
        }\<close>
 
 (* TODO: don't forget to desugar after resolving all imports *)

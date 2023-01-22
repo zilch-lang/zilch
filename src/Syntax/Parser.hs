@@ -63,6 +63,7 @@ instance MP.TraversableStream [Located Token] where
 
 ------------------------------------------------------------------------
 
+{-@ ignore located @-}
 -- | Transforms a simple parser into a parser returning a located value.
 located :: forall m a. MonadParser m => m a -> m (Located a)
 located p = do
@@ -89,10 +90,12 @@ located p = do
 
   pure $ res :@ pos
 
+{-@ ignore token @-}
 -- | Accepts the given 'Token' not matter its position.
 token :: forall m. MonadParser m => Token -> m (Located Token)
 token tk = MP.satisfy ((== tk) . unLoc) MP.<?> showToken tk
 
+{-@ ignore whitespaces @-}
 whitespaces :: forall m. MonadParser m => m ()
 whitespaces = MPL.space MP.empty parseLineComment parseMultiComment
   where
@@ -105,19 +108,24 @@ whitespaces = MPL.space MP.empty parseLineComment parseMultiComment
     multiComment (TkDocComment _ :@ _) = True
     multiComment _ = False
 
+{-@ ignore lexeme @-}
 lexeme :: forall m a. MonadParser m => m a -> m a
 lexeme = MPL.lexeme whitespaces
 
+{-@ ignore indentGuard @-}
 -- | See 'MPL.indentGuard'.
 indentGuard :: forall m. MonadParser m => Ordering -> MP.Pos -> m MP.Pos
 indentGuard = MPL.indentGuard whitespaces
 
+{-@ ignore nonIndented @-}
 nonIndented :: forall m a. MonadParser m => m a -> m a
 nonIndented = MPL.nonIndented whitespaces
 
+{-@ ignore lineFold @-}
 lineFold :: forall m a. MonadParser m => (m () -> m a) -> m a
 lineFold p = MPL.lineFold whitespaces (p . MP.try)
 
+{-@ ignore indentBlock @-}
 -- | Unfortunately, we cannot use 'MPL.indentBlock' because it has a constraint @'Token' s ~ 'Char'@,
 --   which is not our case here.
 indentBlock :: forall m a. MonadParser m => m a -> m [a]
@@ -125,6 +133,7 @@ indentBlock p = do
   pos <- whitespaces *> MPL.indentLevel
   (p <* whitespaces) `MP.sepBy` indentGuard EQ pos
 
+{-@ ignore parens @-}
 parens :: forall m a. MonadParser m => m a -> m a
 parens p = do
   _ <- lexeme (token TkLeftParen)
@@ -134,12 +143,14 @@ parens p = do
 
 ------------------------------------------------------------------------
 
+{-@ ignore parseIdentifier @-}
 parseIdentifier :: forall m. MonadParser m => m (Located String)
 parseIdentifier = MP.label "an identifier" $ MP.satisfy isIdentifier <&> \(TkSymbol id :@ p) -> Text.unpack id :@ p
   where
     isIdentifier (TkSymbol _ :@ _) = True
     isIdentifier _ = False
 
+{-@ ignore parseNumber @-}
 parseNumber :: forall m. MonadParser m => m (Located String, Maybe (Located String))
 parseNumber = MP.label "a number" do
   TkNumber nb suffix :@ p <- MP.satisfy isNumber
@@ -150,6 +161,7 @@ parseNumber = MP.label "a number" do
 
 ------------------------------------------------------------------------
 
+{-@ ignore runParser @-}
 runParser :: FilePath -> [Located Token] -> Either (Diagnostic String) (Located CST.Module, Diagnostic String)
 runParser path tokens =
   bimap
@@ -161,18 +173,21 @@ runParser path tokens =
 
 ------------------------------------------------------------------------
 
+{-@ ignore parseModule @-}
 parseModule :: forall m. MonadParser m => m (Located CST.Module)
 parseModule = located do
   defs <- MP.many (nonIndented parseTopLevel)
   _ <- token TkEOF MP.<?> "end of input"
   pure $ CST.Mod defs
 
+{-@ ignore parseTopLevel @-}
 parseTopLevel :: forall m. MonadParser m => m (Located CST.TopLevel)
 parseTopLevel = located $ lineFold \s -> do
   isPub <- MP.option False (True <$ lexeme (token TkPublic))
   def <- parseDefinition s
   pure $ CST.Binding isPub def
 
+{-@ ignore parseDefinition @-}
 parseDefinition :: forall m. MonadParser m => m () -> m (Located CST.Definition)
 parseDefinition s =
   located $
@@ -217,6 +232,7 @@ parseDefinition s =
 
       pure $ CST.Mutual defs
 
+{-@ ignore parseMultiplicity @-}
 parseMultiplicity :: forall m. MonadParser m => m () -> m (Located CST.Multiplicity)
 parseMultiplicity s = do
   _ :@ Position _ (_, cl) _ <- token TkAt
@@ -225,6 +241,7 @@ parseMultiplicity s = do
     Right _ -> pure ()
   parseAtomicExpression s
 
+{-@ ignore parseAtomicExpression @-}
 parseAtomicExpression :: forall m. MonadParser m => m () -> m (Located CST.Expression)
 parseAtomicExpression s =
   located $
@@ -249,6 +266,7 @@ parseAtomicExpression s =
           <$> parens (parseFullExpression s)
       ]
 
+{-@ ignore parseFullExpression @-}
 parseFullExpression :: forall m. MonadParser m => m () -> m (Located CST.Expression)
 parseFullExpression s =
   MP.label "an expression" . located $
@@ -265,6 +283,7 @@ parseFullExpression s =
         parseApplication s
       ]
 
+{-@ ignore parseLambda @-}
 parseLambda :: forall m. MonadParser m => m () -> m CST.Expression
 parseLambda _ = lineFold \s -> do
   _ <- lexeme (token TkLam MP.<|> token TkUniLam) <* s
@@ -274,6 +293,7 @@ parseLambda _ = lineFold \s -> do
 
   pure $ CST.Lambda params body
 
+{-@ ignore parseDo @-}
 parseDo :: forall m. MonadParser m => m () -> m CST.Expression
 parseDo _ = lineFold \s -> do
   _ <- lexeme (token TkDo) <* s
@@ -281,6 +301,7 @@ parseDo _ = lineFold \s -> do
 
   pure $ CST.Do body
 
+{-@ ignore parseLocal @-}
 parseLocal :: forall m. MonadParser m => m () -> m CST.Expression
 parseLocal s = do
   def <- lineFold parseDefinition <* s
@@ -288,6 +309,7 @@ parseLocal s = do
 
   pure $ CST.Local def body
 
+{-@ ignore parseDependentType @-}
 parseDependentType :: forall m. MonadParser m => m () -> m CST.Expression
 parseDependentType s = do
   params <- parseTypeParameter s <* s
@@ -312,6 +334,7 @@ parseDependentType s = do
 
   pure $ ctor params ret
 
+{-@ ignore parseApplication @-}
 parseApplication :: forall m. MonadParser m => m () -> m CST.Expression
 parseApplication s = do
   fn <- lexeme (parseAtomicExpression s)
@@ -334,6 +357,7 @@ parseApplication s = do
 
       pure (imp, args)
 
+{-@ ignore parseTypeParameter @-}
 parseTypeParameter :: forall m. MonadParser m => m () -> m [Located CST.Parameter]
 parseTypeParameter s =
   MP.choice
@@ -370,6 +394,7 @@ parseTypeParameter s =
 
     unnamedBinding = ("_" <$) <$> token TkUnderscore
 
+{-@ ignore parseLambdaParameter @-}
 parseLambdaParameter :: forall m. MonadParser m => m () -> m [Located CST.Parameter]
 parseLambdaParameter s =
   MP.choice

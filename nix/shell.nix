@@ -14,5 +14,8 @@ pkgs.mkShell {
       supportedGhcVersions = [ "902" ];
     })
     ed
+    # For LiquidHaskell
+    z3
+    cvc4
   ];
 }

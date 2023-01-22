@@ -32,6 +32,7 @@ import qualified Text.Megaparsec.Char.Lexer as MPL
 --   * Act like a monadic parser.
 type MonadLexer m = (MonadWriter [LexicalWarning] m, MP.MonadParsec LexicalError Text m, MonadFail m)
 
+{-@ ignore located @-}
 -- | Transform a simple parser producing a value into a parser returning a located value.
 located :: forall m a. MonadLexer m => m a -> m (Located a)
 located p = do
@@ -47,10 +48,12 @@ located p = do
 
   pure $ res :@ pos
 
+{-@ ignore space @-}
 -- | Convenient wrapper around 'MPL.space' to only skip multiple consecutive whitespaces (but no comment).
 space :: MonadLexer m => m ()
 space = MPL.space MPC.space1 MP.empty MP.empty
 
+{-@ ignore lexeme @-}
 -- | 'MPL.lexeme' but with its first argument set to 'space'.
 lexeme :: MonadLexer m => m a -> m a
 lexeme = MPL.lexeme space
@@ -59,16 +62,19 @@ lexeme = MPL.lexeme space
 -- symbol :: MonadLexer m => Text -> m Text
 -- symbol = MPL.symbol space
 
+{-@ ignore eof @-}
 -- | Parse and return a 'TkEOF' if at the end of the stream.
 eof :: MonadLexer m => m (Located Token)
 eof = located $ TkEOF <$ MP.eof
 
 -------------------------------------------------------------------------------------
 
+{-@ ignore runLexer' @-}
 -- | A variant of 'runLexer' that works on a 'String' rather than a 'Text'.
 runLexer' :: FilePath -> String -> Either (Diagnostic String) ([Located Token], Diagnostic String)
 runLexer' path content = runLexer path (Text.pack content)
 
+{-@ ignore runLexer @-}
 -- | Run the lexer on the given file path and content.
 --
 -- Returns either an error as a 'Diagnostic', or a list of token and warnings as a 'Diagnostic'.
@@ -83,6 +89,7 @@ runLexer path content =
 
 -------------------------------------------------------------------------------------
 
+{-@ ignore entrypoint @-}
 -- | Parse any number of tokens in the whole file, until EOF.
 entrypoint :: forall m. MonadLexer m => m [Located Token]
 entrypoint = ignoreLeadingSpaces *> (concat' <$> MP.manyTill_ (lexeme token) eof)
@@ -103,6 +110,7 @@ entrypoint = ignoreLeadingSpaces *> (concat' <$> MP.manyTill_ (lexeme token) eof
 -------------------------------------------------------------------------------------
 -- Comments
 
+{-@ ignore lineComment @-}
 -- | Parse a line comment, starting with @--@ and expanding until the end of the line.
 lineComment :: forall m. MonadLexer m => m (Located Token)
 lineComment = located do
@@ -119,14 +127,17 @@ lineComment = located do
       ]
   pure $ TkInlineComment (front <> back)
 
+{-@ ignore docComment @-}
 -- | Parse a documentation comment, which starts with @/--@ and ends with @-/@.
 docComment :: forall m. MonadLexer m => m (Located Token)
 docComment = specialMultilineComment "/--" "-/" TkDocComment
 
+{-@ ignore multilineComment @-}
 -- | Parse a multiline comment, which starts with @/-@ and ends with @-/@.
 multilineComment :: forall m. MonadLexer m => m (Located Token)
 multilineComment = specialMultilineComment "/-" "-/" TkMultilineComment
 
+{-@ ignore specialMultilineComment @-}
 -- | To avoid redundancy between 'docComment' and 'multilineComment'.
 specialMultilineComment :: forall m. MonadLexer m => Text -> Text -> (Text -> Token) -> m (Located Token)
 specialMultilineComment begin end tok = located do
@@ -145,6 +156,7 @@ specialMultilineComment begin end tok = located do
 --------------------------------------------------------------------------------------
 -- Numbers
 
+{-@ ignore integer @-}
 integer :: forall m. MonadLexer m => m (Located Token)
 integer = MP.label "a number" . located $ MP.choice [toNumber hexadecimal, toNumber octal, toNumber binary, decimalWithSuffix]
   where
@@ -173,9 +185,11 @@ integer = MP.label "a number" . located $ MP.choice [toNumber hexadecimal, toNum
 --------------------------------------------------------------------------------------
 -- Identifiers & keywords
 
+{-@ ignore identifierOrKeyword @-}
 identifierOrKeyword :: forall m. MonadLexer m => m (Located Token)
 identifierOrKeyword = reservedSymbol MP.<|> anySymbol
 
+{-@ ignore reservedSymbol @-}
 reservedSymbol :: forall m. MonadLexer m => m (Located Token)
 reservedSymbol =
   located $
@@ -199,6 +213,7 @@ reservedSymbol =
         TkAt <$ MPC.string "@"
       ]
 
+{-@ ignore anySymbol @-}
 anySymbol :: forall m. MonadLexer m => m (Located Token)
 anySymbol = located $ toToken <$> MP.some (MP.noneOf (":,{}()⦃⦄⟨⟩ \t\n\r\v∷@" :: String))
   where

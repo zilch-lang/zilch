@@ -186,6 +186,7 @@ type MonadParser m = (MP.MonadParsec Void String m)
 instance HasHints Void String where
   hints _ = []
 
+{-@ ignore parseModuleName @-}
 parseModuleName :: Maybe Position -> String -> Either (Diagnostic String) [String]
 parseModuleName pos modName =
   let fileName = maybe "<command-line>" file pos
@@ -193,6 +194,7 @@ parseModuleName pos modName =
         (errorDiagnosticFromBundle Nothing "Invalid module name" Nothing)
         (MP.runParser parseName fileName modName)
 
+{-@ ignore parseName @-}
 parseName :: MonadParser m => m [String]
 parseName = parsePart `MP.sepBy1` parseSeparator
   where
@@ -202,6 +204,7 @@ parseName = parsePart `MP.sepBy1` parseSeparator
 
 --------------------------------------------
 
+{-@ ignore mkConstraintSystem @-}
 mkConstraintSystem :: [FilePath] -> [String] -> System
 mkConstraintSystem idirs mods =
   let paths = generateAllPossiblePaths [] idirs mods
