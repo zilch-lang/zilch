@@ -72,6 +72,7 @@ substituteUnicodeInPlace() {
         --replace "⤜" "\<bind>" \
         --replace "⋀" "\<And>" \
         --replace "∨" "\<or>" \
+        --replace "∧" "\<and>" \
         --replace "¬" "\<not>" \
         --replace "≠" "\<noteq>" \
         --replace "∘" "\<circ>" \
@@ -80,7 +81,9 @@ substituteUnicodeInPlace() {
         --replace "∃" "\<exists>" \
         --replace "⟹" "\<Longrightarrow>" \
         --replace "≤" "\<le>" \
-        --replace "⟷" "\<longleftrightarrow>"
+        --replace "⟷" "\<longleftrightarrow>" \
+        --replace "⟨" "\<langle>" \
+        --replace "⟩" "\<rangle>"
 }
 
 export -f substitute

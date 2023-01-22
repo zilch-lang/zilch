@@ -5,5 +5,5 @@ set -e
 isabelle build -D . -j$(nproc) "$@" EntryPoint
 
 # Finally, patch the generated Haskell code to include our parser, etc.
-cd generated
-patch < EntryPoint.patch
+# Edit the generated file using `ed` to add some of our stuff in here.
+ed generated/EntryPoint.hs <generated/EntryPoint_patch.ed

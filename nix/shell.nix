@@ -13,5 +13,6 @@ pkgs.mkShell {
     (haskell-language-server.override {
       supportedGhcVersions = [ "902" ];
     })
+    ed
   ];
 }

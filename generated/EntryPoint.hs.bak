@@ -1,0 +1,1119 @@
+{-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
+
+module EntryPoint(Tree, Modulea, entrypoint) where {
+
+import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
+  (>>=), (>>), (=<<), (&&), (||), (^), (^^), (.), ($), ($!), (++), (!!), Eq,
+  error, id, return, not, fst, snd, map, filter, concat, concatMap, reverse,
+  zip, null, takeWhile, dropWhile, all, any, Integer, negate, abs, divMod,
+  String, Bool(True, False), Maybe(Nothing, Just));
+import qualified Prelude;
+import qualified Error.Diagnose.Diagnostic;
+import qualified Error.Diagnose.Report;
+import qualified Error.Diagnose.Position;
+import qualified Error.Diagnose.Style;
+import qualified Located;
+import qualified Syntax.CST;
+import qualified Syntax.Lexer;
+import qualified Syntax.Parser;
+import qualified Syntax.Tokens;
+import qualified System.IO;
+import qualified System.Exit;
+import qualified CLI.Flags;
+import qualified StdIO;
+import qualified FileIO;
+import qualified ImportResolver;
+
+class Ord a where {
+  less_eq :: a -> a -> Bool;
+  less :: a -> a -> Bool;
+};
+
+class (Ord a) => Preorder a where {
+};
+
+class (Preorder a) => Order a where {
+};
+
+class (Order a) => Linorder a where {
+};
+
+less_eq_list :: forall a. (Linorder a) => [a] -> [a] -> Bool;
+less_eq_list [] uu = True;
+less_eq_list (uv : uw) [] = False;
+less_eq_list (x : xs) (y : ys) = less_eq x y && less_eq_list xs ys;
+
+less_list :: forall a. (Linorder a) => [a] -> [a] -> Bool;
+less_list [] uu = True;
+less_list (uv : uw) [] = False;
+less_list (x : xs) (y : ys) = less x y && less_list xs ys;
+
+instance {-# OVERLAPPABLE #-} (Linorder a) => Ord [a] where {
+  less_eq = less_eq_list;
+  less = less_list;
+};
+
+instance {-# OVERLAPPABLE #-} (Linorder a) => Preorder [a] where {
+};
+
+instance {-# OVERLAPPABLE #-} (Linorder a) => Order [a] where {
+};
+
+instance {-# OVERLAPPABLE #-} (Linorder a) => Linorder [a] where {
+};
+
+instance Ord String where {
+  less_eq = (\ a b -> a <= b);
+  less = (\ a b -> a < b);
+};
+
+instance Preorder String where {
+};
+
+instance Order String where {
+};
+
+instance Linorder String where {
+};
+
+instance Ord Integer where {
+  less_eq = (\ a b -> a <= b);
+  less = (\ a b -> a < b);
+};
+
+newtype Nat = Nat Integer;
+
+data Num = One | Bit0 Num | Bit1 Num;
+
+data Implicitness = Implicit | Explicit;
+
+data Def =
+  Let Bool (Located.Located String) (Located.Located Expr)
+    (Located.Located Expr);
+
+data Expr = Identifier (Located.Located String)
+  | Integera (Located.Located String) (Maybe (Located.Located Expr))
+  | ProductType (Located.Located Parameter) (Located.Located Expr)
+  | Lambda (Located.Located Parameter) (Located.Located Expr)
+  | MultiplicativeSigmaType (Located.Located Parameter) (Located.Located Expr)
+  | AdditiveSigmaType (Located.Located Parameter) (Located.Located Expr)
+  | MultiplicativeUnitType | MultiplicativeUnit
+  | Local (Located.Located Def) (Located.Located Expr)
+  | Application (Located.Located Expr) Implicitness (Located.Located Expr)
+  | Hole;
+
+data Parameter =
+  Parameter Implicitness (Located.Located Expr) (Located.Located String)
+    (Located.Located Expr);
+
+data Tree a = Leaf | Node (Tree a) a (Tree a);
+
+data Toplevel = Binding Bool (Located.Located Tldef);
+
+data Tldef = Mutual [Located.Located Toplevel]
+  | Val (Maybe (Located.Located Expr)) (Located.Located String)
+      (Maybe (Located.Located Expr))
+  | Bind (Located.Located Def);
+
+newtype Modulea = Mod [Located.Located Toplevel];
+
+data Cmp_val = LT | EQ | GT;
+
+data Char = Char Bool Bool Bool Bool Bool Bool Bool Bool;
+
+newtype Interface = Iface (Tree (String, Interface));
+
+data Digraph_ext a b = Digraph_ext (Tree a) (Tree (a, Tree a)) b;
+
+data Module_origin = CommandLine | InSource Error.Diagnose.Position.Position;
+
+cmp :: forall a. (Eq a, Linorder a) => a -> a -> Cmp_val;
+cmp x y = (if less x y then LT else (if x == y then EQ else GT));
+
+integer_of_nat :: Nat -> Integer;
+integer_of_nat (Nat x) = x;
+
+plus_nat :: Nat -> Nat -> Nat;
+plus_nat m n = Nat (integer_of_nat m + integer_of_nat n);
+
+one_nat :: Nat;
+one_nat = Nat (1 :: Integer);
+
+suc :: Nat -> Nat;
+suc n = plus_nat n one_nat;
+
+max :: forall a. (Ord a) => a -> a -> a;
+max a b = (if less_eq a b then b else a);
+
+minus_nat :: Nat -> Nat -> Nat;
+minus_nat m n = Nat (max (0 :: Integer) (integer_of_nat m - integer_of_nat n));
+
+equal_nat :: Nat -> Nat -> Bool;
+equal_nat m n = integer_of_nat m == integer_of_nat n;
+
+zero_nat :: Nat;
+zero_nat = Nat (0 :: Integer);
+
+nth :: forall a. [a] -> Nat -> a;
+nth (x : xs) n =
+  (if equal_nat n zero_nat then x else nth xs (minus_nat n one_nat));
+
+bind :: forall a b. [a] -> (a -> [b]) -> [b];
+bind xs f = concatMap f xs;
+
+fold :: forall a b. (a -> b -> b) -> [a] -> b -> b;
+fold f (x : xs) s = fold f xs (f x s);
+fold f [] s = s;
+
+join :: String -> [String] -> String;
+join uu [] = "";
+join uv [x] = x;
+join sep (x : y : zs) = (x ++ sep) ++ join sep (y : zs);
+
+member :: forall a. (Eq a) => [a] -> a -> Bool;
+member [] y = False;
+member (x : xs) y = x == y || member xs y;
+
+remdups :: forall a. (Eq a) => [a] -> [a];
+remdups [] = [];
+remdups (x : xs) = (if member xs x then remdups xs else x : remdups xs);
+
+preorder :: forall a. Tree a -> [a];
+preorder Leaf = [];
+preorder (Node l x r) = x : preorder l ++ preorder r;
+
+fold_set :: forall a b. (a -> b -> b) -> b -> Tree a -> b;
+fold_set f x t = fold f (preorder t) x;
+
+vertices :: forall a b. (Linorder a) => Digraph_ext a b -> Tree a;
+vertices (Digraph_ext vertices edges more) = vertices;
+
+edges :: forall a b. (Linorder a) => Digraph_ext a b -> Tree (a, Tree a);
+edges (Digraph_ext vertices edges more) = edges;
+
+insert :: forall a. (Eq a, Linorder a) => a -> Tree a -> Tree a;
+insert x Leaf = Node Leaf x Leaf;
+insert x (Node l a r) = (case cmp x a of {
+                          LT -> Node (insert x l) a r;
+                          EQ -> Node l a r;
+                          GT -> Node l a (insert x r);
+                        });
+
+lookup :: forall a b. (Eq a, Linorder a) => Tree (a, b) -> a -> Maybe b;
+lookup Leaf x = Nothing;
+lookup (Node l (a, b) r) x = (case cmp x a of {
+                               LT -> lookup l x;
+                               EQ -> Just b;
+                               GT -> lookup r x;
+                             });
+
+isin :: forall a. (Eq a, Linorder a) => Tree a -> a -> Bool;
+isin Leaf x = False;
+isin (Node l a r) x = (case cmp x a of {
+                        LT -> isin l x;
+                        EQ -> True;
+                        GT -> isin r x;
+                      });
+
+postset :: forall a. (Eq a, Linorder a) => a -> Digraph_ext a () -> Tree a;
+postset x g =
+  (case lookup (edges g) x of {
+    Nothing -> Leaf;
+    Just es ->
+      fold_set (\ y s -> (if isin es y then insert y s else s)) Leaf
+        (vertices g);
+  });
+
+walk_aux1 ::
+  forall a.
+    (Eq a,
+      Linorder a) => a -> Digraph_ext a () -> [a] -> Prelude.Either [a] [a];
+walk_aux1 root g stack =
+  fold_set (walk_aux2 g) (Prelude.Right stack) (postset root g);
+
+walk_aux2 ::
+  forall a.
+    (Eq a,
+      Linorder a) => Digraph_ext a () ->
+                       a -> Prelude.Either [a] [a] -> Prelude.Either [a] [a];
+walk_aux2 g uu (Prelude.Left cycle) = Prelude.Left cycle;
+walk_aux2 g v (Prelude.Right stack) =
+  (if member stack v then Prelude.Left (v : stack)
+    else (case walk_aux1 v g (v : stack) of {
+           Prelude.Left a -> Prelude.Left a;
+           Prelude.Right stacka -> Prelude.Right (remdups (stack ++ stacka));
+         }));
+
+walk ::
+  forall a.
+    (Eq a, Linorder a) => a -> Digraph_ext a () -> Prelude.Either [a] [a];
+walk x g = walk_aux1 x g [x];
+
+inorder :: forall a. Tree a -> [a];
+inorder Leaf = [];
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r;
+
+empty :: forall a. (Linorder a) => Digraph_ext a ();
+empty = Digraph_ext Leaf Leaf ();
+
+enumerate :: forall a. Nat -> [a] -> [(Nat, a)];
+enumerate n (x : xs) = (n, x) : enumerate (suc n) xs;
+enumerate n [] = [];
+
+is_none :: forall a. Maybe a -> Bool;
+is_none (Just x) = False;
+is_none Nothing = True;
+
+topsort ::
+  forall a. (Eq a, Linorder a) => Digraph_ext a () -> Prelude.Either [a] [a];
+topsort g = (case vertices g of {
+              Leaf -> Prelude.Right [];
+              Node _ x _ -> walk x g;
+            });
+
+update ::
+  forall a b. (Eq a, Linorder a) => a -> b -> Tree (a, b) -> Tree (a, b);
+update x y Leaf = Node Leaf (x, y) Leaf;
+update x y (Node l (a, b) r) = (case cmp x a of {
+                                 LT -> Node (update x y l) (a, b) r;
+                                 EQ -> Node l (x, y) r;
+                                 GT -> Node l (a, b) (update x y r);
+                               });
+
+add_edge ::
+  forall a.
+    (Eq a, Linorder a) => (a, a) -> Digraph_ext a () -> Digraph_ext a ();
+add_edge x g =
+  (case x of {
+    (a, b) ->
+      Digraph_ext (insert a (insert b (vertices g)))
+        (case lookup (edges g) a of {
+          Nothing -> update a (insert b Leaf) (edges g);
+          Just es -> update a (insert b es) (edges g);
+        })
+        ();
+  });
+
+mk_ns_str :: ImportResolver.Namespace -> String;
+mk_ns_str (ImportResolver.Module path) = "" ++ path;
+mk_ns_str (ImportResolver.Access ns x) = (mk_ns_str ns ++ "::") ++ x;
+
+mk_notes1 :: [ImportResolver.Formula] -> [String];
+mk_notes1 [] = [];
+mk_notes1 (ImportResolver.Exists path : fs) =
+  (("- File " ++ path) ++ " does not exist") : mk_notes1 fs;
+mk_notes1 (ImportResolver.In x n : fs) =
+  ((("- " ++ x) ++ " is not a public member of the namespace ") ++
+    mk_ns_str n) :
+    mk_notes1 fs;
+mk_notes1 (ImportResolver.Top uu : fs) = mk_notes1 fs;
+mk_notes1 (ImportResolver.Bottom uv : fs) = mk_notes1 fs;
+
+mk_notes2 :: [ImportResolver.Formula] -> [String];
+mk_notes2 [] = [];
+mk_notes2 (ImportResolver.Top (ImportResolver.Exists path) : fs) =
+  (("- File " ++ path) ++ " can be imported here") : mk_notes2 fs;
+mk_notes2 (ImportResolver.Top (ImportResolver.Top va) : fs) = mk_notes2 fs;
+mk_notes2 (ImportResolver.Top (ImportResolver.Bottom va) : fs) = mk_notes2 fs;
+mk_notes2 (ImportResolver.Top (ImportResolver.In va vb) : fs) = mk_notes2 fs;
+mk_notes2 (ImportResolver.Bottom v : fs) = mk_notes2 fs;
+mk_notes2 (ImportResolver.Exists v : fs) = mk_notes2 fs;
+mk_notes2 (ImportResolver.In v va : fs) = mk_notes2 fs;
+
+list_update :: forall a. [a] -> Nat -> a -> [a];
+list_update [] i y = [];
+list_update (x : xs) i y =
+  (if equal_nat i zero_nat then y : xs
+    else x : list_update xs (minus_nat i one_nat) y);
+
+map_sum ::
+  forall a b c d.
+    (a -> b) -> (c -> d) -> Prelude.Either a c -> Prelude.Either b d;
+map_sum f1 f2 (Prelude.Left a) = Prelude.Left (f1 a);
+map_sum f1 f2 (Prelude.Right a) = Prelude.Right (f2 a);
+
+join_tree_map :: forall a b. Tree (a, b) -> Tree (a, b) -> Tree (a, b);
+join_tree_map t Leaf = t;
+join_tree_map Leaf (Node v va vb) = Node v va vb;
+join_tree_map (Node t1 a t2) (Node t3 b t4) =
+  (case join_tree_map t2 t3 of {
+    Leaf -> Node t1 a (Node Leaf b t4);
+    Node u2 x u3 -> Node (Node t1 a u2) x (Node u3 b t4);
+  });
+
+union_files ::
+  Tree (String, String) -> Tree (String, String) -> Tree (String, String);
+union_files m1 m2 = join_tree_map m1 m2;
+
+bind_resolver ::
+  forall a b.
+    (([[[ImportResolver.Formula]]],
+       ([(Module_origin, [String])],
+         (Tree (String, Maybe Interface),
+           (Tree (String, Located.Located Syntax.CST.Module),
+             Digraph_ext [String] ())))) ->
+      Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+  ([(Module_origin, [String])],
+    (Tree (String, Maybe Interface),
+      (Tree (String, Located.Located Syntax.CST.Module),
+        Digraph_ext [String] ())))),
+ a),
+                   Tree (String, String))) ->
+      (a -> ([[[ImportResolver.Formula]]],
+              ([(Module_origin, [String])],
+                (Tree (String, Maybe Interface),
+                  (Tree (String, Located.Located Syntax.CST.Module),
+                    Digraph_ext [String] ())))) ->
+              Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))),
+         b),
+                           Tree (String, String))) ->
+        ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     b),
+                       Tree (String, String));
+bind_resolver r f st =
+  (r st) >>= (\ a ->
+               (case a of {
+                 (Prelude.Left diag, fs1) -> return (Prelude.Left diag, fs1);
+                 (Prelude.Right (sta, x), fs1) ->
+                   (f x sta) >>= (\ (res, fs2) ->
+                                   return (res, union_files fs1 fs2));
+               }));
+
+is_bottom :: ImportResolver.Formula -> Bool;
+is_bottom (ImportResolver.Bottom uu) = True;
+is_bottom (ImportResolver.Top v) = False;
+is_bottom (ImportResolver.Exists v) = False;
+is_bottom (ImportResolver.In v va) = False;
+
+is_false :: [ImportResolver.Formula] -> Bool;
+is_false c = any is_bottom c;
+
+is_top :: ImportResolver.Formula -> Bool;
+is_top (ImportResolver.Top uu) = True;
+is_top (ImportResolver.Bottom v) = False;
+is_top (ImportResolver.Exists v) = False;
+is_top (ImportResolver.In v va) = False;
+
+is_true :: [ImportResolver.Formula] -> Bool;
+is_true c = all is_top c;
+
+is_solved :: [ImportResolver.Formula] -> Bool;
+is_solved c = is_false c || is_true c;
+
+is_fully_solved :: [[ImportResolver.Formula]] -> Bool;
+is_fully_solved s = all is_solved s;
+
+no_files :: Tree (String, String);
+no_files = Leaf;
+
+returna ::
+  forall a.
+    a -> ([[[ImportResolver.Formula]]],
+           ([(Module_origin, [String])],
+             (Tree (String, Maybe Interface),
+               (Tree (String, Located.Located Syntax.CST.Module),
+                 Digraph_ext [String] ())))) ->
+           Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+       ([(Module_origin, [String])],
+         (Tree (String, Maybe Interface),
+           (Tree (String, Located.Located Syntax.CST.Module),
+             Digraph_ext [String] ())))),
+      a),
+                        Tree (String, String));
+returna x st = return (Prelude.Right (st, x), no_files);
+
+get ::
+  ([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))) ->
+    Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+([(Module_origin, [String])],
+  (Tree (String, Maybe Interface),
+    (Tree (String, Located.Located Syntax.CST.Module),
+      Digraph_ext [String] ())))),
+                                       ([[[ImportResolver.Formula]]],
+ ([(Module_origin, [String])],
+   (Tree (String, Maybe Interface),
+     (Tree (String, Located.Located Syntax.CST.Module),
+       Digraph_ext [String] ()))))),
+                 Tree (String, String));
+get = (\ st -> return (Prelude.Right (st, st), no_files));
+
+find_unsolved_system ::
+  () -> ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     Maybe (Nat, [[ImportResolver.Formula]])),
+                       Tree (String, String));
+find_unsolved_system () =
+  bind_resolver get
+    (\ (ss, (_, (_, (_, _)))) ->
+      (case filter (\ (_, s) -> not (is_fully_solved s)) (enumerate zero_nat ss)
+        of {
+        [] -> returna Nothing;
+        c : _ -> returna (Just c);
+      }));
+
+insert_dependency ::
+  [String] ->
+    [String] ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+insert_dependency a b =
+  (\ (ss, (ml, (ns, (ms, g)))) ->
+    return
+      (Prelude.Right ((ss, (ml, (ns, (ms, add_edge (a, b) g)))), ()),
+        no_files));
+
+mk_cyclic_import_error ::
+  [[String]] -> Error.Diagnose.Diagnostic.Diagnostic String;
+mk_cyclic_import_error ms = error "undefined";
+
+has_cycle_from ::
+  forall a. (Eq a, Linorder a) => a -> Digraph_ext a () -> Maybe [a];
+has_cycle_from x g = (case walk x g of {
+                       Prelude.Left a -> Just a;
+                       Prelude.Right _ -> Nothing;
+                     });
+
+throw ::
+  forall a.
+    Error.Diagnose.Diagnostic.Diagnostic String ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   a),
+                     Tree (String, String));
+throw diag uu = return (Prelude.Left diag, no_files);
+
+insert_dependency_and_check_cycles ::
+  [String] ->
+    [String] ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+insert_dependency_and_check_cycles m i =
+  bind_resolver (insert_dependency m i)
+    (\ () ->
+      bind_resolver get
+        (\ (_, (_, (_, (_, g)))) ->
+          (case has_cycle_from m g of {
+            Nothing -> returna ();
+            Just a -> (throw . mk_cyclic_import_error) a;
+          })));
+
+prepend_system ::
+  [[ImportResolver.Formula]] ->
+    ([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))) ->
+      Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+  ([(Module_origin, [String])],
+    (Tree (String, Maybe Interface),
+      (Tree (String, Located.Located Syntax.CST.Module),
+        Digraph_ext [String] ())))),
+ ()),
+                   Tree (String, String));
+prepend_system s =
+  (\ (ss, (ml, (ns, (ms, g)))) ->
+    return (Prelude.Right ((s : ss, (ml, (ns, (ms, g)))), ()), no_files));
+
+insert_dependencies_and_constraints ::
+  [String] ->
+    [Located.Located [String]] ->
+      [String] ->
+        ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     Nat),
+                       Tree (String, String));
+insert_dependencies_and_constraints uu [] uv = returna zero_nat;
+insert_dependencies_and_constraints idirs ((i Located.:@ p) : is) m =
+  bind_resolver get
+    (\ (_, (_, (_, (_, g)))) ->
+      bind_resolver
+        (if isin (vertices g) i then returna zero_nat
+          else bind_resolver (insert_dependency_and_check_cycles m i)
+                 (\ _ ->
+                   bind_resolver
+                     (prepend_system
+                       (ImportResolver.mkConstraintSystem idirs i))
+                     (\ _ -> returna one_nat)))
+        (\ k ->
+          bind_resolver (insert_dependencies_and_constraints idirs is m)
+            (\ n -> returna (plus_nat k n))));
+
+try_generate_interface ::
+  ImportResolver.Namespace ->
+    ([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))) ->
+      Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+  ([(Module_origin, [String])],
+    (Tree (String, Maybe Interface),
+      (Tree (String, Located.Located Syntax.CST.Module),
+        Digraph_ext [String] ())))),
+ (Maybe (Maybe Interface), Nat)),
+                   Tree (String, String));
+try_generate_interface uu = error "undefined";
+
+insert_module ::
+  String ->
+    Located.Located Syntax.CST.Module ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+insert_module name m =
+  (\ (ss, (ml, (ns, (ms, g)))) ->
+    return
+      (Prelude.Right ((ss, (ml, (ns, (update name m ms, g)))), ()), no_files));
+
+insert_file ::
+  String ->
+    String ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+insert_file name content =
+  (\ st -> return (Prelude.Right (st, ()), update name content Leaf));
+
+lift_sum ::
+  forall a.
+    Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) a ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   a),
+                     Tree (String, String));
+lift_sum res = (\ st -> return (map_sum id (\ a -> (st, a)) res, no_files));
+
+contains :: String -> Interface -> Bool;
+contains x (Iface binds) = not (is_none (lookup binds x));
+
+extract_imports_def ::
+  Located.Located Syntax.CST.Definition -> [Located.Located [String]];
+extract_imports_def (Syntax.CST.Mutual ts Located.:@ uu) =
+  bind ts extract_imports_def;
+extract_imports_def (Syntax.CST.Assume ps Located.:@ uv) =
+  bind (concat ps) extract_imports_parameter;
+extract_imports_def (Syntax.CST.Val uw ux ps ty Located.:@ uy) =
+  bind (concat ps) extract_imports_parameter ++ extract_imports_expr ty;
+extract_imports_def (Syntax.CST.Let uz va ps ty ex Located.:@ vb) =
+  bind (concat ps) extract_imports_parameter ++
+    (case ty of {
+      Nothing -> [];
+      Just a -> extract_imports_expr a;
+    }) ++
+      extract_imports_expr ex;
+extract_imports_def (Syntax.CST.Rec vc vd ps ty ex Located.:@ ve) =
+  bind (concat ps) extract_imports_parameter ++
+    (case ty of {
+      Nothing -> [];
+      Just a -> extract_imports_expr a;
+    }) ++
+      extract_imports_expr ex;
+
+extract_imports_expr ::
+  Located.Located Syntax.CST.Expression -> [Located.Located [String]];
+extract_imports_expr (Syntax.CST.Identifier vj Located.:@ vk) = [];
+extract_imports_expr (Syntax.CST.Integer vl vm Located.:@ vn) = [];
+extract_imports_expr (Syntax.CST.ProductType ps ty Located.:@ vo) =
+  bind ps extract_imports_parameter ++ extract_imports_expr ty;
+extract_imports_expr (Syntax.CST.Lambda ps ex Located.:@ vp) =
+  bind (concat ps) extract_imports_parameter ++ extract_imports_expr ex;
+extract_imports_expr (Syntax.CST.MultiplicativeSigmaType ps ty Located.:@ vq) =
+  bind ps extract_imports_parameter ++ extract_imports_expr ty;
+extract_imports_expr (Syntax.CST.AdditiveSigmaType ps ty Located.:@ vr) =
+  bind ps extract_imports_parameter ++ extract_imports_expr ty;
+extract_imports_expr (Syntax.CST.MultiplicativeUnitType Located.:@ vs) = [];
+extract_imports_expr (Syntax.CST.MultiplicativeUnit Located.:@ vt) = [];
+extract_imports_expr (Syntax.CST.Local d ex Located.:@ vu) =
+  extract_imports_def d ++ extract_imports_expr ex;
+extract_imports_expr (Syntax.CST.Application f xs Located.:@ vv) =
+  extract_imports_expr f ++
+    bind xs (\ (_, asa) -> bind asa extract_imports_expr);
+extract_imports_expr (Syntax.CST.Parenthesized ex Located.:@ vw) =
+  extract_imports_expr ex;
+extract_imports_expr (Syntax.CST.Do ex Located.:@ vx) = extract_imports_expr ex;
+
+extract_imports_parameter ::
+  Located.Located Syntax.CST.Parameter -> [Located.Located [String]];
+extract_imports_parameter (Syntax.CST.Parameter vf vg vh ty Located.:@ vi) =
+  (case ty of {
+    Nothing -> [];
+    Just a -> extract_imports_expr a;
+  });
+
+extract_imports_toplevel ::
+  Located.Located Syntax.CST.TopLevel -> [Located.Located [String]];
+extract_imports_toplevel (Syntax.CST.Binding uu d Located.:@ uv) =
+  extract_imports_def d;
+
+extract_imports ::
+  Located.Located Syntax.CST.Module -> [Located.Located [String]];
+extract_imports (Syntax.CST.Mod ts Located.:@ uu) =
+  bind ts extract_imports_toplevel;
+
+lift_io ::
+  forall a.
+    Prelude.IO a ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   a),
+                     Tree (String, String));
+lift_io act =
+  (\ st -> act >>= (\ x -> return (Prelude.Right (st, x), no_files)));
+
+try_solve_constraint ::
+  [String] ->
+    [String] ->
+      [ImportResolver.Formula] ->
+        ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     ([ImportResolver.Formula], Nat)),
+                       Tree (String, String));
+try_solve_constraint uu uv [] = returna ([], zero_nat);
+try_solve_constraint idirs m (ImportResolver.Top f : fs) =
+  bind_resolver (try_solve_constraint idirs m fs)
+    (\ (fsa, n) -> returna (ImportResolver.Top f : fsa, n));
+try_solve_constraint uw m (ImportResolver.Bottom f : fs) =
+  returna (ImportResolver.Bottom f : fs, zero_nat);
+try_solve_constraint idirs m (ImportResolver.Exists path : fs) =
+  bind_resolver (lift_io (FileIO.doesFileExist path))
+    (\ file_exists ->
+      (if file_exists
+        then bind_resolver get
+               (\ (_, (_, (ms, _))) ->
+                 bind_resolver
+                   (case lookup ms path of {
+                     Nothing ->
+                       bind_resolver (lift_io (FileIO.readFile path))
+                         (\ content ->
+                           bind_resolver (insert_file path content)
+                             (\ _ ->
+                               bind_resolver
+                                 (lift_sum
+                                   (Syntax.Lexer.runLexer' path content))
+                                 (\ (tokens, _) ->
+                                   bind_resolver
+                                     (lift_sum
+                                       (Syntax.Parser.runParser path tokens))
+                                     (\ (cst, _) ->
+                                       let {
+ flattened_imports = extract_imports cst;
+                                       } in
+ bind_resolver (insert_dependencies_and_constraints idirs flattened_imports m)
+   (\ i -> bind_resolver (insert_module path cst) (\ _ -> returna i))))));
+                     Just _ -> returna zero_nat;
+                   })
+                   (\ i ->
+                     bind_resolver (try_solve_constraint idirs m fs)
+                       (\ (fsa, n) ->
+                         returna
+                           (ImportResolver.Top (ImportResolver.Exists path) :
+                              fsa,
+                             plus_nat i n))))
+        else returna
+               (ImportResolver.Bottom (ImportResolver.Exists path) : fs,
+                 zero_nat)));
+try_solve_constraint idirs m (ImportResolver.In x n : fs) =
+  bind_resolver (try_generate_interface n)
+    (\ a ->
+      (case a of {
+        (Nothing, i) -> returna (ImportResolver.In x n : fs, i);
+        (Just Nothing, i) ->
+          returna (ImportResolver.Bottom (ImportResolver.In x n) : fs, i);
+        (Just (Just iface), i) ->
+          (if contains x iface
+            then bind_resolver (try_solve_constraint idirs m fs)
+                   (\ (fsa, k) ->
+                     returna
+                       (ImportResolver.Top (ImportResolver.In x n) : fsa,
+                         plus_nat i k))
+            else returna
+                   (ImportResolver.Bottom (ImportResolver.In x n) : fs, i));
+      }));
+
+try_solve_each_constraint ::
+  [String] ->
+    (Module_origin, [String]) ->
+      [[ImportResolver.Formula]] ->
+        ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     ([[ImportResolver.Formula]], Nat)),
+                       Tree (String, String));
+try_solve_each_constraint uu uv [] = returna ([], zero_nat);
+try_solve_each_constraint idirs (orig, m) (c : cs) =
+  bind_resolver
+    (if is_solved c then returna (c, zero_nat)
+      else try_solve_constraint idirs m c)
+    (\ (ca, i) ->
+      bind_resolver (try_solve_each_constraint idirs (orig, m) cs)
+        (\ (csa, n) -> returna (ca : csa, plus_nat i n)));
+
+set_system ::
+  Nat ->
+    [[ImportResolver.Formula]] ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+set_system n s =
+  (\ (ss, (ml, (ns, (ms, g)))) ->
+    return
+      (Prelude.Right ((list_update ss n s, (ml, (ns, (ms, g)))), ()),
+        no_files));
+
+try_solve_system ::
+  [String] ->
+    Nat ->
+      [[ImportResolver.Formula]] ->
+        ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     ()),
+                       Tree (String, String));
+try_solve_system idirs i s =
+  bind_resolver get
+    (\ (_, (ml, (_, (_, _)))) ->
+      bind_resolver (try_solve_each_constraint idirs (nth ml i) s)
+        (\ (cs, n) -> set_system (plus_nat i n) cs));
+
+try_solve_systems_incrementally ::
+  [String] ->
+    () -> ([[[ImportResolver.Formula]]],
+            ([(Module_origin, [String])],
+              (Tree (String, Maybe Interface),
+                (Tree (String, Located.Located Syntax.CST.Module),
+                  Digraph_ext [String] ())))) ->
+            Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))),
+       ()),
+                         Tree (String, String));
+try_solve_systems_incrementally idirs () =
+  bind_resolver (find_unsolved_system ())
+    (\ a ->
+      (case a of {
+        Nothing -> returna ();
+        Just (i, s) ->
+          bind_resolver (try_solve_system idirs i s)
+            (try_solve_systems_incrementally idirs);
+      }));
+
+origin_to_position :: Module_origin -> Maybe Error.Diagnose.Position.Position;
+origin_to_position CommandLine = Nothing;
+origin_to_position (InSource pos) = Just pos;
+
+try_mk_constraints_for_module ::
+  [String] ->
+    Module_origin ->
+      String ->
+        Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) ([[ImportResolver.Formula]],
+                               [String]);
+try_mk_constraints_for_module idirs orig m =
+  ImportResolver.parseModuleName (origin_to_position orig) m Prelude.>>=
+    (\ parts ->
+      Prelude.Right (ImportResolver.mkConstraintSystem idirs parts, parts));
+
+make_initial_constraint_system ::
+  [String] ->
+    [(Module_origin, String)] ->
+      Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) ([[[ImportResolver.Formula]]],
+                             [(Module_origin, [String])]);
+make_initial_constraint_system uu [] = Prelude.Right ([], []);
+make_initial_constraint_system idirs ((orig, m) : ms) =
+  try_mk_constraints_for_module idirs orig m Prelude.>>=
+    (\ (csts, ma) ->
+      make_initial_constraint_system idirs ms Prelude.>>=
+        (\ (sys, msa) -> Prelude.Right (csts : sys, (orig, ma) : msa)));
+
+mk_cannot_resolve_import_error ::
+  Prelude.Either Error.Diagnose.Position.Position [String] ->
+    [ImportResolver.Formula] -> Error.Diagnose.Diagnostic.Diagnostic String;
+mk_cannot_resolve_import_error (Prelude.Left p) l =
+  Error.Diagnose.Diagnostic.addReport Error.Diagnose.Diagnostic.def
+    (Error.Diagnose.Report.Err Nothing "TODO" [] []);
+mk_cannot_resolve_import_error (Prelude.Right m) l =
+  Error.Diagnose.Diagnostic.addReport Error.Diagnose.Diagnostic.def
+    (Error.Diagnose.Report.Err Nothing
+      (("Cannot resolve import of " ++ join "::" m) ++ " on command-line") []
+      [Error.Diagnose.Report.Note (join "\n" (mk_notes1 l))]);
+
+only_false_constraint ::
+  [ImportResolver.Formula] -> Maybe ImportResolver.Formula;
+only_false_constraint [] = Nothing;
+only_false_constraint (ImportResolver.Bottom f : uu) = Just f;
+only_false_constraint (ImportResolver.Top v : fs) = only_false_constraint fs;
+only_false_constraint (ImportResolver.Exists v : fs) = only_false_constraint fs;
+only_false_constraint (ImportResolver.In v va : fs) = only_false_constraint fs;
+
+mk_ambiguous_import_error ::
+  Prelude.Either Error.Diagnose.Position.Position [String] ->
+    [ImportResolver.Formula] -> Error.Diagnose.Diagnostic.Diagnostic String;
+mk_ambiguous_import_error (Prelude.Left p) l =
+  Error.Diagnose.Diagnostic.addReport Error.Diagnose.Diagnostic.def
+    (Error.Diagnose.Report.Err Nothing "TODO2" [] []);
+mk_ambiguous_import_error (Prelude.Right m) l =
+  Error.Diagnose.Diagnostic.addReport Error.Diagnose.Diagnostic.def
+    (Error.Diagnose.Report.Err Nothing
+      ("Ambiguous command-line import of " ++ join "::" m) []
+      [Error.Diagnose.Report.Note (join "\n" (mk_notes2 l))]);
+
+is_true_exists :: ImportResolver.Formula -> Bool;
+is_true_exists (ImportResolver.Top (ImportResolver.Exists uu)) = True;
+is_true_exists (ImportResolver.Top (ImportResolver.Top va)) = False;
+is_true_exists (ImportResolver.Top (ImportResolver.Bottom va)) = False;
+is_true_exists (ImportResolver.Top (ImportResolver.In va vb)) = False;
+is_true_exists (ImportResolver.Bottom v) = False;
+is_true_exists (ImportResolver.Exists v) = False;
+is_true_exists (ImportResolver.In v va) = False;
+
+pos_or ::
+  forall a.
+    Module_origin -> a -> Prelude.Either Error.Diagnose.Position.Position a;
+pos_or CommandLine x = Prelude.Right x;
+pos_or (InSource p) uu = Prelude.Left p;
+
+the :: forall a. Maybe a -> a;
+the (Just x2) = x2;
+
+check_all_systems ::
+  [[[ImportResolver.Formula]]] ->
+    [(Module_origin, [String])] ->
+      ([[[ImportResolver.Formula]]],
+        ([(Module_origin, [String])],
+          (Tree (String, Maybe Interface),
+            (Tree (String, Located.Located Syntax.CST.Module),
+              Digraph_ext [String] ())))) ->
+        Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+    ([(Module_origin, [String])],
+      (Tree (String, Maybe Interface),
+        (Tree (String, Located.Located Syntax.CST.Module),
+          Digraph_ext [String] ())))),
+   ()),
+                     Tree (String, String));
+check_all_systems [] uu = returna ();
+check_all_systems (s : ss) ((orig, m) : ms) =
+  (case filter is_true s of {
+    [] -> throw (mk_cannot_resolve_import_error (pos_or orig m)
+                  (map (the . only_false_constraint) s));
+    [_] -> check_all_systems ss ms;
+    a : b : cs ->
+      throw (mk_ambiguous_import_error (pos_or orig m)
+              (filter is_true_exists (a ++ b ++ bind cs id)));
+  });
+check_all_systems (v : va) [] = error "undefined";
+
+check_final_systems ::
+  () -> ([[[ImportResolver.Formula]]],
+          ([(Module_origin, [String])],
+            (Tree (String, Maybe Interface),
+              (Tree (String, Located.Located Syntax.CST.Module),
+                Digraph_ext [String] ())))) ->
+          Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (([[[ImportResolver.Formula]]],
+      ([(Module_origin, [String])],
+        (Tree (String, Maybe Interface),
+          (Tree (String, Located.Located Syntax.CST.Module),
+            Digraph_ext [String] ())))),
+     ()),
+                       Tree (String, String));
+check_final_systems () =
+  bind_resolver get (\ (ss, (ml, (_, (_, _)))) -> check_all_systems ss ml);
+
+parse_and_resolve_modules ::
+  [String] ->
+    [String] ->
+      Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (Tree
+  (String, Located.Located Syntax.CST.Module),
+ [[String]]),
+                   Tree (String, String));
+parse_and_resolve_modules idirs mods =
+  let {
+    modsa = map (\ a -> (CommandLine, a)) mods;
+  } in (case make_initial_constraint_system idirs modsa of {
+         Prelude.Left diag -> return (Prelude.Left diag, no_files);
+         Prelude.Right (sys, modsb) ->
+           (bind_resolver (try_solve_systems_incrementally [] ())
+             (\ () -> check_final_systems ())
+             (sys, (modsb,
+                     (Leaf,
+                       (Leaf,
+                         empty))))) >>= (\ (res, files) ->
+  let {
+    resa =
+      res Prelude.>>=
+        (\ (a, b) ->
+          (case a of {
+            (_, (_, (_, (modsc, g)))) ->
+              (\ () ->
+                map_sum (error "undefined") (\ aa -> (modsc, aa)) (topsort g));
+          })
+            b);
+  } in return (resa, files));
+       });
+
+run_driver ::
+  CLI.Flags.InputFlags ->
+    Prelude.IO (Prelude.Either (Error.Diagnose.Diagnostic.Diagnostic String) (Tree
+(String, Located.Located Modulea),
+                                       [[String]]),
+                 Tree (String, String));
+run_driver (CLI.Flags.InputFlags idirs mods) =
+  (parse_and_resolve_modules idirs
+    mods) >>= (\ _ -> return (error "undefined"));
+
+print_diagnostic_and_quit ::
+  forall a. Error.Diagnose.Diagnostic.Diagnostic String -> Prelude.IO a;
+print_diagnostic_and_quit diag =
+  (Error.Diagnose.Diagnostic.printDiagnostic System.IO.stderr True True (Prelude.fromInteger (4 :: Integer)) Error.Diagnose.Style.defaultStyle diag) >>= (\
+                                   _ -> System.Exit.exitFailure);
+
+add_all_files ::
+  [(String, String)] ->
+    Error.Diagnose.Diagnostic.Diagnostic String ->
+      Error.Diagnose.Diagnostic.Diagnostic String;
+add_all_files = fold (\ (a, b) d -> Error.Diagnose.Diagnostic.addFile d a b);
+
+go_typecheck ::
+  Tree (String, Located.Located Modulea) -> [[String]] -> Prelude.IO ();
+go_typecheck asts mods = return ();
+
+entrypoint :: CLI.Flags.AllFlags -> Prelude.IO ();
+entrypoint (CLI.Flags.AllFlags input output) =
+  (run_driver
+    input) >>= (\ (result, files) ->
+                 let {
+                   filesa = inorder files;
+                 } in (case result of {
+                        Prelude.Left diag ->
+                          print_diagnostic_and_quit (add_all_files filesa diag);
+                        Prelude.Right (a, b) -> go_typecheck a b;
+                      }));
+
+}

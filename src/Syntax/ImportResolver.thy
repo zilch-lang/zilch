@@ -13,6 +13,7 @@ theory ImportResolver
     Syntax.Lexer
     Syntax.Parser
     Syntax.Desugarer
+    Syntax.Internal
 begin
 
 fun bind_sum :: \<open>'a + 'b \<Rightarrow> ('b \<Rightarrow> 'a + 'c) \<Rightarrow> 'a + 'c\<close>
@@ -25,18 +26,27 @@ code_printing
 
 (***************************************************)
 
-type_synonym registered_files = \<open>String.literal list \<times> (String.literal \<rightharpoonup> String.literal)\<close>
+type_synonym registered_files = \<open>(String.literal \<times> String.literal) tree\<close>
 
-fun union_files :: \<open>[registered_files, registered_files] \<Rightarrow> registered_files\<close> (infixl \<open>U\<close> 30)
-where \<open>union_files (l1, m1) (l2, m2) = (List.remdups (l1 @ l2), m1 ++ m2)\<close>
+fun join_tree_map :: \<open>('a \<times> 'b) tree \<Rightarrow> ('a \<times> 'b) tree \<Rightarrow> ('a \<times> 'b) tree\<close>
+where \<open>join_tree_map t \<langle>\<rangle> = t\<close>
+    | \<open>join_tree_map \<langle>\<rangle> t = t\<close>
+    | \<open>join_tree_map \<langle>t1, a, t2\<rangle> \<langle>t3, b, t4\<rangle> = (case join_tree_map t2 t3 of
+         \<langle>\<rangle> \<Rightarrow> \<langle>t1, a, \<langle>\<langle>\<rangle>, b, t4\<rangle>\<rangle>
+       | \<langle>u2, x, u3\<rangle> \<Rightarrow> \<langle>\<langle>t1, a, u2\<rangle>, x, \<langle>u3, b, t4\<rangle>\<rangle>)\<close>
+
+definition union_files :: \<open>[registered_files, registered_files] \<Rightarrow> registered_files\<close> (infixl \<open>U\<close> 30)
+where \<open>union_files m1 m2 \<equiv> join_tree_map m1 m2\<close>
+
+hide_const join_tree_map
 
 definition no_files :: \<open>registered_files\<close>
-where \<open>no_files = ([], Map.empty)\<close>
+where \<open>no_files = \<langle>\<rangle>\<close>
 
 text \<open>
   File system path to parsed CST, to prevent reparsing files we have parsed before.
 \<close>
-type_synonym modules = \<open>String.literal \<rightharpoonup> CST.module located\<close>
+type_synonym modules = \<open>(String.literal \<times> CST.module located) tree\<close>
 
 type_synonym module_order = \<open>String.literal list list\<close>
 
@@ -60,9 +70,9 @@ where \<open>pos_or CommandLine x = Inr x\<close>
     | \<open>pos_or (InSource p) _ = Inl p\<close>
 
 datatype interface =
-  Iface \<open>String.literal \<rightharpoonup> interface\<close>
+  Iface \<open>(String.literal \<times> interface) tree\<close>
 
-type_synonym namespaces = \<open>String.literal \<rightharpoonup> interface option\<close>
+type_synonym namespaces = \<open>(String.literal \<times> interface option) tree\<close>
 
 type_synonym global_state = \<open>system list \<times> mod_list \<times> namespaces \<times> modules \<times> import_graph\<close>
 
@@ -93,10 +103,10 @@ definition set_system :: \<open>[nat, system] \<Rightarrow> unit resolver\<close
 where \<open>set_system n s = (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss[n := s], ml, ns, ms, g), ()), no_files))\<close>
 
 definition insert_interface :: \<open>[String.literal, interface option] \<Rightarrow> unit resolver\<close>
-where \<open>insert_interface name iface \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns(name \<mapsto> iface), ms, g), ()), no_files))\<close>
+where \<open>insert_interface name iface \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, Tree_Map.update name iface ns, ms, g), ()), no_files))\<close>
 
 definition insert_module :: \<open>[String.literal, CST.module located] \<Rightarrow> unit resolver\<close>
-where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms(name \<mapsto> m), g), ()), no_files))\<close>
+where \<open>insert_module name m \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, Tree_Map.update name m ms, g), ()), no_files))\<close>
 
 definition register_module :: \<open>[String.literal list, module_origin] \<Rightarrow> unit resolver\<close>
 where \<open>register_module m orig \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, (orig, m) # ml, ns, ms, g), ()), no_files))\<close>
@@ -105,7 +115,7 @@ definition insert_dependency :: \<open>[String.literal list, String.literal list
 where \<open>insert_dependency a b \<equiv> (\<lambda>(ss, ml, ns, ms, g). IO.return (Inr ((ss, ml, ns, ms, add_edge (a, b) g), ()), no_files))\<close>
 
 definition insert_file :: \<open>[String.literal, String.literal] \<Rightarrow> unit resolver\<close>
-where \<open>insert_file name content \<equiv> (\<lambda>st. IO.return (Inr (st, ()), ([name], Map.empty(name \<mapsto> content))))\<close>
+where \<open>insert_file name content \<equiv> (\<lambda>st. IO.return (Inr (st, ()), (Tree_Map.update name content \<langle>\<rangle>)))\<close>
 
 definition get :: \<open>global_state resolver\<close>
 where \<open>get \<equiv> (\<lambda>st. IO.return (Inr (st, st), no_files))\<close>
@@ -117,7 +127,7 @@ definition lift_sum :: \<open>String.literal diagnostic + 'a \<Rightarrow> 'a re
 where \<open>lift_sum res \<equiv> (\<lambda>st. IO.return (map_sum id (Pair st) res, no_files))\<close>
 
 fun contains :: \<open>String.literal \<Rightarrow> interface \<Rightarrow> bool\<close>
-where \<open>contains x (Iface binds) = (binds x \<noteq> None)\<close>
+where \<open>contains x (Iface binds) = (Tree_Map.lookup binds x \<noteq> None)\<close>
 
 (************************************************)
 
@@ -279,7 +289,7 @@ fun insert_dependencies_and_constraints :: \<open>[String.literal list, String.l
 where \<open>insert_dependencies_and_constraints _ [] _ = return 0\<close>
     | \<open>insert_dependencies_and_constraints idirs ((i @@ p) # is) m = do {
          (_, _, _, _, g) \<leftarrow> get;
-         k \<leftarrow> (if i \<in> vertices g
+         k \<leftarrow> (if isin (vertices g) i
               then return 0
               else do {
                 insert_dependency_and_check_cycles m i;
@@ -302,7 +312,7 @@ where \<open>try_solve_constraint _ _ [] = return ([], 0)\<close>
          if file_exists
            then do {
              (_, _, ms, _) \<leftarrow> get;
-             i \<leftarrow> case ms path of
+             i \<leftarrow> case Tree_Map.lookup ms path of
                    None \<Rightarrow> do {
                      content \<leftarrow> lift_io (read_file path);
                      insert_file path content;
@@ -399,12 +409,12 @@ where \<open>parse_and_resolve_modules idirs mods = do {
          let mods = map (Pair CommandLine) mods;
          let sys = make_initial_constraint_system idirs mods;
          case sys of
-           Inl diag \<Rightarrow> IO.return (Inl diag, ([], Map.empty))
+           Inl diag \<Rightarrow> IO.return (Inl diag, no_files)
          | Inr (sys, mods) \<Rightarrow> do {
              (res, files) \<leftarrow> (do {
-               try_solve_systems_incrementally [] ();
+               () \<leftarrow> try_solve_systems_incrementally [] ();
                check_final_systems ()
-             }) (sys, mods, Map.empty, Map.empty, Digraph.empty);
+             }) (sys, mods, \<langle>\<rangle>, \<langle>\<rangle>, Digraph.empty);
              let res = do {
                    ((_, _, _, mods, g), ()) \<leftarrow> res;
                    map_sum undefined (Pair mods) (topsort g)
@@ -412,8 +422,6 @@ where \<open>parse_and_resolve_modules idirs mods = do {
              IO.return (res, files)
            }
        }\<close>
-(* FIXME: little hickup: we can't find the path of a module only knowing the module name,
-          yet we return a list of modules (the topsort) along with a list of filepaths mapped to CSTs *)
 (* TODO: return all the interfaces generated for later use in the name resolver and the typechecker
          we only need to generate them once *)
 

@@ -6,6 +6,7 @@ session Syntax (GZC) = HOL +
     Diagnose
     Located
     CLI
+    "HOL-Data_Structures"
 
   theories
     AST
