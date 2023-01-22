@@ -72,4 +72,7 @@ where \<open>mk_ambiguous_import_error (Inl p) l =
 
 hide_const mk_notes2
 
+fun mk_cyclic_import_error :: \<open>String.literal list list \<Rightarrow> String.literal diagnostic\<close>
+where \<open>mk_cyclic_import_error ms = undefined\<close>
+
 end

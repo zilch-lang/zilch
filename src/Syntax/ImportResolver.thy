@@ -268,6 +268,13 @@ text \<open>
 fun try_generate_interface :: \<open>namespace \<Rightarrow> (interface option option \<times> nat) resolver\<close>
 where \<open>try_generate_interface _ = undefined\<close>
 
+fun insert_dependency_and_check_cycles :: \<open>[String.literal list, String.literal list] \<Rightarrow> unit resolver\<close>
+where \<open>insert_dependency_and_check_cycles m i = do {
+         () \<leftarrow> insert_dependency m i;
+         (_, _, _, _, g) \<leftarrow> get;
+         case_option (return ()) (throw \<circ> mk_cyclic_import_error) (Digraph.has_cycle_from m g)
+       }\<close>
+
 fun insert_dependencies_and_constraints :: \<open>[String.literal list, String.literal list located list, String.literal list] \<Rightarrow> nat resolver\<close>
 where \<open>insert_dependencies_and_constraints _ [] _ = return 0\<close>
     | \<open>insert_dependencies_and_constraints idirs ((i @@ p) # is) m = do {
@@ -275,7 +282,7 @@ where \<open>insert_dependencies_and_constraints _ [] _ = return 0\<close>
          k \<leftarrow> (if i \<in> vertices g
               then return 0
               else do {
-                insert_dependency m i;
+                insert_dependency_and_check_cycles m i;
                 prepend_system (mk_constraint_system idirs i);
                 return 1
               });

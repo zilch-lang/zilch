@@ -79,7 +79,8 @@ substituteUnicodeInPlace() {
         --replace "∀" "\<forall>" \
         --replace "∃" "\<exists>" \
         --replace "⟹" "\<Longrightarrow>" \
-        --replace "≤" "\<le>"
+        --replace "≤" "\<le>" \
+        --replace "⟷" "\<longleftrightarrow>"
 }
 
 export -f substitute
