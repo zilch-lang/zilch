@@ -22,10 +22,14 @@ when:
   - condition: flag(liquidhaskell)
     then:
       dependencies:
-      - liquidhaskell
-      - liquid-base >= 4.7 && < 5
+      - liquidhaskell == 0.8.10.7.1
+      - liquid-base == 4.14.3.0
+      - liquid-ghc-prim 
+      - liquid-fixpoint
+      - liquid-prelude
       ghc-options:
       - -fplugin=LiquidHaskell
+      # - -fplugin-opt=LiquidHaskell:...
     else:
       dependencies:
       - base >= 4.7 && < 5

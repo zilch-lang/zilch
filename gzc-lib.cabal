@@ -51,8 +51,11 @@ library
   if flag(liquidhaskell)
     ghc-options: -fplugin=LiquidHaskell
     build-depends:
-        liquid-base >=4.7 && <5
-      , liquidhaskell
+        liquid-base ==4.14.3.0
+      , liquid-fixpoint
+      , liquid-ghc-prim
+      , liquid-prelude
+      , liquidhaskell ==0.8.10.7.1
   else
     build-depends:
         base >=4.7 && <5
@@ -85,8 +88,11 @@ executable gzc
   if flag(liquidhaskell)
     ghc-options: -fplugin=LiquidHaskell
     build-depends:
-        liquid-base >=4.7 && <5
-      , liquidhaskell
+        liquid-base ==4.14.3.0
+      , liquid-fixpoint
+      , liquid-ghc-prim
+      , liquid-prelude
+      , liquidhaskell ==0.8.10.7.1
   else
     build-depends:
         base >=4.7 && <5
@@ -107,8 +113,11 @@ test-suite parser-tests
   if flag(liquidhaskell)
     ghc-options: -fplugin=LiquidHaskell
     build-depends:
-        liquid-base >=4.7 && <5
-      , liquidhaskell
+        liquid-base ==4.14.3.0
+      , liquid-fixpoint
+      , liquid-ghc-prim
+      , liquid-prelude
+      , liquidhaskell ==0.8.10.7.1
   else
     build-depends:
         base >=4.7 && <5

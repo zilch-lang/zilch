@@ -6,6 +6,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
+{-@ LIQUID "--max-case-expand=0" @-}
+
 module Syntax.Lexer (runLexer, runLexer') where
 
 import Control.Monad.Writer (MonadWriter, runWriterT)

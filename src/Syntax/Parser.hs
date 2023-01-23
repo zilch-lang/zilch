@@ -9,6 +9,8 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+{-@ LIQUID "--max-case-expand=0" @-}
+
 module Syntax.Parser (runParser) where
 
 import Control.Monad.Writer (MonadWriter, runWriterT)

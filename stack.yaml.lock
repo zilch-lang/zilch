@@ -46,6 +46,13 @@ packages:
   original:
     hackage: unordered-containers-0.2.14.0@sha256:2fe789f78246b7c7ec10d7b85c72d898a9f72fdda5b60d581e839d21016bc628,4992
 - completed:
+    hackage: rest-rewrite-0.3.0@sha256:398f937a5faf6bd3329650ee9aed31bbfe7ed1c23252710908ad7295e3252c94,3890
+    pantry-tree:
+      sha256: 6e42cf85257cbc2abf50a9c8f3bac8777920f1b970e6f2cae9358690e1186e99
+      size: 3943
+  original:
+    hackage: rest-rewrite-0.3.0
+- completed:
     commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
     git: https://github.com/ucsd-progsys/liquidhaskell
     name: liquidhaskell
@@ -74,6 +81,19 @@ packages:
 - completed:
     commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
     git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-prelude
+    pantry-tree:
+      sha256: 5fb206c776b87a0de48c5f429ac82b689a5942d215582a06ac752e1f118229f7
+      size: 1029
+    subdir: liquid-prelude
+    version: 0.8.10.2
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-prelude
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
     name: liquid-ghc-prim
     pantry-tree:
       sha256: e1dbd416d00871251794b17a96e25453469856a73cb943a3dc3d851a7a8f00a5
@@ -85,23 +105,70 @@ packages:
     git: https://github.com/ucsd-progsys/liquidhaskell
     subdir: liquid-ghc-prim
 - completed:
-    commit: 5aed39ec3210b9093ed635693d01bf351e25392f
-    git: https://github.com/ucsd-progsys/liquid-fixpoint
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-platform
+    pantry-tree:
+      sha256: 70e01ea4b0cbfc649d069041bac0c729ed24d3e48e0a4c0d426a30be43cd82d8
+      size: 275
+    subdir: liquid-platform
+    version: 0.8.10.2
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-platform
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-bytestring
+    pantry-tree:
+      sha256: e6548e2c9c108207eb9f24bccb2d67713a15625bdb7b4bfa4d2bf9c174f8dbfe
+      size: 1843
+    subdir: liquid-bytestring
+    version: 0.10.10.0
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-bytestring
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-containers
+    pantry-tree:
+      sha256: 69ab7d9ccde93b16e14c0f27ac8f2d8bac81e7047c3ccad98e7926c8cadd21b5
+      size: 2143
+    subdir: liquid-containers
+    version: 0.6.2.1
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-containers
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    name: liquid-vector
+    pantry-tree:
+      sha256: 4ae656f917b4a48549f17dc7bc537b6f0d5a9c0cfe0447ca3ca0d6db77af032e
+      size: 1724
+    subdir: liquid-vector
+    version: 0.12.1.2
+  original:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-vector
+- completed:
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
     name: liquid-fixpoint
     pantry-tree:
-      sha256: e75d523a96db5c9786d7806b0bb61a2134a0ceb64c729e9e2ca4ccc8ec42ae16
-      size: 23098
+      sha256: eb86f67f0cec00cee544860484878e7dd728c12922b33eed6e1d052e14bb05c7
+      size: 22580
+    subdir: liquid-fixpoint
     version: 0.8.10.7.1
   original:
-    commit: 5aed39ec3210b9093ed635693d01bf351e25392f
-    git: https://github.com/ucsd-progsys/liquid-fixpoint
-- completed:
-    hackage: rest-rewrite-0.4.0@sha256:be93d899f7dece33f2a7613eb3dabd24d139f9cb2fc09f9efedfdce4ba6eb276,3923
-    pantry-tree:
-      sha256: ad19ccb2185ac0b58ddfd2eede69e6444986e687232e1504eb04ce7bb6e39368
-      size: 4018
-  original:
-    hackage: rest-rewrite-0.4.0@sha256:be93d899f7dece33f2a7613eb3dabd24d139f9cb2fc09f9efedfdce4ba6eb276,3923
+    commit: 495cb3e53db96b8f1f08bb2f68b9b2fd8c86679e
+    git: https://github.com/ucsd-progsys/liquidhaskell
+    subdir: liquid-fixpoint
 snapshots:
 - completed:
     sha256: 6d1532d40621957a25bad5195bfca7938e8a06d923c91bc52aa0f3c41181f2d4

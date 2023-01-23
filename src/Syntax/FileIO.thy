@@ -13,10 +13,11 @@ code_printing
 | constant read_file \<rightharpoonup> (Haskell) "FileIO.readFile"
 
 | code_module FileIO \<rightharpoonup> (Haskell) \<open>
+{-# LANGUAGE NoImplicitPrelude #-}
 module FileIO (module Export) where
 
-import System.Directory as Export (doesFileExist)
 import Prelude as Export (readFile)
+import System.Directory as Export (doesFileExist)
 \<close>
 
 end

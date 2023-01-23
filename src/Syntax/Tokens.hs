@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Werror=incomplete-patterns #-}
 
+{-@ LIQUID "--max-case-expand=0" @-}
+
 module Syntax.Tokens where
 
 import Data.Maybe (fromMaybe)
