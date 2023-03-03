@@ -83,7 +83,10 @@ substituteUnicodeInPlace() {
         --replace "≤" "\<le>" \
         --replace "⟷" "\<longleftrightarrow>" \
         --replace "⟨" "\<langle>" \
-        --replace "⟩" "\<rangle>"
+        --replace "⟩" "\<rangle>" \
+        --replace "―" "\<comment>" \
+        --replace "⟶" "\<longrightarrow>" \
+        --replace "→" "\<leftarrow>"
 }
 
 export -f substitute
