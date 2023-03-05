@@ -435,7 +435,8 @@ where \<open>full_module_resolver is \<equiv> do {
            let G = \<lparr> pverts = insert '''' (ran I),
                      parcs = { ('''', v) | v. v \<in> set is },
                      labels = (\<lambda> (x, _). if x = '''' then Some [] else None) \<rparr>;
-           ASSERT (insert '''' { i. (\<exists> is. (i, is) \<in> Cs \<or> (\<exists> m. (i, m) \<in> is)) \<and> does_file_exist (path_from_module_name i) } = pverts G);
+           ASSERT (\<forall> (i, _) \<in> Cs. i \<in> pverts G);
+           ASSERT (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G);
            G \<leftarrow> populate_import_graph G Cs;
            res \<leftarrow> trim_import_graph G C;
            case res of
@@ -879,16 +880,22 @@ theorem full_module_resolver_correct:
   (* After the loop *)
   subgoal premises
     by simp
-  subgoal premises assms
-    using assms(9) assms(10) assms(11) assms(12) assms(13) assms(14) assms(15) assms(16) assms(17)
-    apply simp
-    using assms(3)
-    sorry
+  subgoal premises prems
+    apply auto
+    using prems(3) prems(5) prems(6) prems(7) prems(8)
+    by fast
+  subgoal premises prems
+    apply auto
+    using prems(3)
+    apply (simp only: case_prod_conv prems(5) prems(6) prems(7) prems(8) prems(9) empty_iff list.set)
+    apply fastforce
+    done
   apply (rule SPEC_cons_rule[OF populate_import_graph_correct])
   apply (intro refine_vcg)
   apply (rule SPEC_cons_rule[OF trim_import_graph_correct])
   apply (intro refine_vcg)
   apply (metis option.simps(4))
+  (* Assertions at the end of the function *)
   subgoal sorry
   subgoal sorry
   subgoal sorry
