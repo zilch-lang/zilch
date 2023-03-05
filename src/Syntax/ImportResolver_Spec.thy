@@ -30,7 +30,7 @@ locale Resolver_Spec =
     and path_from_module_name :: \<open>import \<Rightarrow> string\<close>
     and parse_file_and_extract_imports :: \<open>path \<Rightarrow> cst_abs \<times> import list\<close>
     and make_constraints_from_path_and_modules :: \<open>[ path, string list ] \<Rightarrow> Solver_Spec.conjunctive_system\<close>
-    and try_solve_constraint :: \<open>[ path \<Rightarrow> bool, Solver_Spec.conjunctive_system, import_cache, namespaces_abs ] \<Rightarrow> bool option \<times> namespaces_abs\<close>
+    and try_solve_constraint :: \<open>[ Solver_Spec.conjunctive_system, import_cache, namespaces_abs ] \<Rightarrow> bool option \<times> namespaces_abs\<close>
     and does_file_exist :: \<open>path \<Rightarrow> bool\<close>
 
   assumes import_has_paths: \<open>\<forall> i. mk_paths_from_module_name i \<noteq> {}\<close>
@@ -40,9 +40,6 @@ locale Resolver_Spec =
       and paths_uniqueness: \<open>\<forall> i i'. i \<noteq> i' \<longleftrightarrow> mk_paths_from_module_name i \<noteq> mk_paths_from_module_name i'\<close>
       and path_uniqueness: \<open>\<forall> i i'. i \<noteq> i' \<longleftrightarrow> path_from_module_name i \<noteq> path_from_module_name i'\<close>
       and import_non_empty: \<open>\<forall> i i' m. (i, m) \<in> mk_paths_from_module_name i' \<longrightarrow> i \<noteq> []\<close>
-
-      and \<open>\<forall> p. make_constraints_from_path_and_modules p [] = [Solver_Spec.Exists p]\<close>
-      and \<open>\<forall> p ms. Solver_Spec.Exists p \<in> set (make_constraints_from_path_and_modules p ms)\<close>
 begin
 
 definition single_module_resolver_invar1 :: \<open>[ import, import set, import list ] \<Rightarrow> bool\<close>
@@ -213,6 +210,8 @@ where \<open>populate_import_graph_invar2 G' Ps' i Ps G \<equiv> pverts G = pver
 lemma populate_import_graph_invar1_init:
   assumes \<open>finite Cs\<close>
       and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> pverts G\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G\<close>
   shows \<open>populate_import_graph_invar1 G Cs Cs G\<close>
   using assms
   unfolding populate_import_graph_invar1_def
@@ -221,6 +220,8 @@ lemma populate_import_graph_invar1_init:
 lemma populate_import_graph_invar1_step:
   assumes \<open>finite Cs\<close>
       and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> pverts G\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G\<close>
       and \<open>(a, b) \<in> it\<close>
       and \<open>it \<subseteq> Cs\<close>
       and \<open>populate_import_graph_invar1 G Cs it G'\<close>
@@ -233,6 +234,8 @@ lemma populate_import_graph_invar1_step:
 lemma populate_import_graph_invar2_init:
   assumes \<open>finite Cs\<close>
       and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> pverts G\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G\<close>
       and \<open>(a, b) \<in> it\<close>
       and \<open>it \<subseteq> Cs\<close>
       and \<open>populate_import_graph_invar1 G Cs it G'\<close>
@@ -243,6 +246,8 @@ lemma populate_import_graph_invar2_init:
 lemma populate_import_graph_invar2_step:
   assumes \<open>finite Cs\<close>
       and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> pverts G\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G\<close>
       and \<open>(a, b) \<in> it\<close>
       and \<open>it \<subseteq> Cs\<close>
       and \<open>populate_import_graph_invar1 G Cs it G'\<close>
@@ -254,13 +259,26 @@ lemma populate_import_graph_invar2_step:
   using assms
   unfolding populate_import_graph_invar2_def populate_import_graph_invar1_def
   apply auto
+  apply (metis (mono_tags, lifting) add_arc_no_new_vertex case_prodD subset_iff)
+  apply (simp add: add_arc_def)
+  apply (simp_all add: add_arc_def)
+  apply auto[1]
+  apply blast
+  apply blast
+  done
 
-  sorry
-
-definition populate_import_graph :: \<open>[ import_graph, import_constraints ] \<Rightarrow> import_graph nres\<close>
-where \<open>populate_import_graph G Cs \<equiv> do {
+definition populate_import_graph :: \<open>[ import list, all_imports, import_graph, import_constraints ] \<Rightarrow> import_graph nres\<close>
+where \<open>populate_import_graph is I G Cs \<equiv> do {
          ASSUME (finite Cs);
          ASSUME (\<forall> (_, is) \<in> Cs. finite is);
+         ASSUME (\<forall> (i, _) \<in> Cs. i \<in> pverts G);
+         ASSUME (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G);
+         ASSUME (\<forall> u \<in> set is. u \<noteq> '''' \<longrightarrow> ('''', u) \<in> parcs G);
+         ASSUME (set is \<subseteq> pverts G);
+         ASSUME (\<forall> (i, _) \<in> Cs. i \<in> ran I);
+         ASSUME (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> ran I);
+         ASSUME (pverts G = insert '''' (ran I));
+         ASSUME (parcs G = { ('''', u) | u. u \<in> set is });
          FOREACH\<^bsup>populate_import_graph_invar1 G Cs\<^esup> Cs (\<lambda> (i, paths) G. do {
            FOREACH\<^bsup>populate_import_graph_invar2 G paths i\<^esup> paths (\<lambda> (i', ms') G'. do {
              let p' = path_from_module_name i';
@@ -273,34 +291,40 @@ where \<open>populate_import_graph G Cs \<equiv> do {
 
 definition populate_import_graph_post :: \<open>[ import_graph, import_constraints, import_graph ] \<Rightarrow> bool\<close>
 where \<open>populate_import_graph_post G' Cs G \<equiv> pverts G' = pverts G
-                                                 \<comment>\<open>We do not add vertices to the graph.\<close>
-                                          \<and> (\<forall> u \<in> pverts G. \<exists> v \<in> pverts G. (u, v) \<in> parcs G \<or> (v, u) \<in> parcs G)
-                                                 \<comment>\<open>For all vertices, there is at least one edge going from/to it.\<close>
-  \<close>
+                                                 \<comment>\<open>We do not add vertices to the graph.\<close>\<close>
 
 lemma populate_import_graph_invar1_imp_post:
   assumes \<open>finite Cs\<close>
       and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> pverts G\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G\<close>
+      and \<open>\<forall> u \<in> set is. u \<noteq> '''' \<longrightarrow> ('''', u) \<in> parcs G\<close>
+      and \<open>set is \<subseteq> pverts G\<close>
+      and \<open>\<forall> (i, _) \<in> Cs. i \<in> ran I\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> ran I\<close>
+      and \<open>pverts G = insert '''' (ran I)\<close>
+      and \<open>parcs G = { ('''', u) | u. u \<in> set is }\<close>
       and \<open>populate_import_graph_invar1 G Cs {} G'\<close>
   shows \<open>populate_import_graph_post G Cs G'\<close>
-  sorry
+  unfolding populate_import_graph_post_def
+  using assms(11) populate_import_graph_invar1_def
+  by blast
 
-lemma populate_import_graph_correct: \<open>populate_import_graph G Cs \<le> SPEC (populate_import_graph_post G Cs)\<close>
+lemma populate_import_graph_correct: \<open>populate_import_graph is I G Cs \<le> SPEC (populate_import_graph_post G Cs)\<close>
   unfolding populate_import_graph_def
   apply (intro refine_vcg)
   apply simp_all
   using populate_import_graph_invar1_init
-    apply presburger
+    apply force
   apply auto[1]
   apply (intro refine_vcg)
   apply auto[1]
-  using populate_import_graph_invar2_init
-    apply presburger
+  apply (simp add: populate_import_graph_invar2_def)
   apply auto[1]
   using populate_import_graph_invar2_step
     apply fastforce
   using populate_import_graph_invar1_step
-    apply presburger
+    apply auto[1]
   using populate_import_graph_invar1_imp_post
     apply fastforce
   done
@@ -313,6 +337,19 @@ text \<open>
   Note: we need to be careful here, and reject negative cycles (cycles where solving a constraint \<open>C₁\<close> depends
     on solving a constraint \<open>C₂\<close> which itself depends on solving \<open>C₁\<close>).
 \<close>
+
+definition trim_import_graph_invar1 :: \<open>import_graph \<times> import_graph' \<times> bool \<times> namespaces_abs \<Rightarrow> bool\<close>
+where \<open>trim_import_graph_invar1 x \<equiv> case x of
+         (G, G', _, Ns) \<Rightarrow> True\<close>
+
+definition trim_import_graph_invar2 :: \<open>[ (import \<times> Solver_Spec.conjunctive_system \<times> import) set, import_graph \<times> import_graph' \<times> bool \<times> namespaces_abs ] \<Rightarrow> bool\<close>
+where \<open>trim_import_graph_invar2 ps x \<equiv> case x of
+         (G, G', _, Ns) \<Rightarrow> True\<close>
+
+definition trim_import_graph_invar3 :: \<open>import_graph \<times> import_graph' \<times> namespaces_abs \<Rightarrow> bool\<close>
+where \<open>trim_import_graph_invar3 x \<equiv> case x of
+         (G, G', Ns) \<Rightarrow> True\<close>
+
 definition trim_import_graph :: \<open>[ import_graph, import_cache ] \<Rightarrow> (import_graph' \<times> namespaces_abs) option nres\<close>
 (* TODO: in the worst case, this loops indefinitely in case of a dependency cycle, which may be as
  * this single file:
@@ -332,26 +369,72 @@ definition trim_import_graph :: \<open>[ import_graph, import_cache ] \<Rightarr
  *   - if constraints does not successfully solve, continue and try to solve it later
  * *)
 where \<open>trim_import_graph G C \<equiv> do {
-         let edges = { (u, l, v) | u v l. ((u, v), l) \<in> Map.graph (labels G) };
-         (_, G, Ns) \<leftarrow> WHILE\<^bsup>\<lambda> (_, G', Ns). { p. \<exists> i. (i, p) \<in> dom Ns } \<subseteq> dom C \<and> pverts G' \<subseteq> pverts G \<and> parcs G' \<subseteq> parcs G\<^esup>
-                            (\<lambda> (U, _, _). U \<noteq> {}) (\<lambda> (U, G, Ns). do {
-           e \<leftarrow> SPEC (\<lambda> e. e \<in> U);
-           let (u, l, v) = e;
+         (G, G', b, Ns) \<leftarrow> WHILE\<^bsup>trim_import_graph_invar1\<^esup>
+                            \<comment>\<open>While we are able to break a cycle, and there still exists a cycle…\<close>
+                            (\<lambda> (G, _, b, _). \<not> b \<and> (\<exists> p u. pre_digraph.apath (with_proj' G) u p u)) (\<lambda> (G, G', _, Ns). do {
+           p \<leftarrow> SPEC (\<lambda> p. \<exists> u. pre_digraph.apath (with_proj' G) u p u);
+           FOREACH\<^sub>C\<^bsup>trim_import_graph_invar2\<^esup>
+                    (set p) (\<lambda> (_, _, b, _). b) (\<lambda> (u, l, v) (G, G', _, Ns). do {
+                      \<comment>\<open>Loop through each edge of the cycle, try solving any constraint.
+                        If any constraint is solved, break the cycle at this point.
+                        If no constraint is solved at all, return an error.\<close>
+             let (res, Ns) = try_solve_constraint l C Ns;
+             case res of
+               None \<Rightarrow> RETURN (G, G', True, Ns)
+             | Some res \<Rightarrow>
+                      \<comment>\<open>We were able to solve the constraint, so remove the edge and stop processing the cycle.\<close>
+                 let G = remove_arc u v G;
+                     G' = if res
+                          then \<lparr> pverts = {u, v} \<union> pverts G', parcs = insert (u, v) (parcs G') \<rparr>
+                          else G' in
+                 RETURN (G, G', False, Ns)
+           }) (G, G', True, Ns)
+                      \<comment>\<open>Returns @{term True} if no constraint is solved, @{term False} otherwise.\<close>
+         }) (G, \<lparr> pverts = pverts G, parcs = {} \<rparr>, False, Map.empty);
 
-           let (res, Ns) = try_solve_constraint does_file_exist l C Ns;
-           case res of
-             None \<Rightarrow> RETURN (U, G, Ns)
-           | Some res \<Rightarrow>
-               let
-                 U = U - {e};
-                 G = if res
-                     then \<lparr> pverts = {u, v} \<union> pverts G, parcs = insert (u, v) (parcs G) \<rparr>
-                     else G
-               in
-                 RETURN (U, G, Ns)
-         }) (edges, \<lparr> pverts = {}, parcs = {} \<rparr>, Map.empty);
-         RETURN (Some (G, Ns))
+         if b
+               \<comment>\<open>If no constraint has been solved in the last cycle found…\<close>
+         then RETURN None
+         else do {
+           ASSERT (∄ u. u \<in> pverts G \<and> u \<rightarrow>\<^sup>*\<^bsub>with_proj' G\<^esub> u);
+
+               \<comment>\<open>Loop through each edge, solve constraints and add edges in the final graph when needed.\<close>
+           (_, G', Ns) \<leftarrow> WHILE\<^bsup>trim_import_graph_invar3\<^esup>
+                           (\<lambda> (G, _, _). parcs G \<noteq> {}) (\<lambda> (G, G', Ns). do {
+             (u, v) \<leftarrow> SPEC (\<lambda> e. e \<in> parcs G);
+             let l = the ((labels G) (u, v));
+             let (res, Ns) = try_solve_constraint l C Ns;
+             case res of
+                      \<comment>\<open>Constraint has not been solved, try again later.\<close>
+               None \<Rightarrow> RETURN (G, G', Ns)
+             | Some res \<Rightarrow>
+                 let G = remove_arc u v G;
+                     G' = if res
+                          then \<lparr> pverts = {u, v} \<union> pverts G', parcs = insert (u, v) (parcs G') \<rparr>
+                          else G' in
+             RETURN (G, G', Ns)
+           }) (G, G', Ns);
+
+           if \<exists> u \<in> pverts G'. u \<rightarrow>\<^sup>*\<^bsub>with_proj G'\<^esub> u
+           then RETURN None
+           else if \<exists> u \<in> pverts G. ∄ v. v \<in> pverts G \<and> (u, v) \<notin> parcs G' \<and> (v, u) \<notin> parcs G'
+                         \<comment>\<open>If there exists an isolated vertex, error out:
+                           - Either all its dependencies are not resolved (constraints unsatisfied)
+                           - Or it is an unresolved dependency\<close>
+           then RETURN None
+           else if \<exists> u \<in> pverts G'. \<exists> v \<in> pverts G'. card { w. w \<in> pverts G' \<and> (u, w) \<in> parcs G' \<and> w = v } > 1
+                         \<comment>\<open>If there exists a vertex having more than one edge to another vertex, error out:
+                           An import is ambiguous as it could not be resolved to a single file.\<close>
+           then RETURN None
+           else RETURN (Some (G', Ns))
+         }
        }\<close>
+
+(* TODO: there are a few more information that we need in the import graph:
+ * - File paths, associated to each vertex.
+ *   These need to be determined from the constraints initially generated, because we can't determine them
+ *   from the import name (multiple paths can correspond to a single import name).
+ * *)
 
 definition trim_import_graph_post :: \<open>[ import_graph, import_cache, import_graph', namespaces_abs ] \<Rightarrow> bool\<close>
 where \<open>trim_import_graph_post G' C G Ns \<equiv> True\<close>
@@ -361,6 +444,9 @@ where \<open>trim_import_graph_post' G C x \<equiv>
          case x of None \<Rightarrow> True | Some (G', Ns) \<Rightarrow> trim_import_graph_post G C G' Ns\<close>
 
 lemma trim_import_graph_correct: \<open>trim_import_graph G C \<le> SPEC (trim_import_graph_post' G C)\<close>
+  unfolding trim_import_graph_def
+  apply (intro refine_vcg)
+
   sorry
 
 text \<open>
@@ -437,7 +523,9 @@ where \<open>full_module_resolver is \<equiv> do {
                      labels = (\<lambda> (x, _). if x = '''' then Some [] else None) \<rparr>;
            ASSERT (\<forall> (i, _) \<in> Cs. i \<in> pverts G);
            ASSERT (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> pverts G);
-           G \<leftarrow> populate_import_graph G Cs;
+           ASSERT (\<forall> u \<in> set is. u \<noteq> '''' \<longrightarrow> ('''', u) \<in> parcs G);
+           ASSERT (set is \<subseteq> pverts G);
+           G \<leftarrow> populate_import_graph is I G Cs;
            res \<leftarrow> trim_import_graph G C;
            case res of
              None \<Rightarrow> RETURN None
@@ -445,7 +533,7 @@ where \<open>full_module_resolver is \<equiv> do {
              ASSERT (pverts G \<noteq> {});
              ASSERT ('''' \<in> pverts G);
                         \<comment>\<open>The main root (which serves as the "top-most" top-level module) is still in the graph.\<close>
-             ASSERT (\<forall> u \<in> pverts G. card { (v, w). (u, w) \<in> parcs G \<and> (u, v) \<in> parcs G \<and> w = v } \<le> 1);
+             ASSERT (\<forall> u \<in> pverts G. \<forall> v \<in> pverts G. card { w. w \<in> pverts G \<and> (u, w) \<in> parcs G \<and> w = v } \<le> 1);
                         \<comment>\<open>There is at most one edge coming from every @{term u} to a given module
                           (meaning that imports are not ambiguous within a single module).\<close>
              ASSERT (\<forall> i \<in> set is. \<exists>! u \<in> pverts G. u = i);
@@ -863,7 +951,9 @@ theorem full_module_resolver_correct:
   apply simp_all[6]
   unfolding full_module_resolver_invar_def
   apply (smt (verit) Pair_inject case_prodE empty_iff empty_set mem_Collect_eq subset_eq)
-  apply (smt (verit) case_prod_conv mem_Collect_eq)
+  subgoal premises assms
+    using assms(4) assms(3)
+    by blast
   subgoal premises assms
     using assms(4) assms(3)
     by blast
@@ -889,6 +979,14 @@ theorem full_module_resolver_correct:
     using prems(3)
     apply (simp only: case_prod_conv prems(5) prems(6) prems(7) prems(8) prems(9) empty_iff list.set)
     apply fastforce
+    done
+  subgoal premises prems
+    by auto
+  subgoal premises prems
+    apply auto
+    using prems(3)
+    apply (simp only: case_prod_conv prems(5) prems(6) prems(7) prems(8) prems(9))
+    apply (metis prems(21))
     done
   apply (rule SPEC_cons_rule[OF populate_import_graph_correct])
   apply (intro refine_vcg)

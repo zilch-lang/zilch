@@ -14,8 +14,7 @@ datatype namespace =
 | At namespace string
 
 datatype constraint =
-  Exists path
-| Has string namespace
+  Has string namespace
 
 text \<open>
 
