@@ -86,7 +86,7 @@ substituteUnicodeInPlace() {
         --replace "⟩" "\<rangle>" \
         --replace "―" "\<comment>" \
         --replace "⟶" "\<longrightarrow>" \
-        --replace "→" "\<leftarrow>"
+        --replace "→" "\<rightarrow>"
 }
 
 export -f substitute

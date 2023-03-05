@@ -11,8 +11,8 @@ type_synonym cst_abs = unit
 
 type_synonym path = string
 type_synonym import = \<open>string list\<close>
-type_synonym import_graph = \<open>(import \<times> path, Solver_Spec.conjunctive_system) labelled_pair_pre_digraph\<close>
-type_synonym import_graph' = \<open>(import \<times> path) pair_pre_digraph\<close>
+type_synonym import_graph = \<open>(import, Solver_Spec.conjunctive_system) labelled_pair_pre_digraph\<close>
+type_synonym import_graph' = \<open>(import) pair_pre_digraph\<close>
 type_synonym import_cache = \<open>path \<rightharpoonup> cst_abs\<close>
 type_synonym all_imports = \<open>path \<rightharpoonup> import\<close>
 type_synonym import_constraints = \<open>(import \<times> (import \<times> string list) set) set\<close>
@@ -39,6 +39,7 @@ locale Resolver_Spec =
       and import_name_has_unique_paths: \<open>\<forall> x i m i' m'. (i, m) \<in> mk_paths_from_module_name x \<and> (i', m') \<in> mk_paths_from_module_name x \<and> i = i' \<longrightarrow> m = m'\<close>
       and paths_uniqueness: \<open>\<forall> i i'. i \<noteq> i' \<longleftrightarrow> mk_paths_from_module_name i \<noteq> mk_paths_from_module_name i'\<close>
       and path_uniqueness: \<open>\<forall> i i'. i \<noteq> i' \<longleftrightarrow> path_from_module_name i \<noteq> path_from_module_name i'\<close>
+      and import_non_empty: \<open>\<forall> i i' m. (i, m) \<in> mk_paths_from_module_name i' \<longrightarrow> i \<noteq> []\<close>
 
       and \<open>\<forall> p. make_constraints_from_path_and_modules p [] = [Solver_Spec.Exists p]\<close>
       and \<open>\<forall> p ms. Solver_Spec.Exists p \<in> set (make_constraints_from_path_and_modules p ms)\<close>
@@ -197,28 +198,112 @@ text \<open>
   Insert labelled edges inside the import graph to account for dependencies.
 \<close>
 
-definition populate_import_graph_invar1 :: \<open>[ import_graph, import_constraints, import_graph ] \<Rightarrow> bool\<close>
-where \<open>populate_import_graph_invar1 G' Cs G \<equiv> True\<close>
+definition populate_import_graph_invar1 :: \<open>[ import_graph, import_constraints, import_constraints, import_graph ] \<Rightarrow> bool\<close>
+where \<open>populate_import_graph_invar1 G' Cs' Cs G \<equiv> pverts G' = pverts G
+                                                  \<comment>\<open>No vertex is added to the graph.\<close>
+                                                \<and> parcs G = parcs G' \<union> { (u, v). \<exists> is m. (u, is) \<in> (Cs' - Cs) \<and> (v, m) \<in> is }
+                                                  \<comment>\<open>All arcs inserted come from our generated constraints.\<close>\<close>
 
-definition populate_import_graph_invar2 :: \<open>[ import_graph, (import \<times> string list) set, import_graph ] \<Rightarrow> bool\<close>
-where \<open>populate_import_graph_invar2 G' Ps G \<equiv> True\<close>
+definition populate_import_graph_invar2 :: \<open>[ import_graph, (import \<times> string list) set, import, (import \<times> string list) set, import_graph ] \<Rightarrow> bool\<close>
+where \<open>populate_import_graph_invar2 G' Ps' i Ps G \<equiv> pverts G = pverts G'
+                                                 \<comment>\<open>No vertex is added to the graph.\<close>
+                                                \<and> parcs G = parcs G' \<union> { (i, v) | v. \<exists> m. (v, m) \<in> Ps' - Ps }
+                                                  \<comment>\<open>All arcs inserted come from our generated constraints.\<close>\<close>
+
+lemma populate_import_graph_invar1_init:
+  assumes \<open>finite Cs\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+  shows \<open>populate_import_graph_invar1 G Cs Cs G\<close>
+  using assms
+  unfolding populate_import_graph_invar1_def
+  by auto
+
+lemma populate_import_graph_invar1_step:
+  assumes \<open>finite Cs\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>(a, b) \<in> it\<close>
+      and \<open>it \<subseteq> Cs\<close>
+      and \<open>populate_import_graph_invar1 G Cs it G'\<close>
+      and \<open>populate_import_graph_invar2 G' b a {} G''\<close>
+  shows \<open>populate_import_graph_invar1 G Cs (it - {(a, b)}) G''\<close>
+  using assms
+  unfolding populate_import_graph_invar1_def populate_import_graph_invar2_def
+  by auto
+
+lemma populate_import_graph_invar2_init:
+  assumes \<open>finite Cs\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>(a, b) \<in> it\<close>
+      and \<open>it \<subseteq> Cs\<close>
+      and \<open>populate_import_graph_invar1 G Cs it G'\<close>
+  shows \<open>populate_import_graph_invar2 G' b a b G'\<close>
+  unfolding populate_import_graph_invar2_def
+  by auto
+
+lemma populate_import_graph_invar2_step:
+  assumes \<open>finite Cs\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>(a, b) \<in> it\<close>
+      and \<open>it \<subseteq> Cs\<close>
+      and \<open>populate_import_graph_invar1 G Cs it G'\<close>
+      and \<open>(aa, ba) \<in> ita\<close>
+      and \<open>ita \<subseteq> b\<close>
+      and \<open>populate_import_graph_invar2 G' b a ita G''\<close>
+  shows \<open>populate_import_graph_invar2 G' b a (ita - {(aa, ba)})
+           (add_arc a (make_constraints_from_path_and_modules (path_from_module_name aa) ba) aa G'')\<close>
+  using assms
+  unfolding populate_import_graph_invar2_def populate_import_graph_invar1_def
+  apply auto
+
+  sorry
 
 definition populate_import_graph :: \<open>[ import_graph, import_constraints ] \<Rightarrow> import_graph nres\<close>
-where \<open>populate_import_graph G Cs \<equiv> FOREACH\<^bsup>populate_import_graph_invar1 G\<^esup> Cs (\<lambda> (i, paths) G. do {
-         let p = path_from_module_name i;
-         FOREACH\<^bsup>populate_import_graph_invar2 G\<^esup> paths (\<lambda> (i', ms') G'. do {
-           let p' = path_from_module_name i';
-           let G = add_arc (i, p) (make_constraints_from_path_and_modules p' ms') (i', p') G';
-                       \<comment>\<open>Set a constraint system to be solved for this edge to remain in the trimmed import graph\<close>
-           RETURN G'
+where \<open>populate_import_graph G Cs \<equiv> do {
+         ASSUME (finite Cs);
+         ASSUME (\<forall> (_, is) \<in> Cs. finite is);
+         FOREACH\<^bsup>populate_import_graph_invar1 G Cs\<^esup> Cs (\<lambda> (i, paths) G. do {
+           FOREACH\<^bsup>populate_import_graph_invar2 G paths i\<^esup> paths (\<lambda> (i', ms') G'. do {
+             let p' = path_from_module_name i';
+             let G' = add_arc i (make_constraints_from_path_and_modules p' ms') i' G';
+                         \<comment>\<open>Set a constraint system to be solved for this edge to remain in the trimmed import graph\<close>
+             RETURN G'
+           }) G
          }) G
-       }) G\<close>
+       }\<close>
 
-definition populate_import_graph_post :: \<open>[ import_constraints, import_graph ] \<Rightarrow> bool\<close>
-where \<open>populate_import_graph_post Cs G \<equiv> True\<close>
+definition populate_import_graph_post :: \<open>[ import_graph, import_constraints, import_graph ] \<Rightarrow> bool\<close>
+where \<open>populate_import_graph_post G' Cs G \<equiv> pverts G' = pverts G
+                                                 \<comment>\<open>We do not add vertices to the graph.\<close>
+                                          \<and> (\<forall> u \<in> pverts G. \<exists> v \<in> pverts G. (u, v) \<in> parcs G \<or> (v, u) \<in> parcs G)
+                                                 \<comment>\<open>For all vertices, there is at least one edge going from/to it.\<close>
+  \<close>
 
-lemma populate_import_graph_correct: \<open>populate_import_graph G Cs \<le> SPEC (populate_import_graph_post Cs)\<close>
+lemma populate_import_graph_invar1_imp_post:
+  assumes \<open>finite Cs\<close>
+      and \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      and \<open>populate_import_graph_invar1 G Cs {} G'\<close>
+  shows \<open>populate_import_graph_post G Cs G'\<close>
   sorry
+
+lemma populate_import_graph_correct: \<open>populate_import_graph G Cs \<le> SPEC (populate_import_graph_post G Cs)\<close>
+  unfolding populate_import_graph_def
+  apply (intro refine_vcg)
+  apply simp_all
+  using populate_import_graph_invar1_init
+    apply presburger
+  apply auto[1]
+  apply (intro refine_vcg)
+  apply auto[1]
+  using populate_import_graph_invar2_init
+    apply presburger
+  apply auto[1]
+  using populate_import_graph_invar2_step
+    apply fastforce
+  using populate_import_graph_invar1_step
+    apply presburger
+  using populate_import_graph_invar1_imp_post
+    apply fastforce
+  done
 
 text \<open>
   Trim the import graph by solving all constraints on the edges.
@@ -268,14 +353,14 @@ where \<open>trim_import_graph G C \<equiv> do {
          RETURN (Some (G, Ns))
        }\<close>
 
-definition trim_import_graph_post :: \<open>[ import_cache, import_graph', namespaces_abs ] \<Rightarrow> bool\<close>
-where \<open>trim_import_graph_post C G Ns \<equiv> True\<close>
+definition trim_import_graph_post :: \<open>[ import_graph, import_cache, import_graph', namespaces_abs ] \<Rightarrow> bool\<close>
+where \<open>trim_import_graph_post G' C G Ns \<equiv> True\<close>
 
-definition trim_import_graph_post' :: \<open>[ import_cache, (import_graph' \<times> namespaces_abs) option ] \<Rightarrow> bool\<close>
-where \<open>trim_import_graph_post' C x \<equiv>
-         case x of None \<Rightarrow> True | Some (G, Ns) \<Rightarrow> trim_import_graph_post C G Ns\<close>
+definition trim_import_graph_post' :: \<open>[ import_graph, import_cache, (import_graph' \<times> namespaces_abs) option ] \<Rightarrow> bool\<close>
+where \<open>trim_import_graph_post' G C x \<equiv>
+         case x of None \<Rightarrow> True | Some (G', Ns) \<Rightarrow> trim_import_graph_post G C G' Ns\<close>
 
-lemma trim_import_graph_correct: \<open>trim_import_graph G C \<le> SPEC (trim_import_graph_post' C)\<close>
+lemma trim_import_graph_correct: \<open>trim_import_graph G C \<le> SPEC (trim_import_graph_post' G C)\<close>
   sorry
 
 text \<open>
@@ -300,14 +385,27 @@ where \<open>full_module_resolver_invar is x \<equiv> case x of
                             \<and> (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. does_file_exist (path_from_module_name i))
                                     \<comment>\<open>All imports kept in the dependency graph relate to existing files only.\<close>
                             \<and> (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<in> ran I \<or> i \<in> set is')
-                                    \<comment>\<open>All imports which are dependency targets are either already processed or will be later.\<close>\<close>
+                                    \<comment>\<open>All imports which are dependency targets are either already processed or will be later.\<close>
+                            \<and> finite Cs
+                                    \<comment>\<open>We only generate a finite number of dependencies.\<close>
+                            \<and> (\<forall> (_, is) \<in> Cs. finite is)
+                                    \<comment>\<open>Every file can depend on a finite number of imports.\<close>
+                            \<and> (\<forall> i \<in> ran I. i \<noteq> [])
+                            \<and> (\<forall> (i, _) \<in> Cs. i \<noteq> [])
+                            \<and> (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> Cs. i \<noteq> [])
+                            \<and> (\<forall> i \<in> set is'. i \<noteq> [])
+                                    \<comment>\<open>Safety constraints: imports are never empty.\<close>\<close>
 
 definition full_module_resolver :: \<open>import list \<Rightarrow> (import_graph' \<times> import_cache \<times> namespaces_abs) option nres\<close>
 (* TODO: this WHILE loop *should* always terminate because:
  * - there is a finite number of canonicalized file paths on the file system;
- * - we are not re-adding files that we already processed. *)
+ * - we are not re-adding imports of files that we already processed. *)
+(* TODO: handle an include path (meaning that an import can have multiple paths).
+ *       we can mitigate this fact by having \<open>import \<equiv> string list \<times> path\<close>
+ *       that way, each combination of \<open>(import, directory)\<close> has a unique path associated to it. *)
 where \<open>full_module_resolver is \<equiv> do {
          ASSUME (is \<noteq> []);
+         ASSUME (\<forall> i \<in> set is. i \<noteq> []);
          (P, is', C, Cs, I) \<leftarrow> WHILE\<^bsup>full_module_resolver_invar is \<^esup>
                                 (\<lambda> (_, is, _, _, _). is \<noteq> []) (\<lambda> (P, is, C, Cs, I). do {
            (U, C, Cs', I) \<leftarrow> single_module_resolver (hd is) C I;
@@ -324,30 +422,36 @@ where \<open>full_module_resolver is \<equiv> do {
          ASSERT (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. I (path_from_module_name i) = Some i);
          ASSERT ((\<exists> i \<in> P. does_file_exist (path_from_module_name i)) \<longrightarrow> I \<noteq> Map.empty);
          ASSERT ((\<exists> i \<in> P. does_file_exist (path_from_module_name i)) \<longrightarrow> C \<noteq> Map.empty);
+         ASSERT (finite Cs);
+         ASSERT (\<forall> (_, is) \<in> Cs. finite is);
+         ASSERT (\<forall> i \<in> ran I. i \<noteq> []);
+         ASSERT (\<forall> (i, _) \<in> Cs. i \<noteq> []);
+         ASSERT (\<forall> (_, is) \<in> Cs. \<forall> (i, _) \<in> is. i \<noteq> []);
 
          \<comment>\<open>If not all imports in \<open>is\<close> are resolved to existing files, explicitly fail.\<close>
          if (\<exists> i \<in> set is. i \<notin> ran I)
          then RETURN None
          else do {
-           let G = \<lparr> pverts = insert ([], '''') { (i, p). I p = Some i },
-                     parcs = {},
-                     labels = Map.empty \<rparr>;
+           let G = \<lparr> pverts = insert '''' (ran I),
+                     parcs = { ('''', v) | v. v \<in> set is },
+                     labels = (\<lambda> (x, _). if x = '''' then Some [] else None) \<rparr>;
+           ASSERT (insert '''' { i. (\<exists> is. (i, is) \<in> Cs \<or> (\<exists> m. (i, m) \<in> is)) \<and> does_file_exist (path_from_module_name i) } = pverts G);
            G \<leftarrow> populate_import_graph G Cs;
            res \<leftarrow> trim_import_graph G C;
            case res of
              None \<Rightarrow> RETURN None
            | Some (G, Ns) \<Rightarrow> do {
              ASSERT (pverts G \<noteq> {});
-             ASSERT (([], '''') \<in> pverts G);
+             ASSERT ('''' \<in> pverts G);
                         \<comment>\<open>The main root (which serves as the "top-most" top-level module) is still in the graph.\<close>
-             ASSERT (\<forall> u \<in> pverts G. card { (v, w). (u, w) \<in> parcs G \<and> (u, v) \<in> parcs G \<and> fst w = fst v } \<le> 1);
+             ASSERT (\<forall> u \<in> pverts G. card { (v, w). (u, w) \<in> parcs G \<and> (u, v) \<in> parcs G \<and> w = v } \<le> 1);
                         \<comment>\<open>There is at most one edge coming from every @{term u} to a given module
                           (meaning that imports are not ambiguous within a single module).\<close>
-             ASSERT (\<forall> i \<in> set is. \<exists>! u \<in> pverts G. fst u = i);
+             ASSERT (\<forall> i \<in> set is. \<exists>! u \<in> pverts G. u = i);
                         \<comment>\<open>All our top-level modules do not point to code entities.\<close>
 
-             let C = C |` { p. \<exists> i. (i, p) \<in> pverts G };
-             let Ns = Ns |` pverts G;
+             let C = C |` { path_from_module_name i | i. i \<in> pverts G };
+             let Ns = Ns |` { (i, path_from_module_name i) | i. i \<in> pverts G };
              RETURN (Some (G, C, Ns))
            }
          }
@@ -355,14 +459,17 @@ where \<open>full_module_resolver is \<equiv> do {
 
 lemma full_module_resolver_invar_init:
   assumes \<open>is \<noteq> []\<close>
+      and \<open>\<forall> i \<in> set is. i \<noteq> []\<close>
   shows \<open>full_module_resolver_invar is ({}, is, Map.empty, {}, Map.empty)\<close>
+  using assms
   unfolding full_module_resolver_invar_def
-  by force
+  by auto
 
 lemma full_module_resolver_invar_step2:
   assumes \<open>\<forall> x \<in> dom I. does_file_exist x\<close>
       and \<open>dom C = dom I\<close>
       and \<open>is \<noteq> []\<close>
+      and \<open>\<forall> i \<in> set is'. i \<noteq> []\<close>
       and \<open>is' \<noteq> []\<close>
       and \<open>C (path_from_module_name (hd is)) = None\<close>
       and \<open>does_file_exist (path_from_module_name (hd is))\<close>
@@ -387,62 +494,107 @@ lemma full_module_resolver_invar_step2:
     and ?P = \<open>insert (hd is) P\<close>
 
     have \<open>\<forall> p \<in> dom ?I. does_file_exist p\<close>
-      by (simp add: assms(1) assms(6))
+      by (simp add: assms(1) assms(7))
     moreover have \<open>dom ?C = dom ?I\<close>
       by (simp add: assms(2))
     moreover have \<open>\<forall> i. (path_from_module_name i \<in> dom I) \<longleftrightarrow> (i \<in> ran I)\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
-      by blast
+      by fastforce
         then have \<open>\<forall> i. (path_from_module_name i \<in> dom ?I) \<longleftrightarrow> (i \<in> ran ?I)\<close>
-          by (metis assms(2) assms(5) domIff dom_fun_upd insert_iff option.discI path_uniqueness ran_map_upd)
+          by (metis assms(2) assms(6) domIff dom_fun_upd insert_iff option.discI path_uniqueness ran_map_upd)
     moreover have \<open>{ i. \<exists> is. (i, is) \<in> Cs } \<subseteq> ran I\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by blast
         then have \<open>{ i. \<exists> is. (i, is) \<in> ?Cs } \<subseteq> ran ?I\<close>
-          by (smt (verit, ccfv_threshold) Pair_inject Un_iff assms(2) assms(5) domIff insert_iff mem_Collect_eq ran_map_upd subset_iff)
+          by (smt (verit, ccfv_threshold) Pair_inject Un_iff assms(2) assms(6) domIff insert_iff mem_Collect_eq ran_map_upd subset_iff)
     moreover have ***: \<open>ran I = { i \<in> P. does_file_exist (path_from_module_name i) }\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by blast
         then have *: \<open>ran ?I = insert (hd is) (ran I)\<close>
-          by (metis assms(2) assms(5) domIff ran_map_upd)
+          by (metis assms(2) assms(6) domIff ran_map_upd)
         then have **: \<open>{ i \<in> ?P. does_file_exist (path_from_module_name i) } = insert (hd is) { i \<in> P. does_file_exist (path_from_module_name i) }\<close>
-          using assms(11) assms(6)
+          using assms(12) assms(7)
           unfolding full_module_resolver_invar_def
           by blast
         then have \<open>ran ?I = { i \<in> ?P. does_file_exist (path_from_module_name i) }\<close>
           using * ** ***
           by auto
     moreover have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> P \<or> i \<in> set is\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by fastforce
         then have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> ?P \<or> i \<in> set ?is\<close>
           by (metis Un_iff insertCI not_hd_in_tl set_append)
     moreover have \<open>\<forall> i \<in> ran I. I (path_from_module_name i) = Some i\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by blast
         then have \<open>\<forall> i \<in> ran ?I. ?I (path_from_module_name i) = Some i\<close>
           using * path_uniqueness
           by force
     moreover have **: \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. does_file_exist (path_from_module_name i)\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by fastforce
         then have \<open>\<forall> (_, is'') \<in> ?Cs. \<forall> (i, _) \<in> is''. does_file_exist (path_from_module_name i)\<close>
-        by fastforce
+          by fastforce
     moreover have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. i \<in> ran I \<or> i \<in> set is\<close>
-      using assms(11)
+      using assms(12)
       unfolding full_module_resolver_invar_def
       by fastforce
         then have \<open>\<forall> (_, is'') \<in> ?Cs. \<forall> (i, _) \<in> is''. i \<in> ran ?I \<or> i \<in> set ?is\<close>
-          using assms(9) assms(6)
+          using assms(10) assms(7)
           apply auto
           using * not_hd_in_tl
           by fastforce
+    moreover have \<open>finite Cs\<close>
+      using assms(12)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>finite (set b)\<close>
+          by blast
+        then have \<open>finite ?Cs\<close>
+          using \<open>finite Cs\<close>
+          by fastforce
+    moreover have \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      using assms(12)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> isa. (\<exists> i'. isa = mk_paths_from_module_name i' \<and> i' \<in> set b) \<longrightarrow> finite { (i, l) | i l. (i, l) \<in> isa \<and> does_file_exist (path_from_module_name i) }\<close>
+          using paths_finite
+          by (smt (verit, ccfv_threshold) mem_Collect_eq rev_finite_subset subset_iff)
+        then have \<open>\<forall> (_, is) \<in> { (hd is, { (i, l). (i, l) \<in> isa \<and> does_file_exist (path_from_module_name i) } ) | isa. \<exists> i'. isa = mk_paths_from_module_name i' \<and> i' \<in> set b }. finite is\<close>
+          by fastforce
+        then have \<open>\<forall> (_, is) \<in> ?Cs. finite is\<close>
+          by (smt (verit) UnE \<open>\<forall> (_, is) \<in> Cs. finite is\<close>)
+    moreover have \<open>\<forall> i \<in> set is. i \<noteq> []\<close>
+      using assms(12)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> i \<in> set (tl is). i \<noteq> []\<close>
+          by (meson assms(3) list.set_sel(2))
+        then have \<open>\<forall> i \<in> set U. i \<noteq> []\<close>
+          using assms(10) import_non_empty
+          by fastforce
+        then have \<open>\<forall> i \<in> set ?is. i \<noteq> []\<close>
+          using \<open>\<forall> i \<in> set (tl is). i \<noteq> []\<close>
+          by fastforce
+    moreover have \<open>\<forall> i \<in> ran I. i \<noteq> []\<close>
+      using assms(12)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> i \<in> ran ?I. i \<noteq> []\<close>
+        by (simp add: * \<open>\<forall>i\<in>set is. i \<noteq> []\<close> assms(3))
+    moreover have \<open>\<forall> (i, _) \<in> Cs. i \<noteq> []\<close>
+      using assms(12)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> (i, _) \<in> ?Cs. i \<noteq> []\<close>
+        using \<open>\<forall>i\<in>set is. i \<noteq> []\<close> assms(3) list.set_sel(1)
+        by fastforce
       (* This is almost trivial, but somehow we need to make all steps explicit here... *)
     ultimately show ?thesis
       by (auto simp add: full_module_resolver_invar_def)
@@ -452,6 +604,7 @@ lemma full_module_resolver_invar_step3:
   assumes \<open>\<forall> p \<in> dom I. does_file_exist p\<close>
       and \<open>dom C = dom I\<close>
       and \<open>is \<noteq> []\<close>
+      and \<open>\<forall> i \<in> set is'. i \<noteq> []\<close>
       and \<open>is' \<noteq> []\<close>
       and \<open>C (path_from_module_name (hd is)) = None\<close>
       and \<open>\<not> does_file_exist (path_from_module_name (hd is))\<close>
@@ -461,38 +614,61 @@ lemma full_module_resolver_invar_step3:
   using assms
   proof -
     have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> P \<or> i \<in> set is\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
       by fastforce
       then have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> insert (hd is) P \<or> i \<in> set (tl is)\<close>
         using not_hd_in_tl
         by fastforce
     moreover have \<open>\<forall> i. (path_from_module_name i \<in> dom I) \<longleftrightarrow> (i \<in> ran I)\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
-      by blast
+      by fastforce
     moreover have \<open>{ i. \<exists> is. (i, is) \<in> Cs } \<subseteq> ran I\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>ran I = { i \<in> insert (hd is) P. does_file_exist (path_from_module_name i) }\<close>
-      using assms(8) assms(6)
+      using assms(9) assms(7)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>\<forall> i \<in> ran I. I (path_from_module_name i) = Some i\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. does_file_exist (path_from_module_name i)\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
       by fastforce
     moreover have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. i \<in> ran I \<or> i \<in> set is\<close>
-      using assms(8)
+      using assms(9)
       unfolding full_module_resolver_invar_def
       by blast
         then have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. i \<in> ran I \<or> i \<in> set (tl is)\<close>
-        by (smt (verit, ccfv_threshold) assms(6) calculation(6) case_prodD case_prodI2 not_hd_in_tl)
+        by (smt (verit, ccfv_threshold) assms(7) calculation(6) case_prodD case_prodI2 not_hd_in_tl)
+    moreover have \<open>finite Cs\<close>
+      using assms(9)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      using assms(9)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> i \<in> ran I. i \<noteq> []\<close>
+      using assms(9)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> i \<in> set is. i \<noteq> []\<close>
+      using assms(9)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> i \<in> set (tl is). i \<noteq> []\<close>
+        using assms(3)
+        by (meson list.set_sel(2))
+    moreover have \<open>\<forall> (i, _) \<in> Cs. i \<noteq> []\<close>
+      using assms(9)
+      unfolding full_module_resolver_invar_def
+      by fastforce
     ultimately show ?thesis
       unfolding full_module_resolver_invar_def
       using assms(1) assms(2)
@@ -503,6 +679,7 @@ lemma full_module_resolver_invar_step4:
   assumes \<open>\<forall> x \<in> dom I. does_file_exist x\<close>
       and \<open>dom C = dom I\<close>
       and \<open>is \<noteq> []\<close>
+      and \<open>\<forall> i \<in> set is'. i \<noteq> []\<close>
       and \<open>is' \<noteq> []\<close>
       and \<open>C (path_from_module_name (hd is)) = Some cst\<close>
       and \<open>hd is \<in> ran I\<close>
@@ -511,38 +688,61 @@ lemma full_module_resolver_invar_step4:
   using assms
   proof -
     have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> P \<or> i \<in> set is\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
       by fastforce
       then have \<open>\<forall> i \<in> set is'. does_file_exist (path_from_module_name i) \<longrightarrow> i \<in> insert (hd is) P \<or> i \<in> set (tl is)\<close>
         using not_hd_in_tl
         by fastforce
     moreover have \<open>\<forall> i. (path_from_module_name i \<in> dom I) \<longleftrightarrow> (i \<in> ran I)\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
-      by blast
+      by fastforce
     moreover have \<open>{ i. \<exists> is. (i, is) \<in> Cs } \<subseteq> ran I\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>ran I = { i \<in> insert (hd is) P. does_file_exist (path_from_module_name i) }\<close>
-      using assms(7) assms(6)
+      using assms(8) assms(7)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>\<forall> i \<in> ran I. I (path_from_module_name i) = Some i\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
       by blast
     moreover have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. does_file_exist (path_from_module_name i)\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
       by fastforce
     moreover have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. i \<in> ran I \<or> i \<in> set is\<close>
-      using assms(7)
+      using assms(8)
       unfolding full_module_resolver_invar_def
       by blast
         then have \<open>\<forall> (_, is'') \<in> Cs. \<forall> (i, _) \<in> is''. i \<in> ran I \<or> i \<in> set (tl is)\<close>
-        by (smt (verit, ccfv_threshold) assms(6) case_prodD case_prodI2 not_hd_in_tl)
+        by (smt (verit, ccfv_threshold) assms(7) case_prodD case_prodI2 not_hd_in_tl)
+    moreover have \<open>finite Cs\<close>
+      using assms(8)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> (_, is) \<in> Cs. finite is\<close>
+      using assms(8)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> i \<in> ran I. i \<noteq> []\<close>
+      using assms(8)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+    moreover have \<open>\<forall> i \<in> set is. i \<noteq> []\<close>
+      using assms(8)
+      unfolding full_module_resolver_invar_def
+      by fastforce
+        then have \<open>\<forall> i \<in> set (tl is). i \<noteq> []\<close>
+        using assms(3)
+        by (meson list.set_sel(2))
+    moreover have \<open>\<forall> (i, _) \<in> Cs. i \<noteq> []\<close>
+      using assms(8)
+      unfolding full_module_resolver_invar_def
+      by fastforce
     ultimately show ?thesis
       using assms(1) assms(2)
       unfolding full_module_resolver_invar_def
@@ -553,6 +753,7 @@ theorem full_module_resolver_loop_preserves_invar:
   assumes \<open>full_module_resolver_invar is' (P, is, C, Cs, I)\<close>
       and \<open>is' \<noteq> []\<close>
       and \<open>is \<noteq> []\<close>
+      and \<open>\<forall> i \<in> set is'. i \<noteq> []\<close>
   shows \<open>single_module_resolver (hd is) C I \<le> SPEC
            (\<lambda>(U, C, Cs', I). do {
               ASSERT (\<forall> i. (\<exists> is. (i, is) \<in> Cs') \<longrightarrow> I (path_from_module_name i) = Some i);
@@ -586,15 +787,15 @@ theorem full_module_resolver_loop_preserves_invar:
   apply (meson single_module_resolver_invar1_end2)
   apply (intro refine_vcg)
   apply (meson map_upd_Some_unfold ranI)
-  using assms(1) assms(2) assms(3) full_module_resolver_invar_step2
+  using assms(1) assms(2) assms(3) assms(4) full_module_resolver_invar_step2
     apply presburger
   apply (intro refine_vcg)
   apply (smt (verit, best) assms(1) case_prodD full_module_resolver_invar_def)
-  using assms(1) assms(2) assms(3) full_module_resolver_invar_step3
+  using assms(1) assms(2) assms(3) assms(4) full_module_resolver_invar_step3
     apply presburger
   apply (intro refine_vcg)
   apply (smt (verit, ccfv_threshold) assms(1) case_prodD domI full_module_resolver_invar_def)
-  apply (metis assms(1) assms(2) assms(3) domI full_module_resolver_invar_step4)
+  apply (metis assms(1) assms(2) assms(3) assms(4) domI full_module_resolver_invar_step4)
   done
 
 lemma full_module_resolver_assert7:
@@ -620,18 +821,18 @@ text \<open>
 \<close>
 definition full_module_resolver_post :: \<open>[ import list, import_graph', import_cache, namespaces_abs ] \<Rightarrow> bool\<close>
 where \<open>full_module_resolver_post is G C Ns \<equiv>
-         \<not> (\<exists> u \<in> pverts G. u \<leftarrow>\<^sup>*\<^bsub>with_proj G\<^esub> u)
+         \<not> (\<exists> u \<in> pverts G. u \<rightarrow>\<^sup>*\<^bsub>with_proj G\<^esub> u)
                 \<comment>\<open>• The end import graph is acyclic, meaning that no module \<open>M\<close> tries to import itself,
                     or import a module which transitively imports \<open>M\<close>.\<close>
-       \<and> (\<forall> i \<in> set is. \<exists> u \<in> pverts G. fst u = i)
+       \<and> (\<forall> i \<in> set is. \<exists> u \<in> pverts G. u = i)
                 \<comment>\<open>• All our top-level imports are resolved (at least once) in the graph.\<close>
-       \<and> (\<forall> u \<in> pverts G. card { (v, w) | v w. (u, w) \<in> parcs G \<and> (u, v) \<in> parcs G \<and> fst v = fst w } \<le> 1)
+       \<and> (\<forall> u \<in> pverts G. card { (v, w) | v w. (u, w) \<in> parcs G \<and> (u, v) \<in> parcs G \<and> v = w } \<le> 1)
                 \<comment>\<open>• There is at most one edge coming from every node \<open>u\<close> to a given module.
                     In other words, all imports are unambiguous.\<close>
        \<and> C \<noteq> Map.empty
                 \<comment>\<open>• Since we require that the list of top-level modules be non-empty, our end cache
                     must also be non-empty.\<close>
-       \<and> { p. \<exists> i. (i, p) \<in> pverts G } \<subseteq> dom C
+       \<and> { p. \<exists> i. i \<in> pverts G } \<subseteq> dom C
                 \<comment>\<open>• Consistency is key: all modules found in the graph must belong to the cache.\<close>
        \<and> { p. \<exists> i. (i, p) \<in> dom Ns } \<subseteq> dom C
                 \<comment>\<open>• We don't have more namespaces than for each file in the cache.\<close>\<close>
@@ -651,23 +852,38 @@ theorem full_module_resolver_correct:
   apply (intro refine_vcg)
   using full_module_resolver_invar_init
     apply blast
-  apply auto[1]
-  using full_module_resolver_loop_preserves_invar
+  subgoal premises assms
+    apply auto
+    using assms full_module_resolver_loop_preserves_invar
     apply blast
+    done
   (* All assertions after WHILE loop *)
   apply blast
   apply simp_all[6]
   unfolding full_module_resolver_invar_def
   apply (smt (verit) Pair_inject case_prodE empty_iff empty_set mem_Collect_eq subset_eq)
-  apply blast
-  apply blast
-  using full_module_resolver_assert7
-    apply (smt (verit, del_insts) Pair_inject case_prodE case_prodI2 empty_iff empty_set)
-  apply blast
+  apply (smt (verit) case_prod_conv mem_Collect_eq)
+  subgoal premises assms
+    using assms(4) assms(3)
+    by blast
+  subgoal premises assms
+    using assms(3)
+    by fastforce
+  apply fastforce
   apply fast
+  apply fastforce
+  apply fastforce
+  apply fastforce
+  apply fastforce
+  apply fastforce
   (* After the loop *)
   subgoal premises
     by simp
+  subgoal premises assms
+    using assms(9) assms(10) assms(11) assms(12) assms(13) assms(14) assms(15) assms(16) assms(17)
+    apply simp
+    using assms(3)
+    sorry
   apply (rule SPEC_cons_rule[OF populate_import_graph_correct])
   apply (intro refine_vcg)
   apply (rule SPEC_cons_rule[OF trim_import_graph_correct])
