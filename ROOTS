@@ -1,4 +1,4 @@
-src/Located
-src/Error/Diagnose
-src/Syntax
-app
+thys/ExternalLibrary
+thys/ImportResolver
+thys/Parser
+thys/EntryPoint

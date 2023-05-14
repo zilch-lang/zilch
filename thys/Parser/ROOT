@@ -1,0 +1,12 @@
+session Parser = HOL +
+  options [document = pdf, document_output = "output"]
+  sessions 
+    ExternalLibrary
+  theories [document = false]
+    Tokens
+    CST
+    Lexer
+    Parser
+    Errors
+  document_files
+    "root.tex"

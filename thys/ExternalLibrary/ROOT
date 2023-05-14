@@ -1,0 +1,9 @@
+session ExternalLibrary = HOL +
+  options [document = pdf, document_output = "output"]
+  sessions
+    "HOL-Library"
+  theories 
+    Located
+    Diagnose
+  document_files
+    "root.tex"

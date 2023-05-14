@@ -71,7 +71,6 @@ executables:
     main:                Main.hs
     source-dirs:
     - app
-    - generated
     ghc-options:
     - -threaded
     - -rtsopts
@@ -90,6 +89,9 @@ executables:
     - directory >=1.3
     - megaparsec >=9.0 && <10
     - optparse-applicative >=0.16
+    - nsc-core
+    - text ==1.2.5.0
+    - mtl ==2.2.2
     default-extensions:
     - TypeSynonymInstances
     - FlexibleInstances

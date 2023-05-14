@@ -1,0 +1,12 @@
+session EntryPoint (main) = HOL +
+  options [document = pdf, document_output = "output"]
+  sessions 
+    Parser 
+    ExternalLibrary
+    Hello_World
+  theories 
+    (* EntryPoint *)
+    MainFn
+  document_files
+    "root.tex"
+  export_files (in "../../app") [3] "*:code/**"

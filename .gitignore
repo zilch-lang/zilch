@@ -2,3 +2,7 @@
 *~
 .zilch/
 .liquid/
+app.bak/
+src.bak/
+generated/
+**/output/

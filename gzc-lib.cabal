@@ -29,13 +29,6 @@ flag liquidhaskell
   default: False
 
 library
-  exposed-modules:
-      Located
-      Syntax.CST
-      Syntax.Errors
-      Syntax.Lexer
-      Syntax.Parser
-      Syntax.Tokens
   other-modules:
       Paths_gzc_lib
   hs-source-dirs:
@@ -63,16 +56,21 @@ library
 executable gzc
   main-is: Main.hs
   other-modules:
-      CLI.Flags
-      CLI.Parser
       EntryPoint
+      ExternalLibrary_Diagnose
+      ExternalLibrary_Located
       FileIO
-      ImportResolver
+      Product_Type
       StdIO
+      Sum_Type
+      Syntax_CST
+      Syntax_Errors
+      Syntax_Lexer
+      Syntax_Parser
+      Syntax_Tokens
       Paths_gzc_lib
   hs-source-dirs:
       app
-      generated
   default-extensions:
       TypeSynonymInstances
       FlexibleInstances
@@ -83,7 +81,10 @@ executable gzc
     , filepath >=1.4
     , gzc-lib
     , megaparsec >=9.0 && <10
+    , mtl ==2.2.2
+    , nsc-core
     , optparse-applicative >=0.16
+    , text ==1.2.5.0
   default-language: Haskell2010
   if flag(liquidhaskell)
     ghc-options: -fplugin=LiquidHaskell

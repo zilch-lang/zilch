@@ -1,0 +1,10 @@
+session ImportResolver = HOL +
+  options [document = pdf, document_output = "output"]
+  sessions 
+    Collections
+    Refine_Monadic
+    Graph_Theory
+  theories 
+    Intf_Directed_Graph
+  document_files
+    "root.tex"
