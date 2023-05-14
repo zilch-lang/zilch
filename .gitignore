@@ -4,5 +4,5 @@
 .liquid/
 app.bak/
 src.bak/
-generated/
+generated.bak/
 **/output/
