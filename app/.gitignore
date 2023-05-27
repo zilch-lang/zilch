@@ -1,4 +1,1 @@
-*
-
-!.gitignore
-!Main.hs
+*.hs
