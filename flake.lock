@@ -26,11 +26,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1685201910,
-        "narHash": "sha256-Kr6UUJKvcZDM0QGAtFA2zg0b3gINvVfmTCwjUjXO45k=",
+        "lastModified": 1685268423,
+        "narHash": "sha256-L75xixCNAaCHAE+qCP/eLYMeSpF0y3MjtqTf9LYkPUM=",
         "owner": "Mesabloo",
         "repo": "isabelle.nix",
-        "rev": "58a83632169dc89ae335d4f1dd96a0482a21f487",
+        "rev": "b871ebf00974f609bb88d51e09cc3db6cb6fccb6",
         "type": "github"
       },
       "original": {
@@ -57,11 +57,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1685199330,
-        "narHash": "sha256-yXFyvo4HiNkTx4lcU3VYHgqL0y5cEazt8qHEVhWI0DA=",
+        "lastModified": 1685217840,
+        "narHash": "sha256-oK52nNzRwsZm7JUWN7qr4a744++prpqiCLixKHTF/sk=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "108721e4d14a0260dcef5b186949aee154794d43",
+        "rev": "f7947266171e6e29a0886a28f693aa03c2402767",
         "type": "github"
       },
       "original": {
@@ -93,11 +93,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1685199157,
-        "narHash": "sha256-7BTL15T5C8AJrSNB6pJJiqNFPElKnRE9BVxmjcFm6rQ=",
+        "lastModified": 1685205834,
+        "narHash": "sha256-OZLXaX/jJpGaJKPUzTZEx1Poi28oFo7vOxKNxQefSZY=",
         "owner": "zilch-lang",
         "repo": "nstar",
-        "rev": "3568827e3165dacbfbd96815d70af628a4733b49",
+        "rev": "27f92861964b3df66b8958fc5dea63215bb58de8",
         "type": "github"
       },
       "original": {

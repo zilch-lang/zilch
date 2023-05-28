@@ -2,11 +2,16 @@ session Parser = HOL +
   options [document = pdf, document_output = "output"]
   sessions 
     ExternalLibrary
+    Refine_Monadic
+    Refine_Imperative_HOL 
+    Native_Word
   theories [document = false]
     Tokens
     CST
     Lexer
     Parser
     Errors
+    Utf8Reader
+    IICF_Uint
   document_files
     "root.tex"

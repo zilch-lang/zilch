@@ -1,20 +1,21 @@
-{-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE EmptyDataDecls, RankNTypes, ScopedTypeVariables #-}
 
-module Main where
+module Main() where {
 
-import qualified EntryPoint
-import System.Environment (getArgs)
-import Control.Monad (forM_)
-import Error.Diagnose.Diagnostic (printDiagnostic)
-import Error.Diagnose.Style (defaultStyle)
-import System.IO (stderr)
+import Prelude ((==), (/=), (<), (<=), (>=), (>), (+), (-), (*), (/), (**),
+  (>>=), (>>), (=<<), (&&), (||), (^), (^^), (.), ($), ($!), (++), (!!), Eq,
+  error, id, return, not, fst, snd, map, filter, concat, concatMap, reverse,
+  zip, null, takeWhile, dropWhile, all, any, Integer, negate, abs, divMod,
+  String, Bool(True, False), Maybe(Nothing, Just));
+import qualified Prelude;
+import qualified Located_Internal;
+import qualified Diagnose_Internal;
+import qualified Filter;
+import qualified HOL;
+import qualified Typerep;
 
-main :: IO ()
-main = do
-  files <- getArgs
-  forM_ files \f -> do
-    EntryPoint.entry_point f >>= \case
-      Left d -> printDiagnostic stderr True True 4 defaultStyle d
-      Right cst -> putStrLn "✅ OK!"
+instance (Typerep.Typerep a) => Typerep.Typerep (Filter.Filter a) where {
+  typerep = Filter.typerep_filter;
+};
 
+}

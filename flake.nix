@@ -21,26 +21,39 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        haskellPackages = pkgs.haskell.packages.ghc8107;
-        isabelle = isabelle2022.packages.${system}.isabelle;
+        isabelle-lib = isabelle2022.lib { inherit system pkgs isabelle; };
+
+        haskellPackages = pkgs.haskell.packages.ghc8107.override {
+          overrides = new: old:
+            let
+              diagnose' = pkgs.haskell.lib.enableCabalFlag old.diagnose "megaparsec-compat";
+              diagnose = pkgs.haskell.lib.overrideCabal diagnose' (drv: {
+                buildDepends = [ old.megaparsec ];
+              });
+            in
+            {
+              inherit diagnose;
+            };
+        };
+        isabelle = isabelle2022.packages.${system}.isabelle.withComponents [
+          isabelle2022.packages.${system}.isabelle-afp
+        ];
 
         jailbreakUnbreak = pkg:
           pkgs.haskell.lib.doJailbreak (pkg.overrideAttrs (_: { meta = { }; }));
 
+        gzcSource = isabelle-lib.export {
+          session = "EntryPoint";
+          src = self;
+          texlive = pkgs.texlive.combined.scheme-full;
+        };
         # Change this so that it generates the Haskell code before via Isabelle
         # Also add dependency to N* (nsc-core)
-        gzc = pkgs.haskell.lib.overrideCabal
-          (haskellPackages.callCabal2nix "gzc" self {
-            # configurePhase = ''
-            #   ${isabelle}/bin/isabelle build -v -d . -e EntryPoint
-            # '';
+        gzc = haskellPackages.callCabal2nix "gzc"
+          "${gzcSource.outPath}/build"
+          {
             nsc-core = nstar.packages.${system}.nsc-core;
-          })
-          (drv: {
-            preBuild = ''
-              ${isabelle}/bin/isabelle build -d ${self} -e EntryPoint
-            '' + (drv.preBuild or "");
-          });
+          };
       in
       {
         packages = rec {
@@ -60,9 +73,9 @@
             haskellPackages.haskell-language-server
             haskellPackages.cabal-install
             isabelle
-            isabelle2022.packages.${system}.emacs
+            isabelle-lib.custom-emacs
           ];
-          inputsFrom = builtins.attrValues self.packages.${system};
+          # inputsFrom = builtins.attrValues self.packages.${system};
         };
       }
     );
